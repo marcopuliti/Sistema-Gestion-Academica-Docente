@@ -13,4 +13,7 @@ urlpatterns = [
     path('<int:pk>/editar/', views.editar_solicitud, name='editar'),
     path('<int:pk>/revisar/', views.revisar_solicitud, name='revisar'),
     path('<int:pk>/pdf/', views.descargar_pdf_solicitud, name='pdf'),
+    path('<int:pk>/docx/', views.descargar_docx_solicitud, name='docx'),
+    path('ajax/planes-por-carrera/', views.planes_por_carrera, name='planes_por_carrera'),
+    path('ajax/optativas-por-plan/', views.optativas_por_plan, name='optativas_por_plan'),
 ]

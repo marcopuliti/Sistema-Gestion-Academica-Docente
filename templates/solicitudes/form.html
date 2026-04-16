@@ -62,16 +62,11 @@
   <div class="seccion-header"><i class="bi bi-mortarboard me-2"></i>I — Oferta Académica</div>
   <div class="card mb-3">
     <div class="card-body row g-3">
-      <div class="col-md-5">
+      <div class="col-md-12">
         <label class="form-label fw-semibold">{{ form.nombre_curso.label }} *</label>
         {{ form.nombre_curso }}
         {% if form.nombre_curso.errors %}<div class="text-danger small">{{ form.nombre_curso.errors.0 }}</div>{% endif %}
       </div>
-      <div class="col-md-{% if es_curricular %}3{% else %}7{% endif %}">
-        <label class="form-label fw-semibold">{{ form.area.label }}</label>
-        {{ form.area }}
-      </div>
-
       {% if es_curricular %}
       <div class="col-md-4">
         <label class="form-label fw-semibold">{{ form.carrera.label }}</label>
@@ -80,6 +75,11 @@
       <div class="col-md-3">
         <label class="form-label fw-semibold">{{ form.plan_estudio.label }}</label>
         {{ form.plan_estudio }}
+      </div>
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">{{ form.optativa_vinculada.label }}</label>
+        {{ form.optativa_vinculada }}
+        {% if form.optativa_vinculada.errors %}<div class="text-danger small">{{ form.optativa_vinculada.errors.0 }}</div>{% endif %}
       </div>
       <div class="col-md-2">
         <label class="form-label fw-semibold">{{ form.anno_carrera.label }}</label>
@@ -160,6 +160,13 @@
         </div>
       </div>
       {% endif %}
+
+      <div class="row g-2 mb-2">
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">{{ form.modalidad_cursado.label }}</label>
+          {{ form.modalidad_cursado }}
+        </div>
+      </div>
 
       <div class="row g-2">
         {% if tipificacion == 'optativa' %}
@@ -362,5 +369,90 @@ function attachDeleteListener(row) {
   });
 }
 document.querySelectorAll('.formset-row').forEach(attachDeleteListener);
+
+// ── Planes dinámicos por carrera ──────────────────────────────────────────────
+const carreraSelect   = document.getElementById('id_carrera');
+const planSelect      = document.getElementById('id_plan_estudio');
+const optativaSelect  = document.getElementById('id_optativa_vinculada');
+const periodoSelect   = document.getElementById('id_periodo');
+const annoInput       = document.getElementById('id_anno_carrera');
+
+function cargarPlanes(carreraId, planSeleccionado) {
+  if (!planSelect) return;
+  if (!carreraId) {
+    planSelect.innerHTML = '<option value="">---------</option>';
+    cargarOptativas(null, null);
+    return;
+  }
+  fetch('{% url "solicitudes:planes_por_carrera" %}?carrera_id=' + carreraId)
+    .then(r => r.json())
+    .then(data => {
+      planSelect.innerHTML = '<option value="">---------</option>';
+      data.planes.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.codigo;
+        if (planSeleccionado && p.id == planSeleccionado) opt.selected = true;
+        planSelect.appendChild(opt);
+      });
+      if (planSeleccionado) cargarOptativas(planSeleccionado, optativaSelect ? optativaSelect.value : null);
+    });
+}
+
+function cargarOptativas(planId, optativaSeleccionada) {
+  if (!optativaSelect) return;
+  if (!planId) {
+    optativaSelect.innerHTML = '<option value="">---------</option>';
+    return;
+  }
+  fetch('{% url "solicitudes:optativas_por_plan" %}?plan_id=' + planId)
+    .then(r => r.json())
+    .then(data => {
+      optativaSelect.innerHTML = '<option value="">---------</option>';
+      // Guardar datos para autocompletar
+      optativaSelect._datos = {};
+      data.optativas.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.id;
+        opt.textContent = o.label;
+        if (optativaSeleccionada && o.id == optativaSeleccionada) opt.selected = true;
+        optativaSelect.appendChild(opt);
+        optativaSelect._datos[o.id] = {ano: o.ano, periodo: o.periodo};
+      });
+      // Si ya hay optativa seleccionada, autocompletar
+      if (optativaSeleccionada && optativaSelect._datos[optativaSeleccionada]) {
+        autocompletarDesdeOptativa(optativaSelect._datos[optativaSeleccionada]);
+      }
+    });
+}
+
+function autocompletarDesdeOptativa(datos) {
+  if (periodoSelect && datos.periodo) periodoSelect.value = datos.periodo;
+  if (annoInput && datos.ano)         annoInput.value = datos.ano;
+  // Disparar evento para que el autocompletador de fechas reaccione si aplica
+  if (periodoSelect) periodoSelect.dispatchEvent(new Event('change'));
+}
+
+if (carreraSelect) {
+  carreraSelect.addEventListener('change', function() {
+    cargarPlanes(this.value, null);
+  });
+  const planActual      = planSelect     ? planSelect.value     : null;
+  const optativaActual  = optativaSelect ? optativaSelect.value : null;
+  if (carreraSelect.value) cargarPlanes(carreraSelect.value, planActual);
+}
+
+if (planSelect) {
+  planSelect.addEventListener('change', function() {
+    cargarOptativas(this.value, null);
+  });
+}
+
+if (optativaSelect) {
+  optativaSelect.addEventListener('change', function() {
+    const datos = (this._datos || {})[this.value];
+    if (datos) autocompletarDesdeOptativa(datos);
+  });
+}
 </script>
 {% endblock %}

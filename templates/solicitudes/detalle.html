@@ -22,6 +22,7 @@
     <a href="{% url 'solicitudes:editar' solicitud.pk %}" class="btn btn-outline-primary"><i class="bi bi-pencil me-2"></i>Editar</a>
     {% endif %}
     <a href="{% url 'solicitudes:pdf' solicitud.pk %}" class="btn btn-outline-danger"><i class="bi bi-file-pdf me-2"></i>PDF</a>
+    <a href="{% url 'solicitudes:docx' solicitud.pk %}" class="btn btn-outline-primary"><i class="bi bi-file-word me-2"></i>Word</a>
     <a href="{% url 'solicitudes:lista' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-2"></i>Volver</a>
   </div>
 </div>

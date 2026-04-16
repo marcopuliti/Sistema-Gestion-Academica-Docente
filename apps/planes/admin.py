@@ -1,0 +1,159 @@
+from django.contrib import admin
+from django.contrib import messages
+from django.http import HttpResponseRedirect
+from django.urls import path, reverse
+from django.utils.html import format_html
+from .models import Carrera, PlanEstudio, Materia, MateriaEnPlan
+from .management.commands.importar_materias import PlanParser, fetch_html
+
+
+
+
+class MateriaEnPlanInline(admin.TabularInline):
+    model = MateriaEnPlan
+    extra = 1
+    fields = ('materia', 'nombre', 'ano', 'cuatrimestre', 'es_optativa', 'hs_totales', 'tope_hs')
+    autocomplete_fields = ['materia']
+    ordering = ('ano', 'cuatrimestre')
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('materia')
+
+
+@admin.register(Carrera)
+class CarreraAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'nombre', 'duracion_anos', 'cantidad_planes')
+    search_fields = ('codigo', 'nombre')
+    ordering = ('nombre',)
+
+    @admin.display(description='Planes')
+    def cantidad_planes(self, obj):
+        return obj.planes.count()
+
+
+@admin.register(PlanEstudio)
+class PlanEstudioAdmin(admin.ModelAdmin):
+    list_display = ('carrera', 'codigo', 'vigente', 'cantidad_materias')
+    list_display_links = ('codigo',)
+    list_filter = ('vigente', 'carrera')
+    list_editable = ('vigente',)
+    search_fields = ('codigo', 'carrera__nombre', 'carrera__codigo')
+    autocomplete_fields = ['carrera']
+    inlines = [MateriaEnPlanInline]
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                '<int:pk>/importar-desde-url/',
+                self.admin_site.admin_view(self.importar_desde_url_view),
+                name='planes_planestudio_importar_desde_url',
+            ),
+        ]
+        return custom + urls
+
+    def importar_desde_url_view(self, request, pk):
+        redirect_url = reverse('admin:planes_planestudio_change', args=[pk])
+
+        try:
+            plan = PlanEstudio.objects.select_related('carrera').get(pk=pk)
+        except PlanEstudio.DoesNotExist:
+            self.message_user(request, f'Plan con id={pk} no encontrado.', messages.ERROR)
+            return HttpResponseRedirect(reverse('admin:planes_planestudio_changelist'))
+
+        url = request.POST.get('url_plan', '').strip()
+        if not url:
+            self.message_user(request, 'Ingresá un URL antes de importar.', messages.WARNING)
+            return HttpResponseRedirect(redirect_url)
+
+        try:
+            html = fetch_html(url)
+        except Exception as e:
+            self.message_user(request, f'No se pudo descargar la página: {e}', messages.ERROR)
+            return HttpResponseRedirect(redirect_url)
+
+        parser = PlanParser()
+        parser.feed(html)
+
+        if not parser.materias:
+            self.message_user(request, 'No se encontraron materias en esa página.', messages.WARNING)
+            return HttpResponseRedirect(redirect_url)
+
+        creadas = 0
+        existentes = 0
+        for m in parser.materias:
+            materia, _ = Materia.objects.get_or_create(
+                codigo=m['codigo'],
+                defaults={'nombre': m['nombre'].title()},
+            )
+            _, rel_creada = MateriaEnPlan.objects.get_or_create(
+                materia=materia,
+                plan=plan,
+                defaults={'ano': m['ano'], 'cuatrimestre': m['cuatrimestre']},
+            )
+            if rel_creada:
+                creadas += 1
+            else:
+                existentes += 1
+
+        self.message_user(
+            request,
+            f'Plan {plan.codigo} ({plan.carrera.nombre}): {creadas} materias importadas, {existentes} ya existían.',
+            messages.SUCCESS,
+        )
+        return HttpResponseRedirect(redirect_url)
+
+    @admin.display(description='Materias')
+    def cantidad_materias(self, obj):
+        return obj.materias_en_plan.count()
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('carrera').prefetch_related('materias_en_plan')
+
+
+@admin.register(Materia)
+class MateriaAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'nombre', 'en_cuantos_planes')
+    search_fields = ('codigo', 'nombre')
+    ordering = ('nombre',)
+
+    @admin.display(description='Planes')
+    def en_cuantos_planes(self, obj):
+        return obj.en_planes.count()
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related('en_planes')
+
+
+@admin.register(MateriaEnPlan)
+class MateriaEnPlanAdmin(admin.ModelAdmin):
+    list_display = ('get_nombre_display', 'materia', 'plan', 'ano', 'cuatrimestre', 'es_optativa', 'hs_totales', 'tope_hs_display')
+    list_display_links = ('get_nombre_display',)
+    list_filter = ('es_optativa', 'ano', 'cuatrimestre', 'plan__vigente', 'plan__carrera', 'plan')
+    list_editable = ('hs_totales',)
+    search_fields = ('materia__nombre', 'materia__codigo', 'nombre', 'plan__carrera__nombre')
+    autocomplete_fields = ['materia', 'plan']
+    ordering = ('plan__carrera__nombre', 'plan__codigo', 'ano', 'cuatrimestre')
+
+    fieldsets = (
+        ('Ubicación en el plan', {
+            'fields': ('plan', 'materia', 'ano', 'cuatrimestre'),
+        }),
+        ('Datos académicos', {
+            'fields': ('nombre', 'es_optativa', 'hs_totales', 'tope_hs'),
+            'description': 'El nombre es opcional: si se deja vacío se usa el nombre de la materia.',
+        }),
+    )
+
+    @admin.display(description='Nombre en el plan')
+    def get_nombre_display(self, obj):
+        return obj.get_nombre()
+
+    @admin.display(description='Tope hs')
+    def tope_hs_display(self, obj):
+        if obj.tope_hs:
+            return obj.tope_hs
+        return format_html('<span style="color:#aaa">—</span>')
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('materia', 'plan__carrera')

@@ -29,6 +29,7 @@ LOCAL_APPS = [
     'apps.planillas',
     'apps.solicitudes',
     'apps.notifications',
+    'apps.planes',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

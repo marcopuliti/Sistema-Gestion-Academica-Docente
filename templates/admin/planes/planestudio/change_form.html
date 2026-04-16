@@ -1,0 +1,59 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block after_related_objects %}
+{{ block.super }}
+{% if original and original.pk %}
+<div class="module" style="margin-top:20px;padding:16px;">
+  <h2 style="margin-top:0;">Importar materias desde la web</h2>
+  <p style="color:#666;margin-bottom:12px;">
+    Pegá el URL del plan en <strong>planesestudio.unsl.edu.ar</strong> y presioná el botón.
+  </p>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <input
+      type="text"
+      id="url-plan-input"
+      placeholder="http://planesestudio.unsl.edu.ar/index.php?action=car_g3&..."
+      style="flex:1;min-width:320px;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;"
+    >
+    <button
+      type="button"
+      onclick="importarMaterias()"
+      style="background:#417690;color:#fff;padding:7px 16px;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;"
+    >
+      Importar materias
+    </button>
+  </div>
+</div>
+
+<script>
+function importarMaterias() {
+  var urlPlan = document.getElementById('url-plan-input').value.trim();
+  if (!urlPlan) {
+    alert('Ingresá el URL del plan antes de importar.');
+    return;
+  }
+
+  // Crear un form fuera del form principal del admin para evitar anidamiento
+  var f = document.createElement('form');
+  f.method = 'POST';
+  f.action = '{% url "admin:planes_planestudio_importar_desde_url" original.pk %}';
+
+  var csrf = document.createElement('input');
+  csrf.type = 'hidden';
+  csrf.name = 'csrfmiddlewaretoken';
+  csrf.value = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+  var inp = document.createElement('input');
+  inp.type = 'hidden';
+  inp.name = 'url_plan';
+  inp.value = urlPlan;
+
+  f.appendChild(csrf);
+  f.appendChild(inp);
+  document.body.appendChild(f);
+  f.submit();
+}
+</script>
+{% endif %}
+{% endblock %}

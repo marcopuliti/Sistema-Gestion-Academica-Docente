@@ -4,13 +4,15 @@ from datetime import date
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 
+from apps.planes.models import PlanEstudio
 from apps.tramites.decorators import puede_revisar
 from apps.tramites.models import EstadoTramite, CalendarioAcademico
 from .forms import SolicitudProtocolizacionForm, EquipoDocenteFormSet, RevisionForm, TIPIFICACIONES_CURRICULARES
 from .models import SolicitudProtocolizacion, TIPIFICACION_CHOICES
 from .pdf import generar_pdf_solicitud
+from .docx_gen import generar_docx_solicitud
 
 TIPIFICACIONES_VALIDAS = {t[0] for t in TIPIFICACION_CHOICES}
 
@@ -175,3 +177,57 @@ def descargar_pdf_solicitud(request, pk):
     response = HttpResponse(buffer, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{nombre}"'
     return response
+
+
+@login_required
+def descargar_docx_solicitud(request, pk):
+    if request.user.puede_revisar:
+        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    else:
+        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
+    buffer = generar_docx_solicitud(solicitud)
+    apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
+    nombre = f"solicitud_{solicitud.pk}_{apellido}.docx"
+    response = HttpResponse(
+        buffer,
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+    return response
+
+
+def planes_por_carrera(request):
+    """AJAX: devuelve los planes vigentes de una carrera como JSON."""
+    carrera_id = request.GET.get('carrera_id')
+    if not carrera_id:
+        return JsonResponse({'planes': []})
+    planes = PlanEstudio.objects.filter(
+        carrera_id=carrera_id, vigente=True
+    ).values('id', 'codigo')
+    return JsonResponse({'planes': list(planes)})
+
+
+def optativas_por_plan(request):
+    """AJAX: devuelve las optativas de un plan con ano y cuatrimestre."""
+    from apps.planes.models import MateriaEnPlan
+    plan_id = request.GET.get('plan_id')
+    if not plan_id:
+        return JsonResponse({'optativas': []})
+    # cuatrimestre → codigo de periodo
+    CUATRI_A_PERIODO = {1: '1c', 2: '2c', 3: 'anual'}
+    qs = (
+        MateriaEnPlan.objects
+        .filter(plan_id=plan_id, es_optativa=True)
+        .select_related('materia')
+        .order_by('ano', 'materia__nombre')
+    )
+    data = [
+        {
+            'id': m.id,
+            'label': f'{m.get_nombre()} ({m.materia.codigo})',
+            'ano': str(m.ano),
+            'periodo': CUATRI_A_PERIODO.get(m.cuatrimestre, ''),
+        }
+        for m in qs
+    ]
+    return JsonResponse({'optativas': data})

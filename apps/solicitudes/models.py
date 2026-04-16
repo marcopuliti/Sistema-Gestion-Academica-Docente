@@ -1,5 +1,6 @@
 from django.db import models
 from apps.tramites.models import TramiteBase
+from apps.planes.models import Carrera, PlanEstudio, MateriaEnPlan
 
 
 PERIODO_CHOICES = [
@@ -37,13 +38,40 @@ TIPIFICACION_CHOICES = [
     ('extracurricular', 'Extracurricular'),
 ]
 
+MODALIDAD_CURSADO_CHOICES = [
+    ('teo_aula_campo',   'Teoría con Prácticas de Aula y Campo'),
+    ('teo_aula_lab',     'Teoría con Prácticas de Aula y Laboratorios'),
+    ('teo_aula',         'Teoría con Prácticas de Aula'),
+    ('teo_aula_lab_campo', 'Teoría con Prácticas de Aula, Laboratorio y Campo'),
+]
+
 
 class SolicitudProtocolizacion(TramiteBase):
     # ── I. Oferta Académica ──────────────────────────────────────────────────
     nombre_curso = models.CharField(max_length=200, verbose_name='Nombre / Materia')
     area = models.CharField(max_length=200, verbose_name='Área', blank=True)
-    carrera = models.CharField(max_length=200, verbose_name='Carrera', blank=True)
-    plan_estudio = models.CharField(max_length=50, verbose_name='Plan', blank=True)
+    carrera = models.ForeignKey(
+        Carrera,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Carrera',
+    )
+    plan_estudio = models.ForeignKey(
+        PlanEstudio,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Plan de estudio',
+    )
+    optativa_vinculada = models.ForeignKey(
+        MateriaEnPlan,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Optativa vinculada',
+        help_text='Optativa del plan a la que corresponde esta protocolización.',
+    )
     anno_carrera = models.CharField(max_length=10, verbose_name='Año en la carrera', blank=True)
     periodo = models.CharField(
         max_length=10, choices=PERIODO_CHOICES,
@@ -57,6 +85,12 @@ class SolicitudProtocolizacion(TramiteBase):
     tipificacion = models.CharField(
         max_length=20, choices=TIPIFICACION_CHOICES,
         verbose_name='Tipificación', blank=True,
+    )
+    modalidad_cursado = models.CharField(
+        max_length=20,
+        choices=MODALIDAD_CURSADO_CHOICES,
+        verbose_name='Modalidad de cursado',
+        blank=True,
     )
     fecha_inicio = models.DateField(verbose_name='Fecha de inicio')
     fecha_hasta = models.DateField(verbose_name='Fecha hasta')

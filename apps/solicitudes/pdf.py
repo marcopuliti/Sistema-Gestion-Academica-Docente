@@ -3,7 +3,7 @@ from io import BytesIO
 
 from django.conf import settings
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
@@ -17,6 +17,13 @@ MARGIN = 2 * cm
 CONTENT_W = PAGE_W - 2 * MARGIN
 NEGRO = colors.black
 
+ESTADO_LABEL = {
+    'pendiente':   'en trámite de aprobación',
+    'en_revision': 'en revisión',
+    'aprobado':    'aprobado',
+    'rechazado':   'rechazado',
+}
+
 
 # ── Estilos ────────────────────────────────────────────────────────────────────
 def _s():
@@ -26,6 +33,11 @@ def _s():
             'InstBold', parent=base['Normal'],
             fontName='Times-Bold', fontSize=11,
             alignment=TA_CENTER, leading=15, spaceAfter=0,
+        ),
+        'status': ParagraphStyle(
+            'Status', parent=base['Normal'],
+            fontName='Times-Roman', fontSize=10,
+            alignment=TA_CENTER, leading=14, spaceAfter=0,
         ),
         'sec_titulo': ParagraphStyle(
             'SecTitulo', parent=base['Normal'],
@@ -96,6 +108,10 @@ def _caja(texto, s):
     return t
 
 
+def _sec_titulo(texto, s):
+    return Paragraph(f'<u>{texto}</u>', s['sec_titulo'])
+
+
 def _pie_pagina(canvas, doc):
     canvas.saveState()
     canvas.setFont('Times-Roman', 9)
@@ -115,28 +131,54 @@ def generar_pdf_solicitud(solicitud):
     E = []  # elementos
 
     # ── ENCABEZADO ──────────────────────────────────────────────────────────────
+    year       = solicitud.fecha_inicio.year
+    estado_txt = ESTADO_LABEL.get(solicitud.estado, solicitud.estado)
+    fecha_pres = solicitud.fecha_creacion.strftime('%d/%m/%Y %H:%M:%S')
+
+    left_items = []
     logo_path = os.path.join(settings.BASE_DIR, 'static', 'escudo.gif')
     if os.path.exists(logo_path):
         logo = Image(logo_path, width=2.8 * cm, height=2.8 * cm)
         logo.hAlign = 'CENTER'
-        E.append(logo)
-        E.append(Spacer(1, 0.15 * cm))
+        left_items.append(logo)
+        left_items.append(Spacer(1, 0.15 * cm))
 
+    dpto = (solicitud.usuario.departamento if solicitud.usuario else None) \
+        or solicitud.departamento_docente or '—'
     for linea in [
         'Ministerio de Cultura y Educación',
         'Universidad Nacional de San Luis',
         'Facultad de Ciencias Físico Matemáticas y Naturales',
-        f'Departamento: {(solicitud.usuario.departamento if solicitud.usuario else None) or solicitud.departamento_docente or "—"}',
+        f'Departamento: {dpto}',
     ]:
-        E.append(Paragraph(linea, s['inst_bold']))
+        left_items.append(Paragraph(linea, s['inst_bold']))
 
     if solicitud.area:
-        E.append(Paragraph(f'Area: {solicitud.area}', s['inst_bold']))
+        left_items.append(Paragraph(f'Area: {solicitud.area}', s['inst_bold']))
 
+    right_items = [
+        Spacer(1, 0.8 * cm),
+        Paragraph(f'(Programa del año {year})', s['status']),
+        Paragraph(f'(Programa {estado_txt})', s['status']),
+        Paragraph(f'(Presentado el {fecha_pres})', s['status']),
+    ]
+
+    cab = Table(
+        [[left_items, right_items]],
+        colWidths=[CONTENT_W * 0.62, CONTENT_W * 0.38],
+    )
+    cab.setStyle(TableStyle([
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 0),
+        ('TOPPADDING',    (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    E.append(cab)
     E.append(Spacer(1, 0.4 * cm))
 
     # ── I — Oferta Académica ────────────────────────────────────────────────────
-    E.append(Paragraph('I - Oferta Académica', s['sec_titulo']))
+    E.append(_sec_titulo('I - Oferta Académica', s))
     w = CONTENT_W
     E.append(_tabla(
         [
@@ -144,18 +186,19 @@ def generar_pdf_solicitud(solicitud):
              _p('Plan', s['th']), _p('Año', s['th']), _p('Período', s['th'])],
             [
                 _p(solicitud.nombre_curso, s['td']),
-                _p(solicitud.carrera or '', s['td']),
-                _p(solicitud.plan_estudio or '', s['td']),
+                _p(solicitud.carrera.nombre if solicitud.carrera else '', s['td']),
+                _p(solicitud.plan_estudio.codigo if solicitud.plan_estudio else '', s['td']),
                 _p(solicitud.anno_carrera or '', s['td']),
                 _p(solicitud.get_periodo_display() if solicitud.periodo else '', s['td']),
             ],
         ],
         col_widths=[w * 0.28, w * 0.28, w * 0.14, w * 0.10, w * 0.20],
+        extra_cmds=[('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey)],
     ))
 
     # ── II — Equipo Docente ─────────────────────────────────────────────────────
     E.append(Spacer(1, 0.5 * cm))
-    E.append(Paragraph('II - Equipo Docente', s['sec_titulo']))
+    E.append(_sec_titulo('II - Equipo Docente', s))
 
     filas_ii = [[
         _p('Docente', s['th']),
@@ -173,28 +216,31 @@ def generar_pdf_solicitud(solicitud):
     if len(filas_ii) == 1:
         filas_ii.append([_p('', s['td'])] * 4)
 
-    E.append(_tabla(filas_ii, col_widths=[w * 0.40, w * 0.28, w * 0.16, w * 0.16]))
+    E.append(_tabla(
+        filas_ii,
+        col_widths=[w * 0.40, w * 0.28, w * 0.16, w * 0.16],
+        extra_cmds=[('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey)],
+    ))
 
     # ── III — Características del Curso ────────────────────────────────────────
     E.append(Spacer(1, 0.5 * cm))
-    E.append(Paragraph('III - Características del Curso', s['sec_titulo']))
+    E.append(_sec_titulo('III - Características del Curso', s))
 
     total_hs = solicitud.total_horas_semanales
+    cant_hs  = solicitud.cantidad_semanas * total_hs
 
-    # Crédito Horario Semanal (tabla con fila de título fusionada)
+    # Tabla 1: Crédito Horario Semanal
+    cw_hs = [w * 0.17, w * 0.13, w * 0.18, w * 0.35, w * 0.17]
     E.append(_tabla(
         [
-            # fila fusionada: título
-            [_p('Credito Horario Semanal', s['th_c']), '', '', '', ''],
-            # cabeceras de columnas
+            [_p('Crédito Horario Semanal', s['th_c']), '', '', '', ''],
             [
                 _p('Teórico/Práctico', s['th_c']),
                 _p('Teóricas', s['th_c']),
                 _p('Prácticas de Aula', s['th_c']),
-                _p('Práct. de lab/ camp/ Resid/ PIP, etc.', s['th_c']),
+                _p('Práct. de lab/ camp/\nResid/ PIP, etc.', s['th_c']),
                 _p('Total', s['th_c']),
             ],
-            # datos
             [
                 _p('Hs', s['td_c']),
                 _p(f'{solicitud.hs_teoricas} Hs', s['td_c']),
@@ -203,32 +249,32 @@ def generar_pdf_solicitud(solicitud):
                 _p(f'{total_hs} Hs', s['td_c']),
             ],
         ],
-        col_widths=[w * 0.18, w * 0.14, w * 0.20, w * 0.34, w * 0.14],
+        col_widths=cw_hs,
         extra_cmds=[
             ('SPAN', (0, 0), (4, 0)),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('BACKGROUND', (0, 0), (4, 0), colors.lightgrey),
+            ('BACKGROUND', (0, 1), (4, 1), colors.lightgrey),
         ],
     ))
 
-    E.append(Spacer(1, 0.15 * cm))
+    E.append(Spacer(1, 0.3 * cm))
 
-    # Tipificación | Periodo
+    # Tabla 2: Tipificación / Período
     E.append(_tabla(
         [
-            [_p('Tipificación', s['th_c']), _p('Periodo', s['th_c'])],
+            [_p('Tipificación', s['th_c']), _p('Período', s['th_c'])],
             [
-                _p(solicitud.get_tipificacion_display() if solicitud.tipificacion else '', s['td']),
+                _p(solicitud.get_modalidad_cursado_display() if solicitud.modalidad_cursado else '', s['td']),
                 _p(solicitud.get_periodo_display() if solicitud.periodo else '', s['td']),
             ],
         ],
         col_widths=[w * 0.50, w * 0.50],
-        extra_cmds=[('ALIGN', (0, 0), (-1, 0), 'CENTER')],
+        extra_cmds=[('BACKGROUND', (0, 0), (1, 0), colors.lightgrey)],
     ))
 
-    E.append(Spacer(1, 0.15 * cm))
+    E.append(Spacer(1, 0.3 * cm))
 
-    # Duración
-    cant_hs = solicitud.cantidad_semanas * total_hs
+    # Tabla 3: Duración
     E.append(_tabla(
         [
             [_p('Duración', s['th_c']), '', '', ''],
@@ -248,53 +294,35 @@ def generar_pdf_solicitud(solicitud):
         col_widths=[w * 0.25, w * 0.25, w * 0.25, w * 0.25],
         extra_cmds=[
             ('SPAN', (0, 0), (3, 0)),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
+            ('BACKGROUND', (0, 0), (3, 0), colors.lightgrey),
+            ('BACKGROUND', (0, 1), (3, 1), colors.lightgrey),
         ],
     ))
 
-    # ── IV — Fundamentación ─────────────────────────────────────────────────────
+    # ── IV–XIV — Secciones de texto ─────────────────────────────────────────────
     def sec(num, titulo, texto):
         E.append(Spacer(1, 0.5 * cm))
-        E.append(Paragraph(f'{num} - {titulo}', s['sec_titulo']))
+        E.append(_sec_titulo(f'{num} - {titulo}', s))
         E.append(_caja(texto, s))
 
     sec('IV', 'Fundamentación', solicitud.fundamentacion)
-
-    # ── V — Objetivos ───────────────────────────────────────────────────────────
     sec('V', 'Objetivos / Resultados de Aprendizaje', solicitud.objetivos)
 
-    # ── VI — Contenidos ─────────────────────────────────────────────────────────
     E.append(Spacer(1, 0.5 * cm))
-    E.append(Paragraph('VI - Contenidos', s['sec_titulo']))
+    E.append(_sec_titulo('VI - Contenidos', s))
     cont_vi = ''
     if solicitud.contenidos_minimos:
         cont_vi += 'Contenidos Mínimos \n' + solicitud.contenidos_minimos + '\n\n'
     cont_vi += solicitud.unidades
     E.append(_caja(cont_vi, s))
 
-    # ── VII — Plan de Trabajos Prácticos ────────────────────────────────────────
     sec('VII', 'Plan de Trabajos Prácticos', solicitud.plan_trabajos_practicos or '')
-
-    # ── VIII — Régimen de Aprobación ────────────────────────────────────────────
     sec('VIII', 'Regimen de Aprobación', solicitud.regimen_aprobacion)
-
-    # ── IX — Bibliografía Básica ────────────────────────────────────────────────
     sec('IX', 'Bibliografía Básica', solicitud.bibliografia_basica)
-
-    # ── X — Bibliografía Complementaria ────────────────────────────────────────
     sec('X', 'Bibliografia Complementaria', solicitud.bibliografia_complementaria or '')
-
-    # ── XI — Resumen de Objetivos ───────────────────────────────────────────────
     sec('XI', 'Resumen de Objetivos', solicitud.resumen_objetivos or '')
-
-    # ── XII — Resumen del Programa ──────────────────────────────────────────────
     sec('XII', 'Resumen del Programa', solicitud.resumen_programa or '')
-
-    # ── XIII — Imprevistos ──────────────────────────────────────────────────────
     sec('XIII', 'Imprevistos', solicitud.imprevistos or '')
-
-    # ── XIV — Otros ─────────────────────────────────────────────────────────────
     sec('XIV', 'Otros', solicitud.contacto_otros or '')
 
     # ── ELEVACIÓN y APROBACIÓN ──────────────────────────────────────────────────
@@ -303,11 +331,8 @@ def generar_pdf_solicitud(solicitud):
     ROW_H = 1.8 * cm
     E.append(_tabla(
         [
-            # fila 0: título fusionado
             [_p('ELEVACIÓN y APROBACIÓN DE ESTE PROGRAMA', s['th_c']), ''],
-            # fila 1: col derecha "Profesor Responsable"
             ['', _p('Profesor Responsable', s['th_c'])],
-            # filas de firma
             [_p('Firma:', s['td']), ''],
             [_p('Aclaración:', s['td']), ''],
             [_p('Fecha:', s['td']), ''],
@@ -317,6 +342,7 @@ def generar_pdf_solicitud(solicitud):
             ('SPAN', (0, 0), (1, 0)),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('ALIGN', (1, 1), (1, 1), 'CENTER'),
+            ('BACKGROUND', (0, 0), (1, 0), colors.lightgrey),
             ('ROWHEIGHT', (0, 2), (-1, -1), ROW_H),
         ],
     ))

@@ -39,7 +39,7 @@ def _crear_notificacion(destinatario, tipo, titulo, mensaje, url=''):
 def notificar_nuevo_tramite(tramite, tipo_tramite):
     """Notifica a los revisores cuando un docente envía un trámite nuevo."""
     revisores = User.objects.filter(
-        rol__in=['jefe_departamento', 'administrador'],
+        rol__in=['administrador'],
         is_active=True,
     )
     docente = tramite.usuario

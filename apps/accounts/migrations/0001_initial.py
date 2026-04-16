@@ -29,7 +29,7 @@ class Migration(migrations.Migration):
                 ('is_staff', models.BooleanField(default=False, help_text='Designates whether the user can log into this admin site.', verbose_name='staff status')),
                 ('is_active', models.BooleanField(default=True, help_text='Designates whether this user should be treated as active. Unselect this instead of deleting accounts.', verbose_name='active')),
                 ('date_joined', models.DateTimeField(default=django.utils.timezone.now, verbose_name='date joined')),
-                ('rol', models.CharField(choices=[('docente', 'Docente'), ('jefe_departamento', 'Jefe de Departamento'), ('administrador', 'Administrador')], default='docente', max_length=20, verbose_name='Rol')),
+                ('rol', models.CharField(choices=[('docente', 'Docente'), ('administrador', 'Administrador')], default='docente', max_length=20, verbose_name='Rol')),
                 ('departamento', models.CharField(blank=True, max_length=150, verbose_name='Departamento')),
                 ('legajo', models.CharField(blank=True, max_length=20, null=True, unique=True, verbose_name='Legajo')),
                 ('telefono', models.CharField(blank=True, max_length=30, verbose_name='Teléfono')),

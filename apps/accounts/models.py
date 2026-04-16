@@ -4,12 +4,10 @@ from django.db import models
 
 class CustomUser(AbstractUser):
     DOCENTE = 'docente'
-    JEFE_DEPARTAMENTO = 'jefe_departamento'
     ADMINISTRADOR = 'administrador'
 
     ROL_CHOICES = [
         (DOCENTE, 'Docente'),
-        (JEFE_DEPARTAMENTO, 'Jefe de Departamento'),
         (ADMINISTRADOR, 'Administrador'),
     ]
 
@@ -50,13 +48,9 @@ class CustomUser(AbstractUser):
         return self.rol == self.DOCENTE
 
     @property
-    def es_jefe(self):
-        return self.rol == self.JEFE_DEPARTAMENTO
-
-    @property
     def es_administrador(self):
         return self.rol == self.ADMINISTRADOR
 
     @property
     def puede_revisar(self):
-        return self.rol in (self.JEFE_DEPARTAMENTO, self.ADMINISTRADOR)
+        return self.rol == self.ADMINISTRADOR

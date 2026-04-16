@@ -110,7 +110,6 @@ El archivo `datos.json` incluye los datos base del sistema listos para importar:
 | `planes.materia` | Materias del catálogo |
 | `planes.materiaenplan` | Materias por plan con año, cuatrimestre y carga horaria |
 | `tramites.calendarioacademico` | Calendario académico inicial |
-| `solicitudes.*` | Solicitudes de ejemplo |
 
 > **Nota:** Las cuentas de usuario **no** están incluidas por seguridad. Crear con `createsuperuser` y luego desde el admin.
 

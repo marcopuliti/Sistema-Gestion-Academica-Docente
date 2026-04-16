@@ -13,63 +13,6 @@
     }
   },
   {
-    "model": "solicitudes.solicitudprotocolizacion",
-    "pk": 3,
-    "fields": {
-      "usuario": [
-        "sacademica.fmn"
-      ],
-      "nombre_docente": "",
-      "legajo_docente": "",
-      "departamento_docente": "",
-      "email_docente": "",
-      "estado": "pendiente",
-      "fecha_creacion": "2026-04-16T02:58:15.804Z",
-      "fecha_actualizacion": "2026-04-16T03:19:31.188Z",
-      "comentarios_revision": "",
-      "revisor": null,
-      "nombre_curso": "Introducci¾n a grafos",
-      "area": "",
-      "carrera": 1,
-      "plan_estudio": 1,
-      "optativa_vinculada": 31,
-      "anno_carrera": "4",
-      "periodo": "2c",
-      "hs_teoricas": 20,
-      "hs_practicas_aula": 0,
-      "hs_lab_campo": 0,
-      "tipificacion": "optativa",
-      "modalidad_cursado": "teo_aula_campo",
-      "fecha_inicio": "2026-08-03",
-      "fecha_hasta": "2026-11-13",
-      "cantidad_semanas": 15,
-      "fundamentacion": "asfd",
-      "objetivos": "asdfadsf",
-      "contenidos_minimos": "afd",
-      "unidades": "adf",
-      "plan_trabajos_practicos": "adf",
-      "regimen_aprobacion": "adf",
-      "bibliografia_basica": "adf",
-      "bibliografia_complementaria": "afd",
-      "resumen_objetivos": "adf",
-      "resumen_programa": "adf",
-      "imprevistos": "adf",
-      "contacto_otros": "afd"
-    }
-  },
-  {
-    "model": "solicitudes.miembroequipodocente",
-    "pk": 3,
-    "fields": {
-      "solicitud": 3,
-      "nombre": "sdgsfg",
-      "funcion": "responsable",
-      "cargo": "titular",
-      "dedicacion": "10hs",
-      "orden": 0
-    }
-  },
-  {
     "model": "planes.carrera",
     "pk": 1,
     "fields": {

@@ -37,7 +37,7 @@ Plataforma web para la gestión de trámites académicos docentes universitarios
 
 ```bash
 # 1. Clonar repositorio
-git clone <url-del-repo>
+git clone https://github.com/marcopuliti/Sistema-Gestion-Academica-Docente.git
 cd Sistema-Gestion-Academica-Docente
 
 # 2. Entorno virtual

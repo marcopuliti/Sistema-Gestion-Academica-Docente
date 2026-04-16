@@ -17,7 +17,7 @@
     "pk": 1,
     "fields": {
       "codigo": "03025",
-      "nombre": "IngenierÝa Electr¾nica con Orientaci¾n en Sistemas Digitales",
+      "nombre": "Ingeniería Electrónica con Orientación en Sistemas Digitales",
       "duracion_anos": 5
     }
   },
@@ -26,7 +26,7 @@
     "pk": 2,
     "fields": {
       "codigo": "03062",
-      "nombre": "IngenierÝa en Computaci¾n",
+      "nombre": "Ingeniería en Computación",
       "duracion_anos": 5
     }
   },
@@ -35,7 +35,7 @@
     "pk": 3,
     "fields": {
       "codigo": "03061",
-      "nombre": "IngenierÝa en Informßtica",
+      "nombre": "Ingeniería en Informática",
       "duracion_anos": 5
     }
   },
@@ -44,7 +44,7 @@
     "pk": 4,
     "fields": {
       "codigo": "03054",
-      "nombre": "IngenierÝa en Minas",
+      "nombre": "Ingeniería en Minas",
       "duracion_anos": 5
     }
   },
@@ -53,7 +53,7 @@
     "pk": 5,
     "fields": {
       "codigo": "16001",
-      "nombre": "Licenciatura en Anßlisis y Gesti¾n de Datos",
+      "nombre": "Licenciatura en Análisis y Gestión de Datos",
       "duracion_anos": 5
     }
   },
@@ -62,7 +62,7 @@
     "pk": 6,
     "fields": {
       "codigo": "03003",
-      "nombre": "Licenciatura en Ciencias de la Computaci¾n",
+      "nombre": "Licenciatura en Ciencias de la Computación",
       "duracion_anos": 5
     }
   },
@@ -71,7 +71,7 @@
     "pk": 7,
     "fields": {
       "codigo": "03004",
-      "nombre": "Licenciatura en Ciencias Geol¾gicas",
+      "nombre": "Licenciatura en Ciencias Geológicas",
       "duracion_anos": 5
     }
   },
@@ -80,7 +80,7 @@
     "pk": 8,
     "fields": {
       "codigo": "03002",
-      "nombre": "Licenciatura en Ciencias Matemßticas",
+      "nombre": "Licenciatura en Ciencias Matemáticas",
       "duracion_anos": 4
     }
   },
@@ -89,7 +89,7 @@
     "pk": 9,
     "fields": {
       "codigo": "03001",
-      "nombre": "Licenciatura en FÝsica",
+      "nombre": "Licenciatura en Física",
       "duracion_anos": 5
     }
   },
@@ -98,7 +98,7 @@
     "pk": 10,
     "fields": {
       "codigo": "03024",
-      "nombre": "Profesorado en Ciencias de la Computaci¾n",
+      "nombre": "Profesorado en Ciencias de la Computación",
       "duracion_anos": 4
     }
   },
@@ -107,7 +107,7 @@
     "pk": 11,
     "fields": {
       "codigo": "03014",
-      "nombre": "Profesorado en FÝsica",
+      "nombre": "Profesorado en Física",
       "duracion_anos": 4
     }
   },
@@ -116,7 +116,7 @@
     "pk": 12,
     "fields": {
       "codigo": "03060",
-      "nombre": "Profesorado en Matemßtica",
+      "nombre": "Profesorado en Matemática",
       "duracion_anos": 4
     }
   },
@@ -125,7 +125,7 @@
     "pk": 13,
     "fields": {
       "codigo": "03027",
-      "nombre": "Profesorado en TecnologÝa Electr¾nica",
+      "nombre": "Profesorado en Tecnología Electrónica",
       "duracion_anos": 4
     }
   },
@@ -134,7 +134,7 @@
     "pk": 14,
     "fields": {
       "codigo": "03TUE",
-      "nombre": "Tecnicatura Universitaria en Electr¾nica",
+      "nombre": "Tecnicatura Universitaria en Electrónica",
       "duracion_anos": 3
     }
   },
@@ -143,7 +143,7 @@
     "pk": 15,
     "fields": {
       "codigo": "03TER",
-      "nombre": "Tecnicatura Universitaria en EnergÝas Renovables",
+      "nombre": "Tecnicatura Universitaria en Energías Renovables",
       "duracion_anos": 3
     }
   },
@@ -152,7 +152,7 @@
     "pk": 16,
     "fields": {
       "codigo": "03063",
-      "nombre": "Tecnicatura Universitaria en FotografÝa",
+      "nombre": "Tecnicatura Universitaria en Fotografía",
       "duracion_anos": 3
     }
   },
@@ -161,7 +161,7 @@
     "pk": 17,
     "fields": {
       "codigo": "03TUM",
-      "nombre": "Tecnicatura Universitaria en MinerÝa",
+      "nombre": "Tecnicatura Universitaria en Minería",
       "duracion_anos": 3
     }
   },
@@ -197,7 +197,7 @@
     "pk": 21,
     "fields": {
       "codigo": "03064",
-      "nombre": "Tecnicatura Universitaria en Teledetecci¾n y Sistemas de Informaci¾n Geogrßfica",
+      "nombre": "Tecnicatura Universitaria en Teledetección y Sistemas de Información Geográfica",
       "duracion_anos": 3
     }
   },
@@ -457,7 +457,7 @@
     "pk": 2,
     "fields": {
       "codigo": "03MA04137",
-      "nombre": "Cßlculo I"
+      "nombre": "Cálculo I"
     }
   },
   {
@@ -465,7 +465,7 @@
     "pk": 3,
     "fields": {
       "codigo": "03MA04136",
-      "nombre": "┴lgebra I"
+      "nombre": "Álgebra I"
     }
   },
   {
@@ -481,7 +481,7 @@
     "pk": 5,
     "fields": {
       "codigo": "03MA04126",
-      "nombre": "Electr¾nica Programable I"
+      "nombre": "Electrónica Programable I"
     }
   },
   {
@@ -521,7 +521,7 @@
     "pk": 10,
     "fields": {
       "codigo": "03MA04138",
-      "nombre": "Cßlculo Ii"
+      "nombre": "Cálculo Ii"
     }
   },
   {
@@ -529,7 +529,7 @@
     "pk": 11,
     "fields": {
       "codigo": "03MA04127",
-      "nombre": "Electr¾nica Programable Ii"
+      "nombre": "Electrónica Programable Ii"
     }
   },
   {
@@ -545,7 +545,7 @@
     "pk": 13,
     "fields": {
       "codigo": "03MA04129",
-      "nombre": "Matemßtica Avanzada Para IngenierÝa"
+      "nombre": "Matemática Avanzada Para Ingeniería"
     }
   },
   {
@@ -561,7 +561,7 @@
     "pk": 15,
     "fields": {
       "codigo": "03MA04139",
-      "nombre": "Redes ElÚctricas I"
+      "nombre": "Redes Eléctricas I"
     }
   },
   {
@@ -609,7 +609,7 @@
     "pk": 21,
     "fields": {
       "codigo": "03MA04140",
-      "nombre": "Redes ElÚctricas Ii"
+      "nombre": "Redes Eléctricas Ii"
     }
   },
   {
@@ -625,7 +625,7 @@
     "pk": 23,
     "fields": {
       "codigo": "03MA00437",
-      "nombre": "Se±ales Y Sistemas"
+      "nombre": "Señales Y Sistemas"
     }
   },
   {
@@ -633,7 +633,7 @@
     "pk": 24,
     "fields": {
       "codigo": "03MA00454",
-      "nombre": "Dise±o De Sistemas Digitales"
+      "nombre": "Diseño De Sistemas Digitales"
     }
   },
   {
@@ -673,7 +673,7 @@
     "pk": 29,
     "fields": {
       "codigo": "03MA04132",
-      "nombre": "Procesamiento Digital De Se±ales"
+      "nombre": "Procesamiento Digital De Señales"
     }
   },
   {
@@ -729,7 +729,7 @@
     "pk": 36,
     "fields": {
       "codigo": "03MA04134",
-      "nombre": "Comunicaci¾n Profesional, CientÝfica Y TÚcnica"
+      "nombre": "Comunicación Profesional, Científica Y Técnica"
     }
   },
   {
@@ -745,7 +745,7 @@
     "pk": 38,
     "fields": {
       "codigo": "03MA04135",
-      "nombre": "Gesti¾n De Proyectos De IngenierÝa"
+      "nombre": "Gestión De Proyectos De Ingeniería"
     }
   },
   {
@@ -777,7 +777,7 @@
     "pk": 42,
     "fields": {
       "codigo": "03MA02032",
-      "nombre": "Resoluci¾n De Problemas Y Algoritmos"
+      "nombre": "Resolución De Problemas Y Algoritmos"
     }
   },
   {
@@ -913,7 +913,7 @@
     "pk": 59,
     "fields": {
       "codigo": "03MA02039",
-      "nombre": "Dise±o Y Paradigmas De Lenguajes"
+      "nombre": "Diseño Y Paradigmas De Lenguajes"
     }
   },
   {
@@ -945,7 +945,7 @@
     "pk": 63,
     "fields": {
       "codigo": "03MA02041",
-      "nombre": "Procesamiento Digital De Se±ales"
+      "nombre": "Procesamiento Digital De Señales"
     }
   },
   {
@@ -1025,7 +1025,7 @@
     "pk": 73,
     "fields": {
       "codigo": "03003MA00002",
-      "nombre": "Introducci¾n Al Cßlculo"
+      "nombre": "Introducción Al Cálculo"
     }
   },
   {
@@ -1033,7 +1033,7 @@
     "pk": 74,
     "fields": {
       "codigo": "03003MA00005",
-      "nombre": "Programaci¾n I"
+      "nombre": "Programación I"
     }
   },
   {
@@ -1041,7 +1041,7 @@
     "pk": 75,
     "fields": {
       "codigo": "03MA04142",
-      "nombre": "FÝsica"
+      "nombre": "Física"
     }
   },
   {
@@ -1049,7 +1049,7 @@
     "pk": 76,
     "fields": {
       "codigo": "03MA04141",
-      "nombre": "Organizaci¾n Y Arquitectura De Computadoras"
+      "nombre": "Organización Y Arquitectura De Computadoras"
     }
   },
   {
@@ -1065,7 +1065,7 @@
     "pk": 78,
     "fields": {
       "codigo": "03MA04144",
-      "nombre": "╔tica Y Legislaci¾n"
+      "nombre": "Ética Y Legislación"
     }
   },
   {
@@ -1073,7 +1073,7 @@
     "pk": 79,
     "fields": {
       "codigo": "03MA04143",
-      "nombre": "IngenierÝa De Software I"
+      "nombre": "Ingeniería De Software I"
     }
   },
   {
@@ -1081,7 +1081,7 @@
     "pk": 80,
     "fields": {
       "codigo": "03MA04145",
-      "nombre": "Laboratorio De TecnologÝas"
+      "nombre": "Laboratorio De Tecnologías"
     }
   },
   {
@@ -1089,7 +1089,7 @@
     "pk": 81,
     "fields": {
       "codigo": "03MA04146",
-      "nombre": "Anßlisis NumÚrico"
+      "nombre": "Análisis Numérico"
     }
   },
   {
@@ -1105,7 +1105,7 @@
     "pk": 83,
     "fields": {
       "codigo": "03MA04147",
-      "nombre": "Planeamiento EstratÚgico De Sistemas De Informaci¾n"
+      "nombre": "Planeamiento Estratégico De Sistemas De Información"
     }
   },
   {
@@ -1129,7 +1129,7 @@
     "pk": 86,
     "fields": {
       "codigo": "03MA04148",
-      "nombre": "Sistemas CrÝticos"
+      "nombre": "Sistemas Críticos"
     }
   },
   {
@@ -1161,7 +1161,7 @@
     "pk": 90,
     "fields": {
       "codigo": "03MA04149",
-      "nombre": "Seguridad De Sistemas Informßticos"
+      "nombre": "Seguridad De Sistemas Informáticos"
     }
   },
   {
@@ -1169,7 +1169,7 @@
     "pk": 91,
     "fields": {
       "codigo": "03MA04151",
-      "nombre": "ReingenierÝa De Las Organizaciones Y De Los Sistemas De Informaci¾n"
+      "nombre": "Reingeniería De Las Organizaciones Y De Los Sistemas De Información"
     }
   },
   {
@@ -1193,7 +1193,7 @@
     "pk": 94,
     "fields": {
       "codigo": "03MA04152",
-      "nombre": "Administraci¾n Y Evaluaci¾n Financiera De Proyectos Informßticos"
+      "nombre": "Administración Y Evaluación Financiera De Proyectos Informáticos"
     }
   },
   {
@@ -1225,7 +1225,7 @@
     "pk": 98,
     "fields": {
       "codigo": "03054MA00002",
-      "nombre": "Cßlculo I"
+      "nombre": "Cálculo I"
     }
   },
   {
@@ -1233,7 +1233,7 @@
     "pk": 99,
     "fields": {
       "codigo": "03054MA00003",
-      "nombre": "Fundamentos De La Programaci¾n"
+      "nombre": "Fundamentos De La Programación"
     }
   },
   {
@@ -1241,7 +1241,7 @@
     "pk": 100,
     "fields": {
       "codigo": "03054MA00004",
-      "nombre": "Introducci¾n A La IngenierÝa"
+      "nombre": "Introducción A La Ingeniería"
     }
   },
   {
@@ -1249,7 +1249,7 @@
     "pk": 101,
     "fields": {
       "codigo": "03054MA00005",
-      "nombre": "┴lgebra Ii"
+      "nombre": "Álgebra Ii"
     }
   },
   {
@@ -1257,7 +1257,7 @@
     "pk": 102,
     "fields": {
       "codigo": "03054MA00006",
-      "nombre": "FÝsica I"
+      "nombre": "Física I"
     }
   },
   {
@@ -1265,7 +1265,7 @@
     "pk": 103,
     "fields": {
       "codigo": "03054MA00007",
-      "nombre": "QuÝmica"
+      "nombre": "Química"
     }
   },
   {
@@ -1273,7 +1273,7 @@
     "pk": 104,
     "fields": {
       "codigo": "03054MA00008",
-      "nombre": "Cßlculo Ii"
+      "nombre": "Cálculo Ii"
     }
   },
   {
@@ -1281,7 +1281,7 @@
     "pk": 105,
     "fields": {
       "codigo": "03054MA00009",
-      "nombre": "FÝsica Ii"
+      "nombre": "Física Ii"
     }
   },
   {
@@ -1289,7 +1289,7 @@
     "pk": 106,
     "fields": {
       "codigo": "03054MA00010",
-      "nombre": "Sistemas De Representaci¾n"
+      "nombre": "Sistemas De Representación"
     }
   },
   {
@@ -1297,7 +1297,7 @@
     "pk": 107,
     "fields": {
       "codigo": "03054MA00011",
-      "nombre": "InglÚs"
+      "nombre": "Inglés"
     }
   },
   {
@@ -1305,7 +1305,7 @@
     "pk": 108,
     "fields": {
       "codigo": "03054MA00013",
-      "nombre": "Fundamentos De GeologÝa Para IngenierÝa"
+      "nombre": "Fundamentos De Geología Para Ingeniería"
     }
   },
   {
@@ -1313,7 +1313,7 @@
     "pk": 109,
     "fields": {
       "codigo": "03054MA00012",
-      "nombre": "QuÝmica AnalÝtica"
+      "nombre": "Química Analítica"
     }
   },
   {
@@ -1321,7 +1321,7 @@
     "pk": 110,
     "fields": {
       "codigo": "03054MA00014",
-      "nombre": "Estßtica Y Resistencia De Materiales"
+      "nombre": "Estática Y Resistencia De Materiales"
     }
   },
   {
@@ -1329,7 +1329,7 @@
     "pk": 111,
     "fields": {
       "codigo": "03054MA00015",
-      "nombre": "ElectrotÚcnia"
+      "nombre": "Electrotécnia"
     }
   },
   {
@@ -1345,7 +1345,7 @@
     "pk": 113,
     "fields": {
       "codigo": "03054MA00018",
-      "nombre": "Mecßnica De Rocas"
+      "nombre": "Mecánica De Rocas"
     }
   },
   {
@@ -1353,7 +1353,7 @@
     "pk": 114,
     "fields": {
       "codigo": "03054MA00019",
-      "nombre": "Mecßnica Aplicada Minera"
+      "nombre": "Mecánica Aplicada Minera"
     }
   },
   {
@@ -1361,7 +1361,7 @@
     "pk": 115,
     "fields": {
       "codigo": "03054MA00020",
-      "nombre": "Probabilidad Y EstadÝstica"
+      "nombre": "Probabilidad Y Estadística"
     }
   },
   {
@@ -1369,7 +1369,7 @@
     "pk": 116,
     "fields": {
       "codigo": "03054MA00016",
-      "nombre": "MineralogÝa"
+      "nombre": "Mineralogía"
     }
   },
   {
@@ -1377,7 +1377,7 @@
     "pk": 117,
     "fields": {
       "codigo": "03054MA00021",
-      "nombre": "Modelos Matemßticos Aplicados A La MinerÝa"
+      "nombre": "Modelos Matemáticos Aplicados A La Minería"
     }
   },
   {
@@ -1385,7 +1385,7 @@
     "pk": 118,
     "fields": {
       "codigo": "03054MA00022",
-      "nombre": "Fundamentos De GeoestadÝstica"
+      "nombre": "Fundamentos De Geoestadística"
     }
   },
   {
@@ -1393,7 +1393,7 @@
     "pk": 119,
     "fields": {
       "codigo": "03054MA00023",
-      "nombre": "TecnologÝa De Explosivos"
+      "nombre": "Tecnología De Explosivos"
     }
   },
   {
@@ -1417,7 +1417,7 @@
     "pk": 122,
     "fields": {
       "codigo": "03054MA00027",
-      "nombre": "PetrografÝa Y GeologÝa De Yacimientos Minerales"
+      "nombre": "Petrografía Y Geología De Yacimientos Minerales"
     }
   },
   {
@@ -1425,7 +1425,7 @@
     "pk": 123,
     "fields": {
       "codigo": "03054MA00026",
-      "nombre": "Simulaci¾n De Operaciones Mineras"
+      "nombre": "Simulación De Operaciones Mineras"
     }
   },
   {
@@ -1441,7 +1441,7 @@
     "pk": 125,
     "fields": {
       "codigo": "03054MA00029",
-      "nombre": "Software De Dise±o Y Planificaci¾n Minera"
+      "nombre": "Software De Diseño Y Planificación Minera"
     }
   },
   {
@@ -1449,7 +1449,7 @@
     "pk": 126,
     "fields": {
       "codigo": "03054MA00030",
-      "nombre": "Mßquinas Y Servicios Mineros"
+      "nombre": "Máquinas Y Servicios Mineros"
     }
   },
   {
@@ -1457,7 +1457,7 @@
     "pk": 127,
     "fields": {
       "codigo": "03054MA00032",
-      "nombre": "Exploraci¾n Y Evaluaci¾n De Yacimientos Minerales"
+      "nombre": "Exploración Y Evaluación De Yacimientos Minerales"
     }
   },
   {
@@ -1465,7 +1465,7 @@
     "pk": 128,
     "fields": {
       "codigo": "03054MA00033",
-      "nombre": "Evaluaci¾n Econ¾mica E IngenierÝa De Proyectos Mineros"
+      "nombre": "Evaluación Económica E Ingeniería De Proyectos Mineros"
     }
   },
   {
@@ -1473,7 +1473,7 @@
     "pk": 129,
     "fields": {
       "codigo": "03054MA00034",
-      "nombre": "TopografÝa"
+      "nombre": "Topografía"
     }
   },
   {
@@ -1489,7 +1489,7 @@
     "pk": 131,
     "fields": {
       "codigo": "03054MA00031",
-      "nombre": "Medio Ambiente En MinerÝa"
+      "nombre": "Medio Ambiente En Minería"
     }
   },
   {
@@ -1521,7 +1521,7 @@
     "pk": 135,
     "fields": {
       "codigo": "03054MA00036",
-      "nombre": "Dise±o De Plantas De Tratamiento De Minerales"
+      "nombre": "Diseño De Plantas De Tratamiento De Minerales"
     }
   },
   {
@@ -1529,7 +1529,7 @@
     "pk": 136,
     "fields": {
       "codigo": "03054MA00037",
-      "nombre": "Legislaci¾n Minera Y ╔tica Profesional"
+      "nombre": "Legislación Minera Y Ética Profesional"
     }
   },
   {
@@ -1545,7 +1545,7 @@
     "pk": 138,
     "fields": {
       "codigo": "03054MA00045",
-      "nombre": "Proyecto Metal·rgico"
+      "nombre": "Proyecto Metalúrgico"
     }
   },
   {
@@ -1561,7 +1561,7 @@
     "pk": 140,
     "fields": {
       "codigo": "03054MA00042",
-      "nombre": "Gesti¾n Organizacional Y De Las Personas"
+      "nombre": "Gestión Organizacional Y De Las Personas"
     }
   },
   {
@@ -1569,7 +1569,7 @@
     "pk": 141,
     "fields": {
       "codigo": "03054MA00044",
-      "nombre": "IngenierÝa En Excavaciones"
+      "nombre": "Ingeniería En Excavaciones"
     }
   },
   {
@@ -1577,7 +1577,7 @@
     "pk": 142,
     "fields": {
       "codigo": "03054MA00041",
-      "nombre": "Fundamentos De Administraci¾n, Gerencia Y Gesti¾n De Proyectos"
+      "nombre": "Fundamentos De Administración, Gerencia Y Gestión De Proyectos"
     }
   },
   {
@@ -1593,7 +1593,7 @@
     "pk": 144,
     "fields": {
       "codigo": "03054PF00001",
-      "nombre": "Prßctica Profesional Supervisada"
+      "nombre": "Práctica Profesional Supervisada"
     }
   },
   {
@@ -1609,7 +1609,7 @@
     "pk": 146,
     "fields": {
       "codigo": "16001MA0001",
-      "nombre": "Ciencia, TecnologÝa Y Sociedad"
+      "nombre": "Ciencia, Tecnología Y Sociedad"
     }
   },
   {
@@ -1617,7 +1617,7 @@
     "pk": 147,
     "fields": {
       "codigo": "16001MA0003",
-      "nombre": "Cßlculo I"
+      "nombre": "Cálculo I"
     }
   },
   {
@@ -1625,7 +1625,7 @@
     "pk": 148,
     "fields": {
       "codigo": "16001MA0002",
-      "nombre": "Introducci¾n Al ┴lgebra"
+      "nombre": "Introducción Al Álgebra"
     }
   },
   {
@@ -1633,7 +1633,7 @@
     "pk": 149,
     "fields": {
       "codigo": "16001MA0006",
-      "nombre": "Introducci¾n Al Anßlisis Y Gesti¾n De Datos"
+      "nombre": "Introducción Al Análisis Y Gestión De Datos"
     }
   },
   {
@@ -1641,7 +1641,7 @@
     "pk": 150,
     "fields": {
       "codigo": "16001MA0004",
-      "nombre": "┴lgebra Matricial"
+      "nombre": "Álgebra Matricial"
     }
   },
   {
@@ -1649,7 +1649,7 @@
     "pk": 151,
     "fields": {
       "codigo": "16001MA0005",
-      "nombre": "Elementos De Programaci¾n"
+      "nombre": "Elementos De Programación"
     }
   },
   {
@@ -1657,7 +1657,7 @@
     "pk": 152,
     "fields": {
       "codigo": "16001MA0010",
-      "nombre": "InglÚs"
+      "nombre": "Inglés"
     }
   },
   {
@@ -1681,7 +1681,7 @@
     "pk": 155,
     "fields": {
       "codigo": "16001MA0009",
-      "nombre": "Modelos ParamÚtricos"
+      "nombre": "Modelos Paramétricos"
     }
   },
   {
@@ -1689,7 +1689,7 @@
     "pk": 156,
     "fields": {
       "codigo": "16001MA0011",
-      "nombre": "TÚcnicas De Muestreo"
+      "nombre": "Técnicas De Muestreo"
     }
   },
   {
@@ -1705,7 +1705,7 @@
     "pk": 158,
     "fields": {
       "codigo": "16001MA0012",
-      "nombre": "Modelos No ParamÚtricos"
+      "nombre": "Modelos No Paramétricos"
     }
   },
   {
@@ -1713,7 +1713,7 @@
     "pk": 159,
     "fields": {
       "codigo": "16001MA0013",
-      "nombre": "Cßlculo Ii"
+      "nombre": "Cálculo Ii"
     }
   },
   {
@@ -1721,7 +1721,7 @@
     "pk": 160,
     "fields": {
       "codigo": "16001MA0015",
-      "nombre": "Estimaci¾n Bayesiana"
+      "nombre": "Estimación Bayesiana"
     }
   },
   {
@@ -1729,7 +1729,7 @@
     "pk": 161,
     "fields": {
       "codigo": "16001MA0016",
-      "nombre": "Datos Categ¾ricos"
+      "nombre": "Datos Categóricos"
     }
   },
   {
@@ -1737,7 +1737,7 @@
     "pk": 162,
     "fields": {
       "codigo": "16001MA0014",
-      "nombre": "Anßlisis De Datos I"
+      "nombre": "Análisis De Datos I"
     }
   },
   {
@@ -1745,7 +1745,7 @@
     "pk": 163,
     "fields": {
       "codigo": "16001MA0017",
-      "nombre": "Anßlisis De Datos Ii"
+      "nombre": "Análisis De Datos Ii"
     }
   },
   {
@@ -1753,7 +1753,7 @@
     "pk": 164,
     "fields": {
       "codigo": "16001MA0018",
-      "nombre": "Modelos Y Simulaci¾n"
+      "nombre": "Modelos Y Simulación"
     }
   },
   {
@@ -1769,7 +1769,7 @@
     "pk": 166,
     "fields": {
       "codigo": "16001MA0019",
-      "nombre": "Descripci¾n Y Modelizaci¾n De Datos"
+      "nombre": "Descripción Y Modelización De Datos"
     }
   },
   {
@@ -1777,7 +1777,7 @@
     "pk": 167,
     "fields": {
       "codigo": "16001MA0020",
-      "nombre": "Anßlisis Multivariado"
+      "nombre": "Análisis Multivariado"
     }
   },
   {
@@ -1793,7 +1793,7 @@
     "pk": 169,
     "fields": {
       "codigo": "16001MA0022",
-      "nombre": "Dise±os De Experimentos"
+      "nombre": "Diseños De Experimentos"
     }
   },
   {
@@ -1817,7 +1817,7 @@
     "pk": 172,
     "fields": {
       "codigo": "16001MA0023",
-      "nombre": "Construcci¾n Te¾rico-Metodol¾gica Del Trabajo Final"
+      "nombre": "Construcción Teórico-Metodológica Del Trabajo Final"
     }
   },
   {
@@ -1849,7 +1849,7 @@
     "pk": 176,
     "fields": {
       "codigo": "03003MA00004",
-      "nombre": "InglÚs"
+      "nombre": "Inglés"
     }
   },
   {
@@ -1857,7 +1857,7 @@
     "pk": 177,
     "fields": {
       "codigo": "03003MA00001",
-      "nombre": "Introducci¾n A La Programaci¾n"
+      "nombre": "Introducción A La Programación"
     }
   },
   {
@@ -1865,7 +1865,7 @@
     "pk": 178,
     "fields": {
       "codigo": "03003MA00003",
-      "nombre": "┴lgebra I"
+      "nombre": "Álgebra I"
     }
   },
   {
@@ -1873,7 +1873,7 @@
     "pk": 179,
     "fields": {
       "codigo": "03003MA00006",
-      "nombre": "Matemßtica Discreta"
+      "nombre": "Matemática Discreta"
     }
   },
   {
@@ -1881,7 +1881,7 @@
     "pk": 180,
     "fields": {
       "codigo": "03003MA00007",
-      "nombre": "Anßlisis Matemßtico"
+      "nombre": "Análisis Matemático"
     }
   },
   {
@@ -1905,7 +1905,7 @@
     "pk": 183,
     "fields": {
       "codigo": "03003MA00010",
-      "nombre": "L¾gica Para Computaci¾n"
+      "nombre": "Lógica Para Computación"
     }
   },
   {
@@ -1913,7 +1913,7 @@
     "pk": 184,
     "fields": {
       "codigo": "03003MA00008",
-      "nombre": "Programaci¾n Ii"
+      "nombre": "Programación Ii"
     }
   },
   {
@@ -1921,7 +1921,7 @@
     "pk": 185,
     "fields": {
       "codigo": "03003MA00014",
-      "nombre": "Fundamentos Del Dise±o De Lenguajes De Programaci¾n"
+      "nombre": "Fundamentos Del Diseño De Lenguajes De Programación"
     }
   },
   {
@@ -1937,7 +1937,7 @@
     "pk": 187,
     "fields": {
       "codigo": "03003MA00012",
-      "nombre": "┴lgebra Ii"
+      "nombre": "Álgebra Ii"
     }
   },
   {
@@ -1961,7 +1961,7 @@
     "pk": 190,
     "fields": {
       "codigo": "03003MA00015",
-      "nombre": "IngenierÝa De Software I"
+      "nombre": "Ingeniería De Software I"
     }
   },
   {
@@ -1977,7 +1977,7 @@
     "pk": 192,
     "fields": {
       "codigo": "03003MA00021",
-      "nombre": "IngenierÝa De Software Ii"
+      "nombre": "Ingeniería De Software Ii"
     }
   },
   {
@@ -1985,7 +1985,7 @@
     "pk": 193,
     "fields": {
       "codigo": "03003MA00022",
-      "nombre": "Seguridad De La Informaci¾n"
+      "nombre": "Seguridad De La Información"
     }
   },
   {
@@ -2001,7 +2001,7 @@
     "pk": 195,
     "fields": {
       "codigo": "03003MA00020",
-      "nombre": "Aspectos ╔ticos, Legales Y Profesionales"
+      "nombre": "Aspectos Éticos, Legales Y Profesionales"
     }
   },
   {
@@ -2009,7 +2009,7 @@
     "pk": 196,
     "fields": {
       "codigo": "03003MA00025",
-      "nombre": "TeorÝa De La Computaci¾n"
+      "nombre": "Teoría De La Computación"
     }
   },
   {
@@ -2025,7 +2025,7 @@
     "pk": 198,
     "fields": {
       "codigo": "03003MA00023",
-      "nombre": "Planeamiento Informßtico"
+      "nombre": "Planeamiento Informático"
     }
   },
   {
@@ -2033,7 +2033,7 @@
     "pk": 199,
     "fields": {
       "codigo": "03003MA00024",
-      "nombre": "Teoria De La Informaci¾n Y De La Comunicaci¾n"
+      "nombre": "Teoria De La Información Y De La Comunicación"
     }
   },
   {
@@ -2113,7 +2113,7 @@
     "pk": 209,
     "fields": {
       "codigo": "03003MA00033",
-      "nombre": "Modelos Y Simulaci¾n"
+      "nombre": "Modelos Y Simulación"
     }
   },
   {
@@ -2689,7 +2689,7 @@
     "pk": 281,
     "fields": {
       "codigo": "03MA02000",
-      "nombre": "Seminario Taller: Estrategia De Comprensi¾n Y Produccion De Textos"
+      "nombre": "Seminario Taller: Estrategia De Comprensión Y Produccion De Textos"
     }
   },
   {
@@ -2833,7 +2833,7 @@
     "pk": 299,
     "fields": {
       "codigo": "2096",
-      "nombre": "Actividades Acreditables En Investigaci¾n"
+      "nombre": "Actividades Acreditables En Investigación"
     }
   },
   {
@@ -2849,7 +2849,7 @@
     "pk": 301,
     "fields": {
       "codigo": "2095",
-      "nombre": "Actividades Acreditables En Extensi¾n"
+      "nombre": "Actividades Acreditables En Extensión"
     }
   },
   {
@@ -2889,7 +2889,7 @@
     "pk": 306,
     "fields": {
       "codigo": "03MA00271",
-      "nombre": "Laboratorio De Ense±anza De La Fisica I"
+      "nombre": "Laboratorio De Enseñanza De La Fisica I"
     }
   },
   {
@@ -2897,7 +2897,7 @@
     "pk": 307,
     "fields": {
       "codigo": "03MA00274",
-      "nombre": "Laboratorio De Ense±anza De La Fisica Ii"
+      "nombre": "Laboratorio De Enseñanza De La Fisica Ii"
     }
   },
   {
@@ -2913,7 +2913,7 @@
     "pk": 309,
     "fields": {
       "codigo": "03MA00036",
-      "nombre": "Metodologia Y Practica De La Ense±anza En Fisica"
+      "nombre": "Metodologia Y Practica De La Enseñanza En Fisica"
     }
   },
   {
@@ -2977,7 +2977,7 @@
     "pk": 317,
     "fields": {
       "codigo": "03MA04001",
-      "nombre": "Tecnologias Para La Ense±anza De La Matematica"
+      "nombre": "Tecnologias Para La Enseñanza De La Matematica"
     }
   },
   {
@@ -3097,7 +3097,7 @@
     "pk": 332,
     "fields": {
       "codigo": "03MA04005",
-      "nombre": "Matematica, Historia Y Ense±anza"
+      "nombre": "Matematica, Historia Y Enseñanza"
     }
   },
   {
@@ -3441,7 +3441,7 @@
     "pk": 375,
     "fields": {
       "codigo": "03MA01085",
-      "nombre": "Semi¾tica I"
+      "nombre": "Semiótica I"
     }
   },
   {
@@ -3481,7 +3481,7 @@
     "pk": 380,
     "fields": {
       "codigo": "03MA01087",
-      "nombre": "FotografÝa E Imagen Digital Ii"
+      "nombre": "Fotografía E Imagen Digital Ii"
     }
   },
   {
@@ -3489,7 +3489,7 @@
     "pk": 381,
     "fields": {
       "codigo": "03MA01099",
-      "nombre": "Anßlisis De Obra"
+      "nombre": "Análisis De Obra"
     }
   },
   {
@@ -3505,7 +3505,7 @@
     "pk": 383,
     "fields": {
       "codigo": "03MA01095",
-      "nombre": "Legislaci¾n Y Derechos De Autor"
+      "nombre": "Legislación Y Derechos De Autor"
     }
   },
   {
@@ -3521,7 +3521,7 @@
     "pk": 385,
     "fields": {
       "codigo": "03MA01092",
-      "nombre": "Gesti¾n Y Procesamiento Digital De Archivos I"
+      "nombre": "Gestión Y Procesamiento Digital De Archivos I"
     }
   },
   {
@@ -3537,7 +3537,7 @@
     "pk": 387,
     "fields": {
       "codigo": "03MA01094",
-      "nombre": "Gesti¾n Y Elaboraci¾n De Proyectos"
+      "nombre": "Gestión Y Elaboración De Proyectos"
     }
   },
   {
@@ -3545,7 +3545,7 @@
     "pk": 388,
     "fields": {
       "codigo": "03MA01098",
-      "nombre": "Iluminaci¾n Ii"
+      "nombre": "Iluminación Ii"
     }
   },
   {
@@ -3553,7 +3553,7 @@
     "pk": 389,
     "fields": {
       "codigo": "03MA01096",
-      "nombre": "Gesti¾n Y Procesamiento Digital De Archivos Ii"
+      "nombre": "Gestión Y Procesamiento Digital De Archivos Ii"
     }
   },
   {
@@ -3561,7 +3561,7 @@
     "pk": 390,
     "fields": {
       "codigo": "03MA01097",
-      "nombre": "Montaje De Obra Y Preservaci¾n"
+      "nombre": "Montaje De Obra Y Preservación"
     }
   },
   {
@@ -3593,7 +3593,7 @@
     "pk": 394,
     "fields": {
       "codigo": "03MA04121",
-      "nombre": "Informßtica Y EstadÝstica"
+      "nombre": "Informática Y Estadística"
     }
   },
   {
@@ -3633,7 +3633,7 @@
     "pk": 399,
     "fields": {
       "codigo": "03MA04122",
-      "nombre": "Mecßnica De Rocas Y Voladuras"
+      "nombre": "Mecánica De Rocas Y Voladuras"
     }
   },
   {
@@ -3753,7 +3753,7 @@
     "pk": 414,
     "fields": {
       "codigo": "03MA04118",
-      "nombre": "Dise±o Geometrico De Caminos I"
+      "nombre": "Diseño Geometrico De Caminos I"
     }
   },
   {
@@ -3793,7 +3793,7 @@
     "pk": 419,
     "fields": {
       "codigo": "03MA04119",
-      "nombre": "Dise±o Geometrico De Caminos Ii"
+      "nombre": "Diseño Geometrico De Caminos Ii"
     }
   },
   {
@@ -3865,7 +3865,7 @@
     "pk": 428,
     "fields": {
       "codigo": "03MA04120",
-      "nombre": "Dise±o Vial Asistido Por Computadoras"
+      "nombre": "Diseño Vial Asistido Por Computadoras"
     }
   },
   {
@@ -4001,7 +4001,7 @@
     "pk": 445,
     "fields": {
       "codigo": "03MA04110",
-      "nombre": "TÚcnicas De Radiofrecuencia"
+      "nombre": "Técnicas De Radiofrecuencia"
     }
   },
   {
@@ -4025,7 +4025,7 @@
     "pk": 448,
     "fields": {
       "codigo": "03064MA00005",
-      "nombre": "Computaci¾n"
+      "nombre": "Computación"
     }
   },
   {
@@ -4033,7 +4033,7 @@
     "pk": 449,
     "fields": {
       "codigo": "03064MA00001",
-      "nombre": "Elementos De GeologÝa"
+      "nombre": "Elementos De Geología"
     }
   },
   {
@@ -4041,7 +4041,7 @@
     "pk": 450,
     "fields": {
       "codigo": "03064MA00002",
-      "nombre": "Matemßtica"
+      "nombre": "Matemática"
     }
   },
   {
@@ -4049,7 +4049,7 @@
     "pk": 451,
     "fields": {
       "codigo": "03064MA00004",
-      "nombre": "Teledetecci¾n I"
+      "nombre": "Teledetección I"
     }
   },
   {
@@ -4057,7 +4057,7 @@
     "pk": 452,
     "fields": {
       "codigo": "03064MA00003",
-      "nombre": "InglÚs"
+      "nombre": "Inglés"
     }
   },
   {
@@ -4065,7 +4065,7 @@
     "pk": 453,
     "fields": {
       "codigo": "03064MA00007",
-      "nombre": "Sistema De Informaci¾n Geogrßfica I"
+      "nombre": "Sistema De Información Geográfica I"
     }
   },
   {
@@ -4073,7 +4073,7 @@
     "pk": 454,
     "fields": {
       "codigo": "03064MA00006",
-      "nombre": "Teledetecci¾n Ii"
+      "nombre": "Teledetección Ii"
     }
   },
   {
@@ -4081,7 +4081,7 @@
     "pk": 455,
     "fields": {
       "codigo": "03064MA00008",
-      "nombre": "Levantamiento Topogrßfico"
+      "nombre": "Levantamiento Topográfico"
     }
   },
   {
@@ -4089,7 +4089,7 @@
     "pk": 456,
     "fields": {
       "codigo": "03064MA00011",
-      "nombre": "Problemßtica Ambiental"
+      "nombre": "Problemática Ambiental"
     }
   },
   {
@@ -4097,7 +4097,7 @@
     "pk": 457,
     "fields": {
       "codigo": "03064MA00009",
-      "nombre": "GeomorfologÝa Aplicada"
+      "nombre": "Geomorfología Aplicada"
     }
   },
   {
@@ -4105,7 +4105,7 @@
     "pk": 458,
     "fields": {
       "codigo": "03064MA00010",
-      "nombre": "Elementos De EstadÝstica"
+      "nombre": "Elementos De Estadística"
     }
   },
   {
@@ -4113,7 +4113,7 @@
     "pk": 459,
     "fields": {
       "codigo": "03064MA00012",
-      "nombre": "Sistema De Informaci¾n Geogrßfica Ii"
+      "nombre": "Sistema De Información Geográfica Ii"
     }
   },
   {
@@ -4129,7 +4129,7 @@
     "pk": 461,
     "fields": {
       "codigo": "03064MA00013",
-      "nombre": "CartografÝa Digital"
+      "nombre": "Cartografía Digital"
     }
   },
   {
@@ -4137,7 +4137,7 @@
     "pk": 462,
     "fields": {
       "codigo": "03064MA00014",
-      "nombre": "Teledetecci¾n Ambiental"
+      "nombre": "Teledetección Ambiental"
     }
   },
   {
@@ -4145,7 +4145,7 @@
     "pk": 463,
     "fields": {
       "codigo": "03064MA00015",
-      "nombre": "Proyecto De Integraci¾n"
+      "nombre": "Proyecto De Integración"
     }
   },
   {
@@ -4153,7 +4153,7 @@
     "pk": 464,
     "fields": {
       "codigo": "03MA00641",
-      "nombre": "Introduccion Al Dise±o Grafico"
+      "nombre": "Introduccion Al Diseño Grafico"
     }
   },
   {
@@ -4169,7 +4169,7 @@
     "pk": 466,
     "fields": {
       "codigo": "03MA00642",
-      "nombre": "Dise±o De Sitios Web"
+      "nombre": "Diseño De Sitios Web"
     }
   },
   {
@@ -4225,7 +4225,7 @@
     "pk": 473,
     "fields": {
       "codigo": "03MA00441",
-      "nombre": "Procesamiento Digital De Se±ales I"
+      "nombre": "Procesamiento Digital De Señales I"
     }
   },
   {
@@ -4257,7 +4257,7 @@
     "pk": 477,
     "fields": {
       "codigo": "03MA00451",
-      "nombre": "Procesamiento Digital De Se±ales Ii"
+      "nombre": "Procesamiento Digital De Señales Ii"
     }
   },
   {
@@ -4497,7 +4497,7 @@
     "pk": 507,
     "fields": {
       "codigo": "03MA00661",
-      "nombre": "Evaluacion Economica E IngenierÝa De Proyectos Mineros"
+      "nombre": "Evaluacion Economica E Ingeniería De Proyectos Mineros"
     }
   },
   {
@@ -4601,7 +4601,7 @@
     "pk": 520,
     "fields": {
       "codigo": "03MA04043",
-      "nombre": "Aspectos Legales, Sociales, Auditoria Y Peritaje Informßticos"
+      "nombre": "Aspectos Legales, Sociales, Auditoria Y Peritaje Informáticos"
     }
   },
   {
@@ -4721,7 +4721,7 @@
     "pk": 535,
     "fields": {
       "codigo": "03MA00292",
-      "nombre": "Dise±o Y Construccion De Compiladores"
+      "nombre": "Diseño Y Construccion De Compiladores"
     }
   },
   {

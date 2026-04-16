@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Gestión de Usuarios{% endblock %}
+{% block nav_usuarios %}active{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <h2><i class="bi bi-people me-2"></i>Gestión de Usuarios</h2>
+  <a href="{% url 'accounts:crear_usuario' %}" class="btn btn-primary">
+    <i class="bi bi-person-plus me-2"></i>Nuevo usuario
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Apellido y Nombre</th>
+            <th>Usuario</th>
+            <th>Email</th>
+            <th>Rol</th>
+            <th>Departamento</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in usuarios %}
+          <tr class="{% if not u.is_active %}table-secondary{% endif %}">
+            <td>{{ u.get_full_name }}</td>
+            <td><code>{{ u.username }}</code></td>
+            <td>{{ u.email }}</td>
+            <td><span class="badge bg-secondary">{{ u.get_rol_display }}</span></td>
+            <td>{{ u.departamento|default:"—" }}</td>
+            <td>
+              {% if u.is_active %}
+                <span class="badge bg-success">Activo</span>
+              {% else %}
+                <span class="badge bg-secondary">Inactivo</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <a href="{% url 'accounts:editar_usuario' u.pk %}" class="btn btn-sm btn-outline-primary me-1">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="post" action="{% url 'accounts:toggle_activo_usuario' u.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm {% if u.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}"
+                  title="{% if u.is_active %}Desactivar{% else %}Activar{% endif %}">
+                  <i class="bi bi-{% if u.is_active %}person-dash{% else %}person-check{% endif %}"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center text-muted py-4">No hay usuarios registrados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

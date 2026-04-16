@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Solicitudes de Protocolización{% endblock %}
+{% block nav_solicitudes %}active{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <h2><i class="bi bi-journal-plus me-2"></i>Solicitudes de Protocolización</h2>
+  {% if user.es_docente %}
+  <a href="{% url 'solicitudes:crear' %}" class="btn btn-primary">
+    <i class="bi bi-plus-circle me-2"></i>Nueva Solicitud
+  </a>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            {% if user.puede_revisar %}<th>Docente</th>{% endif %}
+            <th>Nombre del curso</th>
+            <th>Modalidad</th>
+            <th>Destinatarios</th>
+            <th>Duración</th>
+            <th>Estado</th>
+            <th>Fecha envío</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sol in solicitudes %}
+          <tr>
+            {% if user.puede_revisar %}<td>{{ sol.usuario.get_full_name }}</td>{% endif %}
+            <td><strong>{{ sol.nombre_curso|truncatechars:40 }}</strong></td>
+            <td>{{ sol.get_modalidad_display }}</td>
+            <td>{{ sol.get_destinatarios_display }}</td>
+            <td>{{ sol.duracion_horas }} hs</td>
+            <td><span class="badge {{ sol.estado_badge }}">{{ sol.get_estado_display }}</span></td>
+            <td>{{ sol.fecha_creacion|date:"d/m/Y" }}</td>
+            <td class="text-center">
+              <a href="{% url 'solicitudes:detalle' sol.pk %}" class="btn btn-sm btn-outline-primary me-1" title="Ver"><i class="bi bi-eye"></i></a>
+              {% if user.puede_revisar %}
+              <a href="{% url 'solicitudes:revisar' sol.pk %}" class="btn btn-sm btn-outline-warning me-1" title="Revisar"><i class="bi bi-pencil-square"></i></a>
+              {% endif %}
+              <a href="{% url 'solicitudes:pdf' sol.pk %}" class="btn btn-sm btn-outline-danger" title="PDF"><i class="bi bi-file-pdf"></i></a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="text-center text-muted py-4">No hay solicitudes registradas.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

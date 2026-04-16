@@ -1,0 +1,366 @@
+{% extends 'base.html' %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block nav_solicitudes %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .seccion-header { background-color:#1a3a5c; color:#fff; padding:.4rem 1rem; border-radius:4px; margin-top:1.2rem; margin-bottom:.6rem; font-weight:600; font-size:.9rem; }
+  .tipo-badge { display:inline-block; padding:.25rem .75rem; border-radius:20px; font-size:.82rem; font-weight:600; margin-left:.5rem; vertical-align:middle; }
+  .formset-row { background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; padding:.75rem 1rem; margin-bottom:.5rem; position:relative; }
+  .formset-row .btn-delete-row { position:absolute; top:.5rem; right:.5rem; }
+  #add-miembro { margin-top:.4rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h2><i class="bi bi-journal-plus me-2"></i>{{ titulo }}</h2>
+    {% if not edicion %}
+    <a href="{% url 'solicitudes:crear' %}" class="btn btn-sm btn-outline-secondary mt-1">
+      <i class="bi bi-arrow-left me-1"></i>Cambiar tipo
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<form method="post" id="solicitud-form">
+  {% csrf_token %}
+  {{ form.tipificacion }}{# campo oculto con la tipificación fija #}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">{{ form.non_field_errors.0 }}</div>
+  {% endif %}
+
+  {% if anonimo %}
+  <!-- Datos del Docente (solo para usuarios no autenticados) -->
+  <div class="seccion-header"><i class="bi bi-person me-2"></i>Datos del Docente</div>
+  <div class="card mb-3 border-warning">
+    <div class="card-body row g-3">
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">{{ form.nombre_docente.label }} *</label>
+        {{ form.nombre_docente }}
+        {% if form.nombre_docente.errors %}<div class="text-danger small">{{ form.nombre_docente.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">{{ form.legajo_docente.label }} *</label>
+        {{ form.legajo_docente }}
+        {% if form.legajo_docente.errors %}<div class="text-danger small">{{ form.legajo_docente.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">{{ form.email_docente.label }}</label>
+        {{ form.email_docente }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">{{ form.departamento_docente.label }}</label>
+        {{ form.departamento_docente }}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- I - Oferta Académica -->
+  <div class="seccion-header"><i class="bi bi-mortarboard me-2"></i>I — Oferta Académica</div>
+  <div class="card mb-3">
+    <div class="card-body row g-3">
+      <div class="col-md-5">
+        <label class="form-label fw-semibold">{{ form.nombre_curso.label }} *</label>
+        {{ form.nombre_curso }}
+        {% if form.nombre_curso.errors %}<div class="text-danger small">{{ form.nombre_curso.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="col-md-{% if es_curricular %}3{% else %}7{% endif %}">
+        <label class="form-label fw-semibold">{{ form.area.label }}</label>
+        {{ form.area }}
+      </div>
+
+      {% if es_curricular %}
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">{{ form.carrera.label }}</label>
+        {{ form.carrera }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">{{ form.plan_estudio.label }}</label>
+        {{ form.plan_estudio }}
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold">{{ form.anno_carrera.label }}</label>
+        {{ form.anno_carrera }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">{{ form.periodo.label }}</label>
+        {{ form.periodo }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- II - Equipo Docente (formset) -->
+  <div class="seccion-header"><i class="bi bi-people me-2"></i>II — Equipo Docente</div>
+  <div class="card mb-3">
+    <div class="card-body">
+      {{ formset.management_form }}
+      {% for miembro_form in formset %}
+        <div class="formset-row">
+          {% if formset.can_delete %}
+            <div class="form-check formset-row-delete d-none">{{ miembro_form.DELETE }}</div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-delete-row" title="Eliminar">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          {% endif %}
+          <div class="row g-2">
+            <div class="col-md-5">
+              <label class="form-label small fw-semibold">Apellido y Nombre</label>
+              {{ miembro_form.nombre }}
+              {% if miembro_form.nombre.errors %}<div class="text-danger small">{{ miembro_form.nombre.errors.0 }}</div>{% endif %}
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold">Función</label>
+              {{ miembro_form.funcion }}
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Cargo</label>
+              {{ miembro_form.cargo }}
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold">Dedicación</label>
+              {{ miembro_form.dedicacion }}
+            </div>
+            {% for hidden in miembro_form.hidden_fields %}{{ hidden }}{% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+      <button type="button" id="add-miembro" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-plus-circle me-1"></i>Agregar miembro
+      </button>
+    </div>
+  </div>
+
+  <!-- III - Características del Curso -->
+  <div class="seccion-header"><i class="bi bi-clock me-2"></i>III — Características del Curso</div>
+  <div class="card mb-3">
+    <div class="card-body">
+
+      {% if es_curricular %}
+      <p class="small fw-semibold mb-2">Crédito Horario Semanal</p>
+      <div class="row g-2 mb-3">
+        <div class="col-md-3">
+          <label class="form-label small">{{ form.hs_teoricas.label }}</label>
+          {{ form.hs_teoricas }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">{{ form.hs_practicas_aula.label }}</label>
+          {{ form.hs_practicas_aula }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">{{ form.hs_lab_campo.label }}</label>
+          {{ form.hs_lab_campo }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">Total hs/semana</label>
+          <input type="text" class="form-control" id="total-hs" readonly>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="row g-2">
+        {% if tipificacion == 'optativa' %}
+        <div class="col-12">
+          <div class="alert alert-info py-2 mb-2 small">
+            <i class="bi bi-info-circle me-1"></i>
+            Las fechas se completan automáticamente al seleccionar el período según el calendario académico cargado.
+          </div>
+        </div>
+        {% endif %}
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">{{ form.fecha_inicio.label }} *</label>
+          {{ form.fecha_inicio }}
+          {% if form.fecha_inicio.errors %}<div class="text-danger small">{{ form.fecha_inicio.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">{{ form.fecha_hasta.label }} *</label>
+          {{ form.fecha_hasta }}
+          {% if form.fecha_hasta.errors %}<div class="text-danger small">{{ form.fecha_hasta.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">{{ form.cantidad_semanas.label }}</label>
+          {{ form.cantidad_semanas }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IV - Fundamentación -->
+  <div class="seccion-header"><i class="bi bi-justify me-2"></i>IV — Fundamentación *</div>
+  <div class="card mb-3">
+    <div class="card-body">{{ form.fundamentacion }}
+      {% if form.fundamentacion.errors %}<div class="text-danger small">{{ form.fundamentacion.errors.0 }}</div>{% endif %}
+    </div>
+  </div>
+
+  <!-- V - Objetivos -->
+  <div class="seccion-header"><i class="bi bi-bullseye me-2"></i>V — Objetivos / Resultados de Aprendizaje *</div>
+  <div class="card mb-3">
+    <div class="card-body">{{ form.objetivos }}
+      {% if form.objetivos.errors %}<div class="text-danger small">{{ form.objetivos.errors.0 }}</div>{% endif %}
+    </div>
+  </div>
+
+  <!-- VI - Contenidos -->
+  <div class="seccion-header"><i class="bi bi-list-ol me-2"></i>VI — Contenidos *</div>
+  <div class="card mb-3">
+    <div class="card-body row g-3">
+      {% if es_curricular %}
+      <div class="col-12">
+        <label class="form-label fw-semibold">{{ form.contenidos_minimos.label }}</label>
+        <div class="form-text mb-1">{{ form.contenidos_minimos.help_text }}</div>
+        {{ form.contenidos_minimos }}
+      </div>
+      {% endif %}
+      <div class="col-12">
+        <label class="form-label fw-semibold">{{ form.unidades.label }} *</label>
+        <div class="form-text mb-1">{{ form.unidades.help_text }}</div>
+        {{ form.unidades }}
+        {% if form.unidades.errors %}<div class="text-danger small">{{ form.unidades.errors.0 }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- VII - Plan de TP -->
+  {% if es_curricular %}
+  <div class="seccion-header"><i class="bi bi-clipboard-check me-2"></i>VII — Plan de Trabajos Prácticos</div>
+  <div class="card mb-3">
+    <div class="card-body">{{ form.plan_trabajos_practicos }}</div>
+  </div>
+  {% endif %}
+
+  <!-- VIII - Régimen de Aprobación -->
+  <div class="seccion-header"><i class="bi bi-patch-check me-2"></i>VIII — Régimen de Aprobación *</div>
+  <div class="card mb-3">
+    <div class="card-body">{{ form.regimen_aprobacion }}
+      {% if form.regimen_aprobacion.errors %}<div class="text-danger small">{{ form.regimen_aprobacion.errors.0 }}</div>{% endif %}
+    </div>
+  </div>
+
+  <!-- IX - Bibliografía Básica -->
+  <div class="seccion-header"><i class="bi bi-book me-2"></i>IX — Bibliografía Básica *</div>
+  <div class="card mb-3">
+    <div class="card-body">{{ form.bibliografia_basica }}
+      {% if form.bibliografia_basica.errors %}<div class="text-danger small">{{ form.bibliografia_basica.errors.0 }}</div>{% endif %}
+    </div>
+  </div>
+
+  <!-- X - Bibliografía Complementaria -->
+  <div class="seccion-header"><i class="bi bi-book-half me-2"></i>X — Bibliografía Complementaria</div>
+  <div class="card mb-3">
+    <div class="card-body">{{ form.bibliografia_complementaria }}</div>
+  </div>
+
+  <!-- XI / XII - Resúmenes (solo curriculares) -->
+  {% if es_curricular %}
+  <div class="seccion-header"><i class="bi bi-file-text me-2"></i>XI — Resumen de Objetivos</div>
+  <div class="card mb-3">
+    <div class="card-body">{{ form.resumen_objetivos }}</div>
+  </div>
+  <div class="seccion-header"><i class="bi bi-file-text me-2"></i>XII — Resumen del Programa</div>
+  <div class="card mb-3">
+    <div class="card-body">{{ form.resumen_programa }}</div>
+  </div>
+  {% endif %}
+
+  <!-- XIII / XIV -->
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <div class="seccion-header"><i class="bi bi-exclamation-triangle me-2"></i>XIII — Imprevistos</div>
+      <div class="card"><div class="card-body">{{ form.imprevistos }}</div></div>
+    </div>
+    <div class="col-md-6">
+      <div class="seccion-header"><i class="bi bi-info-circle me-2"></i>XIV — Otros</div>
+      <div class="card"><div class="card-body">{{ form.contacto_otros }}</div></div>
+    </div>
+  </div>
+
+  <div class="mt-4 d-flex gap-2 justify-content-end">
+    <a href="{% if user.is_authenticated %}{% url 'solicitudes:lista' %}{% else %}{% url 'tramites:dashboard' %}{% endif %}" class="btn btn-outline-secondary">Cancelar</a>
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-send me-2"></i>{% if edicion %}Actualizar y reenviar{% else %}Enviar solicitud{% endif %}
+    </button>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CAL = {{ calendario_json|safe }};
+const TIPIFICACION = '{{ tipificacion }}';
+
+// ── Autocompletado fechas (solo optativa) ─────────────────────────────────────
+function autocompletarFechas() {
+  if (!CAL || TIPIFICACION !== 'optativa') return;
+  const perEl = document.getElementById('id_periodo');
+  if (!perEl) return;
+  const per = perEl.value;
+
+  let inicio = '', hasta = '', semanas = 0;
+  if (per === '1c')    { inicio = CAL.inicio_1c; hasta = CAL.fin_1c; semanas = CAL.semanas_cuatrimestre; }
+  else if (per === '2c')    { inicio = CAL.inicio_2c; hasta = CAL.fin_2c; semanas = CAL.semanas_cuatrimestre; }
+  else if (per === 'anual') { inicio = CAL.inicio_1c; hasta = CAL.fin_2c; semanas = CAL.semanas_anual; }
+
+  if (inicio) document.getElementById('id_fecha_inicio').value = inicio;
+  if (hasta)  document.getElementById('id_fecha_hasta').value  = hasta;
+  if (semanas) document.getElementById('id_cantidad_semanas').value = semanas;
+  actualizarTotal();
+}
+
+const perSelect = document.getElementById('id_periodo');
+if (perSelect) perSelect.addEventListener('change', autocompletarFechas);
+
+// ── Totalizador horas semanales ───────────────────────────────────────────────
+function actualizarTotal() {
+  const teo  = parseInt(document.getElementById('id_hs_teoricas')?.value) || 0;
+  const aula = parseInt(document.getElementById('id_hs_practicas_aula')?.value) || 0;
+  const lab  = parseInt(document.getElementById('id_hs_lab_campo')?.value) || 0;
+  const totalEl = document.getElementById('total-hs');
+  if (totalEl) totalEl.value = teo + aula + lab;
+}
+['id_hs_teoricas','id_hs_practicas_aula','id_hs_lab_campo'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', actualizarTotal);
+});
+actualizarTotal();
+
+// ── Formset dinámico ──────────────────────────────────────────────────────────
+const addBtn = document.getElementById('add-miembro');
+const formsetContainer = addBtn.parentElement;
+const totalFormsInput = document.getElementById('id_miembroequipodocente_set-TOTAL_FORMS');
+
+addBtn.addEventListener('click', function() {
+  const rows = formsetContainer.querySelectorAll('.formset-row');
+  const idx = rows.length;
+  const newRow = rows[0].cloneNode(true);
+
+  newRow.querySelectorAll('input, select, textarea').forEach(el => {
+    el.name = el.name.replace(/-\d+-/, `-${idx}-`);
+    el.id   = el.id.replace(/-\d+-/, `-${idx}-`);
+    if (el.type === 'checkbox') el.checked = false;
+    else el.value = '';
+  });
+  newRow.querySelectorAll('label').forEach(el => {
+    if (el.htmlFor) el.htmlFor = el.htmlFor.replace(/-\d+-/, `-${idx}-`);
+  });
+
+  formsetContainer.insertBefore(newRow, addBtn);
+  totalFormsInput.value = parseInt(totalFormsInput.value) + 1;
+  attachDeleteListener(newRow);
+});
+
+function attachDeleteListener(row) {
+  const btn = row.querySelector('.btn-delete-row');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    const deleteCheck = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+    if (deleteCheck) { deleteCheck.checked = true; row.style.display = 'none'; }
+    else { row.remove(); totalFormsInput.value = parseInt(totalFormsInput.value) - 1; }
+  });
+}
+document.querySelectorAll('.formset-row').forEach(attachDeleteListener);
+</script>
+{% endblock %}

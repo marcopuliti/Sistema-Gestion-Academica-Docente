@@ -1,0 +1,332 @@
+{% extends 'base.html' %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block nav_planillas %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .seccion-header {
+    background-color: #1a3a5c;
+    color: #fff;
+    padding: .6rem 1rem;
+    border-radius: 4px;
+    margin-top: 1.5rem;
+    margin-bottom: .75rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .subseccion-header {
+    background-color: #e8f4fd;
+    color: #1a3a5c;
+    padding: .4rem .8rem;
+    border-left: 4px solid #2e86c1;
+    margin-top: 1rem;
+    margin-bottom: .5rem;
+    font-weight: 600;
+  }
+  .hs-input { max-width: 90px; }
+  .resumen-lateral { position: sticky; top: 80px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-table me-2"></i>{{ titulo }}</h2>
+</div>
+
+<form method="post" id="form-planificacion">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">{{ form.non_field_errors.0 }}</div>
+  {% endif %}
+
+  {% if anonimo %}
+  <div class="card border-warning mb-3">
+    <div class="card-header bg-warning text-dark"><h6 class="mb-0"><i class="bi bi-person me-2"></i>Datos del Docente</h6></div>
+    <div class="card-body row g-3">
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">{{ form.nombre_docente.label }} *</label>
+        {{ form.nombre_docente }}
+        {% if form.nombre_docente.errors %}<div class="text-danger small">{{ form.nombre_docente.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">{{ form.legajo_docente.label }} *</label>
+        {{ form.legajo_docente }}
+        {% if form.legajo_docente.errors %}<div class="text-danger small">{{ form.legajo_docente.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">{{ form.email_docente.label }}</label>
+        {{ form.email_docente }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">{{ form.departamento_docente.label }}</label>
+        {{ form.departamento_docente }}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-lg-9">
+
+      <!-- Período y cargo -->
+      <div class="card">
+        <div class="card-header"><h6 class="mb-0">Datos generales</h6></div>
+        <div class="card-body row g-3">
+          <div class="col-md-2">
+            <label class="form-label fw-semibold">Año *</label>
+            {{ form.anno }}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Período desde *</label>
+            {{ form.fecha_desde }}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Período hasta *</label>
+            {{ form.fecha_hasta }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Cargo *</label>
+            {{ form.cargo }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Dedicación *</label>
+            {{ form.dedicacion }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Designación *</label>
+            {{ form.designacion }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Área</label>
+            {{ form.area }}
+          </div>
+        </div>
+      </div>
+
+      <!-- A. DOCENCIA -->
+      <div class="seccion-header"><i class="bi bi-book me-2"></i>A. DOCENCIA</div>
+
+      {% for codigo, label, desc_field, hs1_field, hs2_field in form|zip_fields %}
+      {% endfor %}
+
+      <!-- A.1 -->
+      <div class="card">
+        <div class="subseccion-header">A.1 — Actividades curriculares de grado y pregrado (asignaturas de carreras)</div>
+        <div class="card-body row g-2 align-items-start">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold small">Descripción *</label>
+            {{ form.a1_descripcion }}
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold small">Hs. 1º Cuat.</label>
+            <input type="number" name="a1_hs_1c" value="{{ form.a1_hs_1c.value|default:0 }}" min="0" class="form-control hs-input hs-field" data-item="a1">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold small">Hs. 2º Cuat.</label>
+            <input type="number" name="a1_hs_2c" value="{{ form.a1_hs_2c.value|default:0 }}" min="0" class="form-control hs-input hs-field" data-item="a1">
+          </div>
+        </div>
+      </div>
+
+      <!-- A.2 -->
+      <div class="card mt-2">
+        <div class="subseccion-header">A.2 — Cursos extracurriculares</div>
+        <div class="card-body row g-2 align-items-start">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold small">Descripción</label>
+            {{ form.a2_descripcion }}
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold small">Hs. 1º Cuat.</label>
+            <input type="number" name="a2_hs_1c" value="{{ form.a2_hs_1c.value|default:0 }}" min="0" class="form-control hs-input hs-field" data-item="a2">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold small">Hs. 2º Cuat.</label>
+            <input type="number" name="a2_hs_2c" value="{{ form.a2_hs_2c.value|default:0 }}" min="0" class="form-control hs-input hs-field" data-item="a2">
+          </div>
+        </div>
+      </div>
+
+      <!-- A.3 -->
+      <div class="card mt-2">
+        <div class="subseccion-header">A.3 — Tareas de Posgrado</div>
+        <div class="card-body row g-2 align-items-start">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold small">Descripción</label>
+            {{ form.a3_descripcion }}
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold small">Hs. 1º Cuat.</label>
+            <input type="number" name="a3_hs_1c" value="{{ form.a3_hs_1c.value|default:0 }}" min="0" class="form-control hs-input hs-field" data-item="a3">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold small">Hs. 2º Cuat.</label>
+            <input type="number" name="a3_hs_2c" value="{{ form.a3_hs_2c.value|default:0 }}" min="0" class="form-control hs-input hs-field" data-item="a3">
+          </div>
+        </div>
+      </div>
+
+      <!-- A.4 -->
+      <div class="card mt-2">
+        <div class="subseccion-header">A.4 — Formación de Recursos Humanos</div>
+        <div class="card-body row g-2 align-items-start">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold small">Descripción</label>
+            {{ form.a4_descripcion }}
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold small">Hs. 1º Cuat.</label>
+            <input type="number" name="a4_hs_1c" value="{{ form.a4_hs_1c.value|default:0 }}" min="0" class="form-control hs-input hs-field" data-item="a4">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold small">Hs. 2º Cuat.</label>
+            <input type="number" name="a4_hs_2c" value="{{ form.a4_hs_2c.value|default:0 }}" min="0" class="form-control hs-input hs-field" data-item="a4">
+          </div>
+        </div>
+      </div>
+
+      {% for letra, nombre in seccionesExtra %}{% endfor %}
+
+      <!-- B -->
+      <div class="seccion-header"><i class="bi bi-search me-2"></i>B. INVESTIGACIÓN</div>
+      <div class="card">
+        <div class="card-body row g-2 align-items-start">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold small">Descripción</label>
+            {{ form.b_descripcion }}
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold small">Hs. 1º Cuat.</label>
+            <input type="number" name="b_hs_1c" value="{{ form.b_hs_1c.value|default:0 }}" min="0" class="form-control hs-input hs-field">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold small">Hs. 2º Cuat.</label>
+            <input type="number" name="b_hs_2c" value="{{ form.b_hs_2c.value|default:0 }}" min="0" class="form-control hs-input hs-field">
+          </div>
+        </div>
+      </div>
+
+      <!-- C -->
+      <div class="seccion-header"><i class="bi bi-arrow-left-right me-2"></i>C. TRANSFERENCIAS O SERVICIOS</div>
+      <div class="card">
+        <div class="card-body row g-2 align-items-start">
+          <div class="col-md-8">{{ form.c_descripcion }}</div>
+          <div class="col-md-2"><label class="form-label fw-semibold small">Hs. 1º Cuat.</label><input type="number" name="c_hs_1c" value="{{ form.c_hs_1c.value|default:0 }}" min="0" class="form-control hs-input hs-field"></div>
+          <div class="col-md-2"><label class="form-label fw-semibold small">Hs. 2º Cuat.</label><input type="number" name="c_hs_2c" value="{{ form.c_hs_2c.value|default:0 }}" min="0" class="form-control hs-input hs-field"></div>
+        </div>
+      </div>
+
+      <!-- D -->
+      <div class="seccion-header"><i class="bi bi-people me-2"></i>D. EXTENSIÓN UNIVERSITARIA</div>
+      <div class="card">
+        <div class="card-body row g-2 align-items-start">
+          <div class="col-md-8">{{ form.d_descripcion }}</div>
+          <div class="col-md-2"><label class="form-label fw-semibold small">Hs. 1º Cuat.</label><input type="number" name="d_hs_1c" value="{{ form.d_hs_1c.value|default:0 }}" min="0" class="form-control hs-input hs-field"></div>
+          <div class="col-md-2"><label class="form-label fw-semibold small">Hs. 2º Cuat.</label><input type="number" name="d_hs_2c" value="{{ form.d_hs_2c.value|default:0 }}" min="0" class="form-control hs-input hs-field"></div>
+        </div>
+      </div>
+
+      <!-- E -->
+      <div class="seccion-header"><i class="bi bi-mortarboard me-2"></i>E. PERFECCIONAMIENTO</div>
+      <div class="card">
+        <div class="card-body row g-2 align-items-start">
+          <div class="col-md-8">{{ form.e_descripcion }}</div>
+          <div class="col-md-2"><label class="form-label fw-semibold small">Hs. 1º Cuat.</label><input type="number" name="e_hs_1c" value="{{ form.e_hs_1c.value|default:0 }}" min="0" class="form-control hs-input hs-field"></div>
+          <div class="col-md-2"><label class="form-label fw-semibold small">Hs. 2º Cuat.</label><input type="number" name="e_hs_2c" value="{{ form.e_hs_2c.value|default:0 }}" min="0" class="form-control hs-input hs-field"></div>
+        </div>
+      </div>
+
+      <!-- F -->
+      <div class="seccion-header"><i class="bi bi-gear me-2"></i>F. GOBIERNO Y GESTIÓN</div>
+      <div class="card">
+        <div class="card-body row g-2 align-items-start">
+          <div class="col-md-8">{{ form.f_descripcion }}</div>
+          <div class="col-md-2"><label class="form-label fw-semibold small">Hs. 1º Cuat.</label><input type="number" name="f_hs_1c" value="{{ form.f_hs_1c.value|default:0 }}" min="0" class="form-control hs-input hs-field"></div>
+          <div class="col-md-2"><label class="form-label fw-semibold small">Hs. 2º Cuat.</label><input type="number" name="f_hs_2c" value="{{ form.f_hs_2c.value|default:0 }}" min="0" class="form-control hs-input hs-field"></div>
+        </div>
+      </div>
+
+      <!-- G -->
+      <div class="seccion-header"><i class="bi bi-three-dots me-2"></i>G. OTROS</div>
+      <div class="card">
+        <div class="card-body row g-2 align-items-start">
+          <div class="col-md-8">{{ form.g_descripcion }}</div>
+          <div class="col-md-2"><label class="form-label fw-semibold small">Hs. 1º Cuat.</label><input type="number" name="g_hs_1c" value="{{ form.g_hs_1c.value|default:0 }}" min="0" class="form-control hs-input hs-field"></div>
+          <div class="col-md-2"><label class="form-label fw-semibold small">Hs. 2º Cuat.</label><input type="number" name="g_hs_2c" value="{{ form.g_hs_2c.value|default:0 }}" min="0" class="form-control hs-input hs-field"></div>
+        </div>
+      </div>
+
+      <div class="mt-4 d-flex gap-2 justify-content-end">
+        <a href="{% if user.is_authenticated %}{% url 'planillas:lista' %}{% else %}{% url 'tramites:dashboard' %}{% endif %}" class="btn btn-outline-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-send me-2"></i>{% if edicion %}Actualizar y reenviar{% else %}Enviar planificación{% endif %}
+        </button>
+      </div>
+
+    </div><!-- col-lg-9 -->
+
+    <!-- Resumen lateral -->
+    <div class="col-lg-3">
+      <div class="card resumen-lateral">
+        <div class="card-header"><h6 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Horas planificadas</h6></div>
+        <div class="card-body p-2">
+          <table class="table table-sm mb-0" id="tabla-resumen">
+            <thead><tr><th>Ítem</th><th class="text-center">1ºC</th><th class="text-center">2ºC</th></tr></thead>
+            <tbody>
+              <tr class="fw-bold"><td>A. Docencia</td><td class="text-center" id="tot-a-1c">0</td><td class="text-center" id="tot-a-2c">0</td></tr>
+              <tr><td class="ps-3 small">A.1</td><td class="text-center" id="r-a1-1c">0</td><td class="text-center" id="r-a1-2c">0</td></tr>
+              <tr><td class="ps-3 small">A.2</td><td class="text-center" id="r-a2-1c">0</td><td class="text-center" id="r-a2-2c">0</td></tr>
+              <tr><td class="ps-3 small">A.3</td><td class="text-center" id="r-a3-1c">0</td><td class="text-center" id="r-a3-2c">0</td></tr>
+              <tr><td class="ps-3 small">A.4</td><td class="text-center" id="r-a4-1c">0</td><td class="text-center" id="r-a4-2c">0</td></tr>
+              <tr><td>B. Investigación</td><td class="text-center" id="r-b-1c">0</td><td class="text-center" id="r-b-2c">0</td></tr>
+              <tr><td>C. Transferencias</td><td class="text-center" id="r-c-1c">0</td><td class="text-center" id="r-c-2c">0</td></tr>
+              <tr><td>D. Extensión</td><td class="text-center" id="r-d-1c">0</td><td class="text-center" id="r-d-2c">0</td></tr>
+              <tr><td>E. Perfeccionamiento</td><td class="text-center" id="r-e-1c">0</td><td class="text-center" id="r-e-2c">0</td></tr>
+              <tr><td>F. Gestión</td><td class="text-center" id="r-f-1c">0</td><td class="text-center" id="r-f-2c">0</td></tr>
+              <tr><td>G. Otros</td><td class="text-center" id="r-g-1c">0</td><td class="text-center" id="r-g-2c">0</td></tr>
+              <tr class="table-dark fw-bold"><td>TOTAL</td><td class="text-center" id="tot-1c">0</td><td class="text-center" id="tot-2c">0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- row -->
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const items = ['a1','a2','a3','a4','b','c','d','e','f','g'];
+
+function val(name) {
+  const el = document.querySelector(`[name="${name}"]`);
+  return el ? (parseInt(el.value) || 0) : 0;
+}
+function set(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = v;
+}
+
+function actualizar() {
+  items.forEach(i => {
+    const v1 = val(`${i}_hs_1c`), v2 = val(`${i}_hs_2c`);
+    set(`r-${i}-1c`, v1);
+    set(`r-${i}-2c`, v2);
+  });
+  const a1c = ['a1','a2','a3','a4'].reduce((s,i) => s + val(`${i}_hs_1c`), 0);
+  const a2c = ['a1','a2','a3','a4'].reduce((s,i) => s + val(`${i}_hs_2c`), 0);
+  set('tot-a-1c', a1c);
+  set('tot-a-2c', a2c);
+  const t1 = items.reduce((s,i) => s + val(`${i}_hs_1c`), 0);
+  const t2 = items.reduce((s,i) => s + val(`${i}_hs_2c`), 0);
+  set('tot-1c', t1);
+  set('tot-2c', t2);
+}
+
+document.querySelectorAll('.hs-field').forEach(el => {
+  el.addEventListener('input', actualizar);
+});
+actualizar();
+</script>
+{% endblock %}

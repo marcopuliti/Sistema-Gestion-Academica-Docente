@@ -55,10 +55,13 @@ cp .env.example .env
 # 5. Base de datos
 python manage.py migrate
 
-# 6. Superusuario
+# 6. Cargar datos iniciales (carreras, planes, materias, etc.)
+python manage.py loaddata datos.json
+
+# 7. Crear superusuario (las cuentas no están incluidas en datos.json)
 python manage.py createsuperuser
 
-# 7. Servidor de desarrollo
+# 8. Servidor de desarrollo
 python manage.py runserver
 ```
 
@@ -94,6 +97,30 @@ Ver [.env.example](.env.example). Variables principales:
 ├── templates/           # Templates HTML
 ├── static/              # Archivos estáticos
 └── .env.example         # Ejemplo de configuración
+```
+
+## Datos iniciales (`datos.json`)
+
+El archivo `datos.json` incluye los datos base del sistema listos para importar:
+
+| Tabla | Contenido |
+|-------|-----------|
+| `planes.carrera` | Carreras de la facultad |
+| `planes.planestudio` | Planes de estudio por carrera |
+| `planes.materia` | Materias del catálogo |
+| `planes.materiaenplan` | Materias por plan con año, cuatrimestre y carga horaria |
+| `tramites.calendarioacademico` | Calendario académico inicial |
+| `solicitudes.*` | Solicitudes de ejemplo |
+
+> **Nota:** Las cuentas de usuario **no** están incluidas por seguridad. Crear con `createsuperuser` y luego desde el admin.
+
+Para regenerar el archivo desde una instalación existente (sin usuarios):
+
+```bash
+python manage.py dumpdata --natural-foreign --natural-primary \
+  -e contenttypes -e auth.Permission \
+  -e accounts.customuser -e admin.logentry -e sessions.session \
+  --indent 2 > datos.json
 ```
 
 ## Gestión de estados de trámites

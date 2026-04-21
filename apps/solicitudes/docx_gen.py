@@ -258,7 +258,7 @@ def generar_docx_solicitud(solicitud):
     ])
     row = t3a.rows[2]
     for cell, val in zip(row.cells, [
-        'Hs',
+        f'{solicitud.hs_teorico_practico} Hs',
         f'{solicitud.hs_teoricas} Hs',
         f'{solicitud.hs_practicas_aula} Hs',
         f'{solicitud.hs_lab_campo} Hs',
@@ -333,6 +333,251 @@ def generar_docx_solicitud(solicitud):
         trHeight.set(qn('w:val'), '500')
         trPr.append(trHeight)
     _set_col_widths(t_firma, [4.8, 11.2])
+
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+# ── Nota de Elevación ──────────────────────────────────────────────────────────
+
+def generar_docx_nota_comision(solicitud):
+    doc = Document()
+
+    for section in doc.sections:
+        section.top_margin = Cm(2.5)
+        section.bottom_margin = Cm(2.5)
+        section.left_margin = Cm(3)
+        section.right_margin = Cm(3)
+
+    # Destinatario
+    _nota_parrafo(doc, 'Secretario/a Académico/a', space_after=2)
+    _nota_parrafo(doc, 'Fac. Cs. Físico Matemáticas y Naturales', space_after=14)
+
+    _nota_parrafo(doc, 'De mi mayor consideración:', space_after=8)
+
+    periodo_txt = solicitud.get_periodo_display() if solicitud.periodo else '—'
+    anno = solicitud.fecha_inicio.year if solicitud.fecha_inicio else '—'
+    _nota_parrafo_mixed(doc, [
+        ('Me dirijo a Ud., a fin de enviarle la comisión de la materia ', False),
+        (solicitud.nombre_curso, True),
+        (f' del {periodo_txt} del año {anno}.', False),
+    ], space_after=8)
+
+    _nota_parrafo(doc, 'Sin otro particular, me despido de Ud. muy atentamente.', space_after=12)
+
+    # Tabla de comisión
+    dpto = (solicitud.usuario.departamento if solicitud.usuario else None) \
+        or solicitud.departamento_docente or '—'
+    plan_txt = solicitud.plan_estudio.codigo if solicitud.plan_estudio else '—'
+    credito_txt = f'{solicitud.cantidad_semanas * solicitud.total_horas_semanales} hs'
+    condicion_txt = solicitud.get_condicion_display() if solicitud.condicion else '—'
+
+    miembros = list(solicitud.equipo_docente.all())
+    n = max(len(miembros), 1)
+
+    # 7 columnas: Materia | Función | Nombre | Periodo | Condición | Crédito | Plan
+    n_rows = 3 + n  # dept + col-headers + sub-headers + datos
+    t = doc.add_table(rows=n_rows, cols=7)
+    t.style = 'Table Grid'
+
+    # Fila 0: "Departamento de ..." (fusionada)
+    _merge_row(t, 0, 0, 6)
+    _p_cell(t.rows[0].cells[0], f'Departamento de {dpto}', bold=True, center=True)
+    _set_cell_bg(t.rows[0].cells[0], 'D9D9D9')
+
+    # Fila 1: headers principales — "Comisión" fusiona cols 1-2
+    _header_row(t, 1, ['Materia', 'Comisión', '', 'Periodo', 'Condición', 'Crédito Horario', 'Plan de Estudio'])
+    t.rows[1].cells[1].merge(t.rows[1].cells[2])
+
+    # Fila 2: sub-headers de Comisión (cols 1-2) + valores de cols 3-6
+    _header_row(t, 2, ['', 'Función', 'Nombre', '', '', '', ''])
+
+    # Fusionar col 0 (Materia) entre filas 1-2
+    t.rows[1].cells[0].merge(t.rows[2].cells[0])
+
+    # Fusionar cols 3-6 desde fila 2 hasta la última fila de datos
+    # (el header de fila 1 queda separado encima)
+    for col in [3, 4, 5, 6]:
+        anchor = t.rows[2].cells[col]
+        for r in range(3, 3 + n):
+            anchor.merge(t.rows[r].cells[col])
+
+    # Escribir valores en la fila 2 para cols 3-6 (celda fusionada con datos)
+    _p_cell(t.rows[2].cells[3], periodo_txt,   center=True)
+    _p_cell(t.rows[2].cells[4], condicion_txt, center=True)
+    _p_cell(t.rows[2].cells[5], credito_txt,   center=True)
+    _p_cell(t.rows[2].cells[6], plan_txt,      center=True)
+
+    # Filas de datos: solo cols 0, 1, 2
+    for i, m in enumerate(miembros):
+        row = t.rows[3 + i]
+        if i == 0:
+            _p_cell(row.cells[0], solicitud.nombre_curso, center=True)
+        elif i == 1:
+            _p_cell(row.cells[0], 'Código: _______________')
+        else:
+            _p_cell(row.cells[0], '')
+        _p_cell(row.cells[1], m.get_funcion_display())
+        nombre_dni = m.nombre + (f'\nDNI: {m.dni}' if m.dni else '')
+        _p_cell(row.cells[2], nombre_dni)
+
+    _set_col_widths(t, [2.8, 3.0, 3.2, 1.8, 1.8, 1.8, 1.6])
+
+    # Firma
+    doc.add_paragraph().paragraph_format.space_after = Pt(16)
+    t_firma = doc.add_table(rows=1, cols=1)
+    t_firma.style = 'Table Grid'
+    cell = t_firma.cell(0, 0)
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    tcBorders = OxmlElement('w:tcBorders')
+    for side in ('bottom', 'left', 'right', 'insideH', 'insideV'):
+        b = OxmlElement(f'w:{side}')
+        b.set(qn('w:val'), 'none')
+        tcBorders.append(b)
+    top_b = OxmlElement('w:top')
+    top_b.set(qn('w:val'), 'single')
+    top_b.set(qn('w:sz'), '6')
+    top_b.set(qn('w:color'), '000000')
+    tcBorders.append(top_b)
+    tcPr.append(tcBorders)
+    _set_col_widths(t_firma, [6.0])
+    _nota_parrafo(doc, f'Departamento de {dpto}', space_before=4, space_after=0)
+
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+MESES_ES = [
+    '', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+]
+
+
+def _nota_parrafo(doc, texto, bold=False, center=False, size=12, space_before=0, space_after=6):
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER if center else WD_ALIGN_PARAGRAPH.LEFT
+    p.paragraph_format.space_before = Pt(space_before)
+    p.paragraph_format.space_after = Pt(space_after)
+    run = p.add_run(texto or '')
+    run.font.name = 'Times New Roman'
+    run.font.size = Pt(size)
+    run.font.bold = bold
+    return p
+
+
+def _nota_parrafo_mixed(doc, partes, size=12, space_before=0, space_after=6, align_right=False):
+    """Párrafo con fragmentos (texto, bold). partes = [(texto, bold), ...]"""
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.RIGHT if align_right else WD_ALIGN_PARAGRAPH.LEFT
+    p.paragraph_format.space_before = Pt(space_before)
+    p.paragraph_format.space_after = Pt(space_after)
+    for texto, bold in partes:
+        run = p.add_run(texto or '')
+        run.font.name = 'Times New Roman'
+        run.font.size = Pt(size)
+        run.font.bold = bold
+    return p
+
+
+def generar_docx_nota_elevacion(solicitud):
+    doc = Document()
+
+    for section in doc.sections:
+        section.top_margin = Cm(2.5)
+        section.bottom_margin = Cm(2.5)
+        section.left_margin = Cm(3)
+        section.right_margin = Cm(3)
+
+    # Logo centrado
+    logo_path = os.path.join(settings.BASE_DIR, 'static', 'escudo.gif')
+    if os.path.exists(logo_path):
+        p_logo = doc.add_paragraph()
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_logo.paragraph_format.space_after = Pt(4)
+        p_logo.add_run().add_picture(logo_path, width=Cm(2.2))
+
+    _nota_parrafo(doc, 'Universidad Nacional de San Luis', bold=True, center=True, space_after=2)
+    _nota_parrafo(doc, 'Facultad de Ciencias Físico Matemáticas y Naturales', bold=True, center=True, space_after=16)
+
+    # Lugar y fecha
+    fecha = solicitud.fecha_creacion
+    fecha_txt = f'San Luis, {fecha.day} de {MESES_ES[fecha.month]} de {fecha.year}'
+    _nota_parrafo_mixed(doc, [(fecha_txt, False)], space_after=16, align_right=True)
+
+    # Destinatario
+    for linea in [
+        'Señor Decano',
+        'Facultad de Ciencias Físico Matemáticas y Naturales',
+        'Universidad Nacional de San Luis',
+        'S / D',
+    ]:
+        _nota_parrafo(doc, linea, space_after=2)
+    doc.add_paragraph().paragraph_format.space_after = Pt(12)
+
+    # Saludo
+    _nota_parrafo(doc, 'De mi mayor consideración:', space_after=10)
+
+    # Cuerpo
+    carrera_txt = solicitud.carrera.nombre if solicitud.carrera else '(carrera)'
+    plan_txt = solicitud.plan_estudio.codigo if solicitud.plan_estudio else ''
+    plan_ref = f', Plan {plan_txt}' if plan_txt else ''
+    nombre_curso = solicitud.nombre_curso or '(denominación del curso)'
+
+    _nota_parrafo_mixed(doc, [
+        ('Tengo el agrado de dirigirme a Ud. a fin de solicitar se ', False),
+        ('protocolice', True),
+        (' el curso optativo de la carrera de ', False),
+        (carrera_txt, True),
+        (f'{plan_ref}, denominado ', False),
+        (f'"{nombre_curso}"', True),
+        (', cuyo programa adjunto a la presente.', False),
+    ], space_after=10)
+
+    # Despedida
+    _nota_parrafo(doc, 'Sin otro particular, saludo a Ud. muy atentamente.', space_after=40)
+
+    # Firma
+    responsable = None
+    for m in solicitud.equipo_docente.filter(funcion='responsable'):
+        responsable = m
+        break
+    if responsable is None:
+        for m in solicitud.equipo_docente.all():
+            responsable = m
+            break
+
+    nombre_resp = responsable.nombre if responsable else solicitud.get_nombre_docente
+    cargo_resp = responsable.get_cargo_display() if (responsable and responsable.cargo) else ''
+
+    # Línea de firma (tabla de una celda con borde superior)
+    t_firma = doc.add_table(rows=1, cols=1)
+    t_firma.style = 'Table Grid'
+    cell = t_firma.cell(0, 0)
+    cell.text = ''
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    tcBorders = OxmlElement('w:tcBorders')
+    for side in ('bottom', 'left', 'right', 'insideH', 'insideV'):
+        border = OxmlElement(f'w:{side}')
+        border.set(qn('w:val'), 'none')
+        tcBorders.append(border)
+    top_border = OxmlElement('w:top')
+    top_border.set(qn('w:val'), 'single')
+    top_border.set(qn('w:sz'), '6')
+    top_border.set(qn('w:color'), '000000')
+    tcBorders.append(top_border)
+    tcPr.append(tcBorders)
+    _set_col_widths(t_firma, [8.0])
+
+    _nota_parrafo(doc, nombre_resp or '', space_before=4, space_after=2)
+    if cargo_resp:
+        _nota_parrafo(doc, cargo_resp, space_after=2)
+    _nota_parrafo(doc, 'Profesor/a Responsable', space_after=0)
 
     buffer = BytesIO()
     doc.save(buffer)

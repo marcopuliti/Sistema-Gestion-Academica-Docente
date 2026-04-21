@@ -21,8 +21,31 @@
     {% if not user.puede_revisar and solicitud.estado in 'pendiente rechazado' %}
     <a href="{% url 'solicitudes:editar' solicitud.pk %}" class="btn btn-outline-primary"><i class="bi bi-pencil me-2"></i>Editar</a>
     {% endif %}
-    <a href="{% url 'solicitudes:pdf' solicitud.pk %}" class="btn btn-outline-danger"><i class="bi bi-file-pdf me-2"></i>PDF</a>
-    <a href="{% url 'solicitudes:docx' solicitud.pk %}" class="btn btn-outline-primary"><i class="bi bi-file-word me-2"></i>Word</a>
+    <div class="dropdown">
+      <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+        <i class="bi bi-file-earmark-text me-2"></i>Programa de {{ solicitud.nombre_curso }}
+      </button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="{% url 'solicitudes:pdf' solicitud.pk %}"><i class="bi bi-file-pdf me-2 text-danger"></i>PDF</a></li>
+        <li><a class="dropdown-item" href="{% url 'solicitudes:docx' solicitud.pk %}"><i class="bi bi-file-word me-2 text-primary"></i>Word</a></li>
+      </ul>
+    </div>
+    {% if solicitud.numero_comision %}
+    <a href="{% url 'solicitudes:nota_comision_docx' solicitud.pk %}" class="btn btn-outline-secondary">
+      <i class="bi bi-person-lines-fill me-2"></i>Nota Elevación de Comisión
+    </a>
+    {% endif %}
+    {% if solicitud.tipificacion == 'optativa' %}
+    <div class="dropdown">
+      <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+        <i class="bi bi-envelope me-2"></i>Solicitud de Protocolización de Programa
+      </button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="{% url 'solicitudes:nota_elevacion_pdf' solicitud.pk %}"><i class="bi bi-file-pdf me-2 text-danger"></i>PDF</a></li>
+        <li><a class="dropdown-item" href="{% url 'solicitudes:nota_elevacion_docx' solicitud.pk %}"><i class="bi bi-file-word me-2 text-primary"></i>Word</a></li>
+      </ul>
+    </div>
+    {% endif %}
     <a href="{% url 'solicitudes:lista' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-2"></i>Volver</a>
   </div>
 </div>
@@ -97,7 +120,7 @@
       <div class="col-md-2"><span class="text-muted d-block">Desde</span>{{ solicitud.fecha_inicio|date:"d/m/Y" }}</div>
       <div class="col-md-2"><span class="text-muted d-block">Hasta</span>{{ solicitud.fecha_hasta|date:"d/m/Y" }}</div>
       <div class="col-md-2"><span class="text-muted d-block">Semanas</span>{{ solicitud.cantidad_semanas }}</div>
-      <div class="col-md-3"><span class="text-muted d-block">Total hs</span>{{ solicitud.cantidad_semanas|default:0 }} × {{ solicitud.total_horas_semanales }} = <strong>{{ solicitud.cantidad_semanas|default:0|add:0 }}</strong></div>
+      <div class="col-md-3"><span class="text-muted d-block">Total hs</span>{{ solicitud.cantidad_semanas }} × {{ solicitud.total_horas_semanales }} = <strong>{{ solicitud.total_horas }}</strong></div>
     </div>
   </div>
 </div>

@@ -98,6 +98,9 @@
   <div class="card mb-3">
     <div class="card-body">
       {{ formset.management_form }}
+      {% if formset.non_form_errors %}
+        <div class="alert alert-danger py-2">{{ formset.non_form_errors.0 }}</div>
+      {% endif %}
       {% for miembro_form in formset %}
         <div class="formset-row">
           {% if formset.can_delete %}
@@ -107,16 +110,20 @@
             </button>
           {% endif %}
           <div class="row g-2">
-            <div class="col-md-5">
+            <div class="col-md-4">
               <label class="form-label small fw-semibold">Apellido y Nombre</label>
               {{ miembro_form.nombre }}
               {% if miembro_form.nombre.errors %}<div class="text-danger small">{{ miembro_form.nombre.errors.0 }}</div>{% endif %}
             </div>
             <div class="col-md-2">
-              <label class="form-label small fw-semibold">Función</label>
-              {{ miembro_form.funcion }}
+              <label class="form-label small fw-semibold">DNI</label>
+              {{ miembro_form.dni }}
             </div>
             <div class="col-md-3">
+              <label class="form-label small fw-semibold">Función <span class="text-danger" title="Al menos uno debe ser Prof. Responsable">*</span></label>
+              {{ miembro_form.funcion }}
+            </div>
+            <div class="col-md-1">
               <label class="form-label small fw-semibold">Cargo</label>
               {{ miembro_form.cargo }}
             </div>
@@ -142,7 +149,11 @@
       {% if es_curricular %}
       <p class="small fw-semibold mb-2">Crédito Horario Semanal</p>
       <div class="row g-2 mb-3">
-        <div class="col-md-3">
+        <div class="col-md-2">
+          <label class="form-label small">{{ form.hs_teorico_practico.label }}</label>
+          {{ form.hs_teorico_practico }}
+        </div>
+        <div class="col-md-2">
           <label class="form-label small">{{ form.hs_teoricas.label }}</label>
           {{ form.hs_teoricas }}
         </div>
@@ -154,10 +165,19 @@
           <label class="form-label small">{{ form.hs_lab_campo.label }}</label>
           {{ form.hs_lab_campo }}
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label small">Total hs/semana</label>
           <input type="text" class="form-control" id="total-hs" readonly>
         </div>
+      </div>
+      <div id="alerta-hs" class="alert alert-warning py-2 small d-none">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        El total de horas (<strong id="alerta-hs-total"></strong> hs) no alcanza las
+        <strong id="alerta-hs-plan"></strong> hs requeridas por el plan de estudios.
+      </div>
+      <div id="info-hs-plan" class="text-muted small {% if not hs_totales_plan %}d-none{% endif %}">
+        <i class="bi bi-info-circle me-1"></i>
+        Horas según plan de estudios: <strong id="hs-plan-valor">{{ hs_totales_plan|default:'' }}</strong> hs totales
       </div>
       {% endif %}
 
@@ -285,6 +305,22 @@
     </div>
   </div>
 
+  <!-- Datos de Comisión -->
+  <div class="seccion-header"><i class="bi bi-people-fill me-2"></i>Datos de Comisión <span class="fw-normal opacity-75 small">(para nota al Secretario Académico)</span></div>
+  <div class="card mb-3">
+    <div class="card-body row g-3">
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">{{ form.numero_comision.label }}</label>
+        {{ form.numero_comision }}
+        {% if form.numero_comision.errors %}<div class="text-danger small">{{ form.numero_comision.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">{{ form.condicion.label }}</label>
+        {{ form.condicion }}
+      </div>
+    </div>
+  </div>
+
   <div class="mt-4 d-flex gap-2 justify-content-end">
     <a href="{% if user.is_authenticated %}{% url 'solicitudes:lista' %}{% else %}{% url 'tramites:dashboard' %}{% endif %}" class="btn btn-outline-secondary">Cancelar</a>
     <button type="submit" class="btn btn-primary">
@@ -315,24 +351,62 @@ function autocompletarFechas() {
   if (hasta)  document.getElementById('id_fecha_hasta').value  = hasta;
   if (semanas) document.getElementById('id_cantidad_semanas').value = semanas;
   actualizarTotal();
+  verificarHorasPlan();
 }
 
 const perSelect = document.getElementById('id_periodo');
 if (perSelect) perSelect.addEventListener('change', autocompletarFechas);
 
 // ── Totalizador horas semanales ───────────────────────────────────────────────
+let _hsTotalesPlan = {{ hs_totales_plan|default:'null' }};
+
+const _IDS_HORAS = ['id_hs_teorico_practico','id_hs_teoricas','id_hs_practicas_aula','id_hs_lab_campo'];
+
 function actualizarTotal() {
+  const tp   = parseInt(document.getElementById('id_hs_teorico_practico')?.value) || 0;
   const teo  = parseInt(document.getElementById('id_hs_teoricas')?.value) || 0;
   const aula = parseInt(document.getElementById('id_hs_practicas_aula')?.value) || 0;
   const lab  = parseInt(document.getElementById('id_hs_lab_campo')?.value) || 0;
+  const hsSemanales = tp + teo + aula + lab;
   const totalEl = document.getElementById('total-hs');
-  if (totalEl) totalEl.value = teo + aula + lab;
+  if (totalEl) totalEl.value = hsSemanales;
 }
-['id_hs_teoricas','id_hs_practicas_aula','id_hs_lab_campo'].forEach(id => {
+
+function verificarHorasPlan() {
+  const tp   = parseInt(document.getElementById('id_hs_teorico_practico')?.value) || 0;
+  const teo  = parseInt(document.getElementById('id_hs_teoricas')?.value) || 0;
+  const aula = parseInt(document.getElementById('id_hs_practicas_aula')?.value) || 0;
+  const lab  = parseInt(document.getElementById('id_hs_lab_campo')?.value) || 0;
+  const semanas = parseInt(document.getElementById('id_cantidad_semanas')?.value) || 0;
+  const hsSemanales = tp + teo + aula + lab;
+  const totalHoras  = semanas * hsSemanales;
+  const alerta = document.getElementById('alerta-hs');
+  if (!alerta || !_hsTotalesPlan) return;
+  if (totalHoras < _hsTotalesPlan) {
+    document.getElementById('alerta-hs-total').textContent = totalHoras;
+    document.getElementById('alerta-hs-plan').textContent  = _hsTotalesPlan;
+    alerta.classList.remove('d-none');
+  } else {
+    alerta.classList.add('d-none');
+  }
+}
+
+_IDS_HORAS.forEach(id => {
   const el = document.getElementById(id);
-  if (el) el.addEventListener('input', actualizarTotal);
+  if (!el) return;
+  el.addEventListener('input',  () => { actualizarTotal(); verificarHorasPlan(); });
+  el.addEventListener('change', () => { actualizarTotal(); verificarHorasPlan(); });
 });
+
+// cantidad_semanas también puede afectar el total pero no el display de hs/semana
+const semanasEl = document.getElementById('id_cantidad_semanas');
+if (semanasEl) {
+  semanasEl.addEventListener('input',  verificarHorasPlan);
+  semanasEl.addEventListener('change', verificarHorasPlan);
+}
+
 actualizarTotal();
+verificarHorasPlan();
 
 // ── Formset dinámico ──────────────────────────────────────────────────────────
 const addBtn = document.getElementById('add-miembro');
@@ -417,7 +491,7 @@ function cargarOptativas(planId, optativaSeleccionada) {
         opt.textContent = o.label;
         if (optativaSeleccionada && o.id == optativaSeleccionada) opt.selected = true;
         optativaSelect.appendChild(opt);
-        optativaSelect._datos[o.id] = {ano: o.ano, periodo: o.periodo};
+        optativaSelect._datos[o.id] = {ano: o.ano, periodo: o.periodo, hs_totales: o.hs_totales};
       });
       // Si ya hay optativa seleccionada, autocompletar
       if (optativaSeleccionada && optativaSelect._datos[optativaSeleccionada]) {
@@ -429,8 +503,22 @@ function cargarOptativas(planId, optativaSeleccionada) {
 function autocompletarDesdeOptativa(datos) {
   if (periodoSelect && datos.periodo) periodoSelect.value = datos.periodo;
   if (annoInput && datos.ano)         annoInput.value = datos.ano;
-  // Disparar evento para que el autocompletador de fechas reaccione si aplica
   if (periodoSelect) periodoSelect.dispatchEvent(new Event('change'));
+
+  // Mostrar hs del plan y actualizar alerta
+  _hsTotalesPlan = datos.hs_totales || null;
+  const infoEl  = document.getElementById('info-hs-plan');
+  const valorEl = document.getElementById('hs-plan-valor');
+  if (infoEl && valorEl) {
+    if (_hsTotalesPlan) {
+      valorEl.textContent = _hsTotalesPlan;
+      infoEl.classList.remove('d-none');
+    } else {
+      infoEl.classList.add('d-none');
+    }
+  }
+  actualizarTotal();
+  verificarHorasPlan();
 }
 
 if (carreraSelect) {

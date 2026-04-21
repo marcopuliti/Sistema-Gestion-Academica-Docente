@@ -11,8 +11,8 @@ from apps.tramites.decorators import puede_revisar
 from apps.tramites.models import EstadoTramite, CalendarioAcademico
 from .forms import SolicitudProtocolizacionForm, EquipoDocenteFormSet, RevisionForm, TIPIFICACIONES_CURRICULARES
 from .models import SolicitudProtocolizacion, TIPIFICACION_CHOICES
-from .pdf import generar_pdf_solicitud
-from .docx_gen import generar_docx_solicitud
+from .pdf import generar_pdf_solicitud, generar_pdf_nota_elevacion
+from .docx_gen import generar_docx_solicitud, generar_docx_nota_elevacion, generar_docx_nota_comision
 
 TIPIFICACIONES_VALIDAS = {t[0] for t in TIPIFICACION_CHOICES}
 
@@ -97,6 +97,7 @@ def crear_solicitud(request, tipificacion):
         'titulo': f'Nueva Solicitud — {dict(TIPIFICACION_CHOICES)[tipificacion]}',
         'calendario_json': _calendario_json(),
         'anonimo': anonimo,
+        'hs_totales_plan': None,
     })
 
 
@@ -134,6 +135,10 @@ def editar_solicitud(request, pk):
         form = SolicitudProtocolizacionForm(instance=solicitud, tipificacion=tip)
         formset = EquipoDocenteFormSet(instance=solicitud)
 
+    hs_totales_plan = (
+        solicitud.optativa_vinculada.hs_totales
+        if solicitud.optativa_vinculada else None
+    )
     return render(request, 'solicitudes/form.html', {
         'form': form,
         'formset': formset,
@@ -142,6 +147,7 @@ def editar_solicitud(request, pk):
         'titulo': 'Editar Solicitud',
         'edicion': True,
         'calendario_json': _calendario_json(),
+        'hs_totales_plan': hs_totales_plan,
     })
 
 
@@ -173,7 +179,7 @@ def descargar_pdf_solicitud(request, pk):
         solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
     buffer = generar_pdf_solicitud(solicitud)
     apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
-    nombre = f"solicitud_{solicitud.pk}_{apellido}.pdf"
+    nombre = f"programa_{solicitud.pk}_{apellido}.pdf"
     response = HttpResponse(buffer, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{nombre}"'
     return response
@@ -187,7 +193,55 @@ def descargar_docx_solicitud(request, pk):
         solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
     buffer = generar_docx_solicitud(solicitud)
     apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
-    nombre = f"solicitud_{solicitud.pk}_{apellido}.docx"
+    nombre = f"programa_{solicitud.pk}_{apellido}.docx"
+    response = HttpResponse(
+        buffer,
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+    return response
+
+
+@login_required
+def descargar_pdf_nota_elevacion(request, pk):
+    if request.user.puede_revisar:
+        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    else:
+        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
+    buffer = generar_pdf_nota_elevacion(solicitud)
+    apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
+    nombre = f"solicitud_protocolizacion_{solicitud.pk}_{apellido}.pdf"
+    response = HttpResponse(buffer, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+    return response
+
+
+@login_required
+def descargar_docx_nota_elevacion(request, pk):
+    if request.user.puede_revisar:
+        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    else:
+        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
+    buffer = generar_docx_nota_elevacion(solicitud)
+    apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
+    nombre = f"solicitud_protocolizacion_{solicitud.pk}_{apellido}.docx"
+    response = HttpResponse(
+        buffer,
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+    return response
+
+
+@login_required
+def descargar_docx_nota_comision(request, pk):
+    if request.user.puede_revisar:
+        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    else:
+        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
+    buffer = generar_docx_nota_comision(solicitud)
+    apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
+    nombre = f"nota_elevacion_comision_{solicitud.pk}_{apellido}.docx"
     response = HttpResponse(
         buffer,
         content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -227,6 +281,7 @@ def optativas_por_plan(request):
             'label': f'{m.get_nombre()} ({m.materia.codigo})',
             'ano': str(m.ano),
             'periodo': CUATRI_A_PERIODO.get(m.cuatrimestre, ''),
+            'hs_totales': m.hs_totales,
         }
         for m in qs
     ]

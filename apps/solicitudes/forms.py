@@ -1,7 +1,7 @@
 from django import forms
 from django.forms import inlineformset_factory
 
-from .models import SolicitudProtocolizacion, MiembroEquipoDocente
+from .models import SolicitudProtocolizacion, MiembroEquipoDocente, CONDICION_CHOICES
 from apps.planes.models import PlanEstudio, MateriaEnPlan
 
 
@@ -35,7 +35,7 @@ class SolicitudProtocolizacionForm(forms.ModelForm):
             'nombre_curso', 'carrera', 'plan_estudio', 'optativa_vinculada',
             'anno_carrera', 'periodo',
             # III - Características
-            'hs_teoricas', 'hs_practicas_aula', 'hs_lab_campo',
+            'hs_teorico_practico', 'hs_teoricas', 'hs_practicas_aula', 'hs_lab_campo',
             'modalidad_cursado', 'tipificacion', 'fecha_inicio', 'fecha_hasta', 'cantidad_semanas',
             # IV-XIV
             'fundamentacion', 'objetivos',
@@ -44,6 +44,8 @@ class SolicitudProtocolizacionForm(forms.ModelForm):
             'bibliografia_basica', 'bibliografia_complementaria',
             'resumen_objetivos', 'resumen_programa',
             'imprevistos', 'contacto_otros',
+            # Datos de Comisión
+            'numero_comision', 'condicion',
         ]
         widgets = {
             'anno_carrera': forms.TextInput(attrs={'readonly': True}),
@@ -61,6 +63,8 @@ class SolicitudProtocolizacionForm(forms.ModelForm):
             'resumen_programa': forms.Textarea(attrs={'rows': 4}),
             'imprevistos': forms.Textarea(attrs={'rows': 3}),
             'contacto_otros': forms.Textarea(attrs={'rows': 3}),
+            'numero_comision': forms.TextInput(attrs={'placeholder': 'Ej: 1, A, Única'}),
+            'condicion': forms.Select(choices=[('', '---------')] + list(CONDICION_CHOICES)),
         }
 
     def __init__(self, *args, tipificacion=None, anonimo=False, **kwargs):
@@ -143,19 +147,35 @@ class SolicitudProtocolizacionForm(forms.ModelForm):
 class MiembroEquipoDocenteForm(forms.ModelForm):
     class Meta:
         model = MiembroEquipoDocente
-        fields = ['nombre', 'funcion', 'cargo', 'dedicacion']
+        fields = ['nombre', 'dni', 'funcion', 'cargo', 'dedicacion']
         widgets = {
-            'nombre': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Apellido, Nombre'}),
-            'funcion': forms.Select(attrs={'class': 'form-select'}),
-            'cargo': forms.Select(attrs={'class': 'form-select'}),
+            'nombre':     forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Apellido, Nombre'}),
+            'dni':        forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'DNI'}),
+            'funcion':    forms.Select(attrs={'class': 'form-select'}),
+            'cargo':      forms.Select(attrs={'class': 'form-select'}),
             'dedicacion': forms.Select(attrs={'class': 'form-select'}),
         }
+
+
+class EquipoDocenteFormSetBase(forms.BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        tiene_responsable = any(
+            f.cleaned_data.get('funcion') == 'prof_responsable'
+            for f in self.forms
+            if f.cleaned_data and not f.cleaned_data.get('DELETE', False)
+        )
+        if not tiene_responsable:
+            raise forms.ValidationError(
+                'Debe asignar al menos un docente como "Prof. Responsable".'
+            )
 
 
 EquipoDocenteFormSet = inlineformset_factory(
     SolicitudProtocolizacion,
     MiembroEquipoDocente,
     form=MiembroEquipoDocenteForm,
+    formset=EquipoDocenteFormSetBase,
     extra=1,
     can_delete=True,
     min_num=1,

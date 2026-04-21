@@ -10,10 +10,11 @@ PERIODO_CHOICES = [
 ]
 
 FUNCION_CHOICES = [
-    ('responsable', 'Responsable'),
-    ('colaborador', 'Colaborador'),
-    ('auxiliar', 'Auxiliar'),
-    ('adscripto', 'Adscripto'),
+    ('prof_responsable', 'Prof. Responsable'),
+    ('prof_colaborador', 'Prof. Colaborador'),
+    ('resp_practico',    'Responsable de Práctico'),
+    ('aux_practico',     'Auxiliar de Práctico'),
+    ('aux_laboratorio',  'Auxiliar de Laboratorio'),
 ]
 
 CARGO_CHOICES = [
@@ -43,6 +44,12 @@ MODALIDAD_CURSADO_CHOICES = [
     ('teo_aula_lab',     'Teoría con Prácticas de Aula y Laboratorios'),
     ('teo_aula',         'Teoría con Prácticas de Aula'),
     ('teo_aula_lab_campo', 'Teoría con Prácticas de Aula, Laboratorio y Campo'),
+]
+
+CONDICION_CHOICES = [
+    ('regular',     'Regular'),
+    ('libre',       'Libre'),
+    ('promocional', 'Promocional'),
 ]
 
 
@@ -79,6 +86,7 @@ class SolicitudProtocolizacion(TramiteBase):
     )
 
     # ── III. Características del Curso ───────────────────────────────────────
+    hs_teorico_practico = models.PositiveIntegerField(default=0, verbose_name='Hs. Teórico/Práctico')
     hs_teoricas = models.PositiveIntegerField(default=0, verbose_name='Hs. Teóricas')
     hs_practicas_aula = models.PositiveIntegerField(default=0, verbose_name='Hs. Prácticas de Aula')
     hs_lab_campo = models.PositiveIntegerField(default=0, verbose_name='Hs. Práct. Lab/Campo')
@@ -148,6 +156,19 @@ class SolicitudProtocolizacion(TramiteBase):
         verbose_name='Otros / Datos de contacto', blank=True,
     )
 
+    # ── Datos de Comisión (para nota al Secretario Académico) ─────────────────
+    numero_comision = models.CharField(
+        max_length=20,
+        verbose_name='Número de comisión',
+        blank=True,
+    )
+    condicion = models.CharField(
+        max_length=20,
+        choices=CONDICION_CHOICES,
+        verbose_name='Condición',
+        blank=True,
+    )
+
     class Meta(TramiteBase.Meta):
         verbose_name = 'Solicitud de Protocolización'
         verbose_name_plural = 'Solicitudes de Protocolización'
@@ -157,7 +178,11 @@ class SolicitudProtocolizacion(TramiteBase):
 
     @property
     def total_horas_semanales(self):
-        return self.hs_teoricas + self.hs_practicas_aula + self.hs_lab_campo
+        return self.hs_teorico_practico + self.hs_teoricas + self.hs_practicas_aula + self.hs_lab_campo
+
+    @property
+    def total_horas(self):
+        return self.cantidad_semanas * self.total_horas_semanales
 
 
 class MiembroEquipoDocente(models.Model):
@@ -167,6 +192,7 @@ class MiembroEquipoDocente(models.Model):
         related_name='equipo_docente',
     )
     nombre = models.CharField(max_length=200, verbose_name='Apellido y Nombre')
+    dni = models.CharField(max_length=20, verbose_name='DNI', blank=True)
     funcion = models.CharField(
         max_length=20, choices=FUNCION_CHOICES,
         verbose_name='Función',
@@ -187,9 +213,6 @@ class MiembroEquipoDocente(models.Model):
 
     def __str__(self):
         return f"{self.nombre} ({self.get_funcion_display()})"
-
-    def get_funcion_display(self):
-        return dict(FUNCION_CHOICES).get(self.funcion, self.funcion)
 
     def get_cargo_display(self):
         return dict(CARGO_CHOICES).get(self.cargo, self.cargo)

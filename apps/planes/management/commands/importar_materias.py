@@ -160,8 +160,17 @@ class PlanParser(HTMLParser):
 def fetch_html(url):
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req, timeout=15) as resp:
-        charset = resp.headers.get_content_charset() or 'latin-1'
-        return resp.read().decode(charset, errors='replace')
+        raw = resp.read()
+    # Charset del header HTTP (no siempre es correcto)
+    http_charset = resp.headers.get_content_charset()
+    # Charset del <meta> del HTML (más confiable)
+    meta_match = re.search(rb'charset["\s]*=["\s]*([a-zA-Z0-9_-]+)', raw)
+    meta_charset = meta_match.group(1).decode('ascii') if meta_match else None
+    charset = meta_charset or http_charset or 'latin-1'
+    try:
+        return raw.decode(charset)
+    except (UnicodeDecodeError, LookupError):
+        return raw.decode('latin-1')
 
 
 class Command(BaseCommand):

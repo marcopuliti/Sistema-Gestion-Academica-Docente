@@ -42,6 +42,7 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarNav">
       <ul class="navbar-nav ms-auto align-items-center">
+        {% if user.is_authenticated %}
         <li class="nav-item me-2">
           <a class="nav-link position-relative" href="{% url 'notifications:lista' %}">
             <i class="bi bi-bell-fill"></i>
@@ -69,6 +70,18 @@
             </li>
           </ul>
         </li>
+        {% else %}
+        <li class="nav-item me-2">
+          <a class="nav-link" href="{% url 'accounts:registro' %}">
+            <i class="bi bi-person-plus me-1"></i>Registrarse
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'accounts:login' %}">
+            <i class="bi bi-box-arrow-in-right me-1"></i>Ingresar
+          </a>
+        </li>
+        {% endif %}
       </ul>
     </div>
   </div>
@@ -84,16 +97,6 @@
           </a>
         </li>
         <li class="mt-2 mb-1 px-2 text-uppercase text-muted small fw-bold">Trámites</li>
-        <li class="nav-item">
-          <a class="nav-link {% block nav_informes %}{% endblock %}" href="{% if user.is_authenticated %}{% url 'informes:lista' %}{% else %}{% url 'informes:crear' %}{% endif %}">
-            <i class="bi bi-file-earmark-text me-2"></i>Informes Anuales
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link {% block nav_planillas %}{% endblock %}" href="{% if user.is_authenticated %}{% url 'planillas:lista' %}{% else %}{% url 'planillas:crear' %}{% endif %}">
-            <i class="bi bi-table me-2"></i>Planificación de Actividades
-          </a>
-        </li>
         <li class="nav-item">
           <a class="nav-link {% block nav_solicitudes %}{% endblock %}" href="{% if user.is_authenticated %}{% url 'solicitudes:lista' %}{% else %}{% url 'solicitudes:crear' %}{% endif %}">
             <i class="bi bi-journal-plus me-2"></i>Solicitudes de Protocolización

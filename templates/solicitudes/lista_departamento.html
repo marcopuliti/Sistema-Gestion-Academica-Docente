@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}Solicitudes — Depto. {{ departamento }}{% endblock %}
+{% block nav_solicitudes %}active{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h2><i class="bi bi-journal-plus me-2"></i>Solicitudes de Protocolización</h2>
+    <span class="text-muted">Departamento de {{ departamento }}</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Docente</th>
+            <th>Nombre del curso</th>
+            <th>Código materia</th>
+            <th>Tipificación</th>
+            <th>Estado</th>
+            <th>Fecha envío</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sol in solicitudes %}
+          <tr>
+            <td>{{ sol.get_nombre_docente }}</td>
+            <td><strong>{{ sol.nombre_curso|truncatechars:40 }}</strong></td>
+            <td>
+              {% if sol.codigo_materia %}
+                <span class="badge bg-secondary">{{ sol.codigo_materia }}</span>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td>{{ sol.get_tipificacion_display }}</td>
+            <td><span class="badge {{ sol.estado_badge }}">{{ sol.get_estado_display }}</span></td>
+            <td>{{ sol.fecha_creacion|date:"d/m/Y" }}</td>
+            <td class="text-center">
+              <a href="{% url 'solicitudes:detalle' sol.pk %}" class="btn btn-sm btn-outline-primary" title="Ver detalle"><i class="bi bi-eye"></i></a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center text-muted py-4">No hay solicitudes para este departamento.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

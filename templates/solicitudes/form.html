@@ -41,12 +41,7 @@
         {{ form.nombre_docente }}
         {% if form.nombre_docente.errors %}<div class="text-danger small">{{ form.nombre_docente.errors.0 }}</div>{% endif %}
       </div>
-      <div class="col-md-3">
-        <label class="form-label fw-semibold">{{ form.legajo_docente.label }} *</label>
-        {{ form.legajo_docente }}
-        {% if form.legajo_docente.errors %}<div class="text-danger small">{{ form.legajo_docente.errors.0 }}</div>{% endif %}
-      </div>
-      <div class="col-md-3">
+      <div class="col-md-6">
         <label class="form-label fw-semibold">{{ form.email_docente.label }}</label>
         {{ form.email_docente }}
       </div>
@@ -186,6 +181,11 @@
           <label class="form-label small fw-semibold">{{ form.modalidad_cursado.label }}</label>
           {{ form.modalidad_cursado }}
         </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">{{ form.condicion.label }}</label>
+          {{ form.condicion }}
+          {% if form.condicion.errors %}<div class="text-danger small">{{ form.condicion.errors.0 }}</div>{% endif %}
+        </div>
       </div>
 
       <div class="row g-2">
@@ -302,22 +302,6 @@
     <div class="col-md-6">
       <div class="seccion-header"><i class="bi bi-info-circle me-2"></i>XIV — Otros</div>
       <div class="card"><div class="card-body">{{ form.contacto_otros }}</div></div>
-    </div>
-  </div>
-
-  <!-- Datos de Comisión -->
-  <div class="seccion-header"><i class="bi bi-people-fill me-2"></i>Datos de Comisión <span class="fw-normal opacity-75 small">(para nota al Secretario Académico)</span></div>
-  <div class="card mb-3">
-    <div class="card-body row g-3">
-      <div class="col-md-3">
-        <label class="form-label fw-semibold">{{ form.numero_comision.label }}</label>
-        {{ form.numero_comision }}
-        {% if form.numero_comision.errors %}<div class="text-danger small">{{ form.numero_comision.errors.0 }}</div>{% endif %}
-      </div>
-      <div class="col-md-3">
-        <label class="form-label fw-semibold">{{ form.condicion.label }}</label>
-        {{ form.condicion }}
-      </div>
     </div>
   </div>
 
@@ -500,8 +484,30 @@ function cargarOptativas(planId, optativaSeleccionada) {
     });
 }
 
+function lockPeriodo(value) {
+  if (!periodoSelect) return;
+  periodoSelect.value = value;
+  periodoSelect.setAttribute('disabled', 'disabled');
+  let hidden = document.getElementById('_periodo_hidden');
+  if (!hidden) {
+    hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = periodoSelect.name;
+    hidden.id = '_periodo_hidden';
+    periodoSelect.parentNode.appendChild(hidden);
+  }
+  hidden.value = value;
+}
+
+function unlockPeriodo() {
+  if (!periodoSelect) return;
+  periodoSelect.removeAttribute('disabled');
+  const hidden = document.getElementById('_periodo_hidden');
+  if (hidden) hidden.remove();
+}
+
 function autocompletarDesdeOptativa(datos) {
-  if (periodoSelect && datos.periodo) periodoSelect.value = datos.periodo;
+  if (periodoSelect && datos.periodo) lockPeriodo(datos.periodo);
   if (annoInput && datos.ano)         annoInput.value = datos.ano;
   if (periodoSelect) periodoSelect.dispatchEvent(new Event('change'));
 
@@ -540,6 +546,7 @@ if (optativaSelect) {
   optativaSelect.addEventListener('change', function() {
     const datos = (this._datos || {})[this.value];
     if (datos) autocompletarDesdeOptativa(datos);
+    else unlockPeriodo();
   });
 }
 </script>

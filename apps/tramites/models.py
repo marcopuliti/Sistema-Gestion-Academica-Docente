@@ -1,6 +1,16 @@
 from django.db import models
 from django.conf import settings
 
+DEPARTAMENTO_CHOICES = [
+    ('', '---------'),
+    ('Matemática', 'Matemática'),
+    ('Física', 'Física'),
+    ('Geología', 'Geología'),
+    ('Electrónica', 'Electrónica'),
+    ('Informática', 'Informática'),
+    ('Minería', 'Minería'),
+]
+
 
 class CalendarioAcademico(models.Model):
     """Fechas de inicio/fin de cada cuatrimestre por año, configuradas por el superusuario."""

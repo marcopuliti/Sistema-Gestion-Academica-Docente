@@ -1,5 +1,6 @@
 from django import forms
 from .models import InformeActividadAnual
+from apps.tramites.models import DEPARTAMENTO_CHOICES
 
 
 class InformeActividadAnualForm(forms.ModelForm):
@@ -12,9 +13,9 @@ class InformeActividadAnualForm(forms.ModelForm):
         label='Legajo', max_length=20, required=False,
         widget=forms.TextInput(attrs={'class': 'form-control'}),
     )
-    departamento_docente = forms.CharField(
-        label='Departamento', max_length=150, required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    departamento_docente = forms.ChoiceField(
+        label='Departamento', choices=DEPARTAMENTO_CHOICES, required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
     )
     email_docente = forms.EmailField(
         label='Email', required=False,

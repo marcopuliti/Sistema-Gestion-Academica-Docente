@@ -1,0 +1,12 @@
+Hola {{ nombre }},
+
+Gracias por registrarte en el Sistema de Gestión Docente de la
+Facultad de Cs. Físico Matemáticas y Naturales — UNSL.
+
+Para activar tu cuenta hacé clic en el siguiente enlace:
+{{ url_verificacion }}
+
+Este enlace es válido por 24 horas.
+Si no creaste esta cuenta, ignorá este mensaje.
+
+Sistema de Gestión Docente — UNSL

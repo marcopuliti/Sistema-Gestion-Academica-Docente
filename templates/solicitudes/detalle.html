@@ -18,35 +18,34 @@
     {% if user.puede_revisar %}
     <a href="{% url 'solicitudes:revisar' solicitud.pk %}" class="btn btn-warning"><i class="bi bi-pencil-square me-2"></i>Revisar</a>
     {% endif %}
-    {% if not user.puede_revisar and solicitud.estado in 'pendiente rechazado' %}
+    {% if not user.puede_revisar and not user.es_director_departamento and solicitud.estado in 'pendiente rechazado' %}
     <a href="{% url 'solicitudes:editar' solicitud.pk %}" class="btn btn-outline-primary"><i class="bi bi-pencil me-2"></i>Editar</a>
     {% endif %}
     <div class="dropdown">
       <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-        <i class="bi bi-file-earmark-text me-2"></i>Programa de {{ solicitud.nombre_curso }}
+        <i class="bi bi-file-earmark-text me-2"></i>Solicitud Completa
       </button>
       <ul class="dropdown-menu">
-        <li><a class="dropdown-item" href="{% url 'solicitudes:pdf' solicitud.pk %}"><i class="bi bi-file-pdf me-2 text-danger"></i>PDF</a></li>
-        <li><a class="dropdown-item" href="{% url 'solicitudes:docx' solicitud.pk %}"><i class="bi bi-file-word me-2 text-primary"></i>Word</a></li>
+        <li><a class="dropdown-item" href="{% url 'solicitudes:solicitud_completa_pdf' solicitud.pk %}"><i class="bi bi-file-pdf me-2 text-danger"></i>PDF</a></li>
+        <li><a class="dropdown-item" href="{% url 'solicitudes:solicitud_completa_docx' solicitud.pk %}"><i class="bi bi-file-word me-2 text-primary"></i>Word</a></li>
       </ul>
     </div>
-    {% if solicitud.numero_comision %}
-    <a href="{% url 'solicitudes:nota_comision_docx' solicitud.pk %}" class="btn btn-outline-secondary">
-      <i class="bi bi-person-lines-fill me-2"></i>Nota Elevación de Comisión
-    </a>
-    {% endif %}
-    {% if solicitud.tipificacion == 'optativa' %}
+    {% if user.puede_revisar or user.es_director_departamento %}
     <div class="dropdown">
       <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-        <i class="bi bi-envelope me-2"></i>Solicitud de Protocolización de Programa
+        <i class="bi bi-person-lines-fill me-2"></i>Nota Solicitud de Comisión
       </button>
       <ul class="dropdown-menu">
-        <li><a class="dropdown-item" href="{% url 'solicitudes:nota_elevacion_pdf' solicitud.pk %}"><i class="bi bi-file-pdf me-2 text-danger"></i>PDF</a></li>
-        <li><a class="dropdown-item" href="{% url 'solicitudes:nota_elevacion_docx' solicitud.pk %}"><i class="bi bi-file-word me-2 text-primary"></i>Word</a></li>
+        <li><a class="dropdown-item" href="{% url 'solicitudes:nota_comision_pdf' solicitud.pk %}"><i class="bi bi-file-pdf me-2 text-danger"></i>PDF</a></li>
+        <li><a class="dropdown-item" href="{% url 'solicitudes:nota_comision_docx' solicitud.pk %}"><i class="bi bi-file-word me-2 text-primary"></i>Word</a></li>
       </ul>
     </div>
     {% endif %}
+    {% if user.es_director_departamento %}
+    <a href="{% url 'solicitudes:lista_departamento' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-2"></i>Volver</a>
+    {% else %}
     <a href="{% url 'solicitudes:lista' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-2"></i>Volver</a>
+    {% endif %}
   </div>
 </div>
 
@@ -203,4 +202,34 @@
 </div>
 {% endif %}
 {% endwith %}
+
+{% if user.es_director_departamento or user.puede_revisar %}
+<div class="seccion-header"><i class="bi bi-hash me-2"></i>Código de Materia</div>
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row align-items-center g-3">
+      <div class="col-auto">
+        {% if solicitud.codigo_materia %}
+          <span class="badge bg-secondary fs-6">{{ solicitud.codigo_materia }}</span>
+        {% else %}
+          <span class="text-muted">Sin código asignado</span>
+        {% endif %}
+      </div>
+      {% if user.es_director_departamento %}
+      <div class="col-auto">
+        <form method="post" action="{% url 'solicitudes:agregar_codigo_materia' solicitud.pk %}" class="d-flex gap-2">
+          {% csrf_token %}
+          <input type="text" name="codigo_materia" value="{{ solicitud.codigo_materia }}"
+                 class="form-control form-control-sm" style="width:160px"
+                 placeholder="Ej: MAT-101">
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Guardar
+          </button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

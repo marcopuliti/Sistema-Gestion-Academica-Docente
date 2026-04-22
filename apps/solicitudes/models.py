@@ -48,7 +48,6 @@ MODALIDAD_CURSADO_CHOICES = [
 
 CONDICION_CHOICES = [
     ('regular',     'Regular'),
-    ('libre',       'Libre'),
     ('promocional', 'Promocional'),
 ]
 
@@ -165,7 +164,12 @@ class SolicitudProtocolizacion(TramiteBase):
     condicion = models.CharField(
         max_length=20,
         choices=CONDICION_CHOICES,
-        verbose_name='Condición',
+        verbose_name='Condición de aprobación',
+        blank=True,
+    )
+    codigo_materia = models.CharField(
+        max_length=30,
+        verbose_name='Código de materia',
         blank=True,
     )
 

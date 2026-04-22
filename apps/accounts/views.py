@@ -4,8 +4,13 @@ from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.views import LoginView
 
-from .forms import LoginForm, UsuarioCreacionForm, UsuarioEdicionForm, PerfilForm
-from .models import CustomUser
+from django.core.mail import send_mail
+from django.conf import settings
+from django.template.loader import render_to_string
+
+from .emails import enviar_bienvenida
+from .forms import LoginForm, RegistroForm, UsuarioCreacionForm, UsuarioEdicionForm, PerfilForm
+from .models import CustomUser, TokenVerificacionEmail
 from apps.tramites.decorators import solo_administrador
 
 
@@ -13,6 +18,66 @@ class CustomLoginView(LoginView):
     template_name = 'accounts/login.html'
     authentication_form = LoginForm
     redirect_authenticated_user = True
+
+
+def _enviar_verificacion(request, usuario, token):
+    url = request.build_absolute_uri(
+        f'/cuentas/verificar/{token.token}/'
+    )
+    cuerpo = render_to_string('accounts/emails/verificacion.txt', {
+        'nombre': usuario.get_full_name() or usuario.username,
+        'url_verificacion': url,
+    })
+    try:
+        send_mail(
+            subject='Verificá tu cuenta — Sistema de Gestión Docente UNSL',
+            message=cuerpo,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[usuario.email],
+            fail_silently=False,
+        )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning('Error enviando verificación: %s', exc)
+
+
+def registro(request):
+    if request.user.is_authenticated:
+        return redirect('tramites:dashboard')
+    if request.method == 'POST':
+        form = RegistroForm(request.POST)
+        if form.is_valid():
+            usuario = form.save()
+            token = TokenVerificacionEmail.objects.create(usuario=usuario)
+            _enviar_verificacion(request, usuario, token)
+            messages.success(
+                request,
+                f'Cuenta creada. Revisá tu email ({usuario.email}) para activarla.'
+            )
+            return redirect('accounts:login')
+    else:
+        form = RegistroForm()
+    return render(request, 'accounts/registro.html', {'form': form})
+
+
+def verificar_email(request, token):
+    try:
+        tok = TokenVerificacionEmail.objects.select_related('usuario').get(token=token)
+    except TokenVerificacionEmail.DoesNotExist:
+        messages.error(request, 'El enlace de verificación es inválido.')
+        return redirect('accounts:login')
+
+    if tok.esta_expirado():
+        tok.usuario.delete()  # elimina también el token por CASCADE
+        messages.error(request, 'El enlace expiró (24 h). Registrate nuevamente.')
+        return redirect('accounts:registro')
+
+    usuario = tok.usuario
+    usuario.is_active = True
+    usuario.save(update_fields=['is_active'])
+    tok.delete()
+    messages.success(request, '¡Cuenta verificada! Ya podés iniciar sesión.')
+    return redirect('accounts:login')
 
 
 @login_required
@@ -41,8 +106,10 @@ def crear_usuario(request):
     if request.method == 'POST':
         form = UsuarioCreacionForm(request.POST)
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Usuario creado correctamente.')
+            password = form.cleaned_data['password1']
+            usuario = form.save()
+            enviar_bienvenida(usuario, password)
+            messages.success(request, f'Usuario creado. Se envió email de bienvenida a {usuario.email or "—"}.')
             return redirect('accounts:lista_usuarios')
     else:
         form = UsuarioCreacionForm()

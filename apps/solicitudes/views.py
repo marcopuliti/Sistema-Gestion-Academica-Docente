@@ -6,13 +6,14 @@ from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 
+from django.db import models
 from apps.planes.models import PlanEstudio
-from apps.tramites.decorators import puede_revisar
+from apps.tramites.decorators import puede_revisar, solo_director_departamento
 from apps.tramites.models import EstadoTramite, CalendarioAcademico
 from .forms import SolicitudProtocolizacionForm, EquipoDocenteFormSet, RevisionForm, TIPIFICACIONES_CURRICULARES
 from .models import SolicitudProtocolizacion, TIPIFICACION_CHOICES
-from .pdf import generar_pdf_solicitud, generar_pdf_nota_elevacion
-from .docx_gen import generar_docx_solicitud, generar_docx_nota_elevacion, generar_docx_nota_comision
+from .pdf import generar_pdf_solicitud, generar_pdf_nota_elevacion, generar_pdf_solicitud_completa
+from .docx_gen import generar_docx_solicitud, generar_docx_nota_elevacion, generar_docx_nota_comision, generar_docx_solicitud_completa
 
 TIPIFICACIONES_VALIDAS = {t[0] for t in TIPIFICACION_CHOICES}
 
@@ -64,7 +65,6 @@ def crear_solicitud(request, tipificacion):
             if anonimo:
                 solicitud.usuario = None
                 solicitud.nombre_docente = form.cleaned_data['nombre_docente']
-                solicitud.legajo_docente = form.cleaned_data['legajo_docente']
                 solicitud.departamento_docente = form.cleaned_data.get('departamento_docente', '')
                 solicitud.email_docente = form.cleaned_data.get('email_docente', '')
             else:
@@ -101,12 +101,22 @@ def crear_solicitud(request, tipificacion):
     })
 
 
+def _puede_ver_solicitud(user, solicitud):
+    """True si el usuario tiene acceso a esta solicitud."""
+    if user.puede_revisar:
+        return True
+    if user.es_director_departamento:
+        dep = solicitud.usuario.departamento if solicitud.usuario else solicitud.departamento_docente
+        return dep == user.departamento
+    return solicitud.usuario == user
+
+
 @login_required
 def detalle_solicitud(request, pk):
-    if request.user.puede_revisar:
-        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
-    else:
-        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    if not _puede_ver_solicitud(request.user, solicitud):
+        messages.error(request, 'No tenés permisos para ver esta solicitud.')
+        return redirect('solicitudes:lista')
     return render(request, 'solicitudes/detalle.html', {'solicitud': solicitud})
 
 
@@ -173,10 +183,10 @@ def revisar_solicitud(request, pk):
 
 @login_required
 def descargar_pdf_solicitud(request, pk):
-    if request.user.puede_revisar:
-        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
-    else:
-        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    if not _puede_ver_solicitud(request.user, solicitud):
+        messages.error(request, 'No tenés permisos para descargar este documento.')
+        return redirect('solicitudes:lista')
     buffer = generar_pdf_solicitud(solicitud)
     apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
     nombre = f"programa_{solicitud.pk}_{apellido}.pdf"
@@ -187,10 +197,10 @@ def descargar_pdf_solicitud(request, pk):
 
 @login_required
 def descargar_docx_solicitud(request, pk):
-    if request.user.puede_revisar:
-        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
-    else:
-        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    if not _puede_ver_solicitud(request.user, solicitud):
+        messages.error(request, 'No tenés permisos para descargar este documento.')
+        return redirect('solicitudes:lista')
     buffer = generar_docx_solicitud(solicitud)
     apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
     nombre = f"programa_{solicitud.pk}_{apellido}.docx"
@@ -204,10 +214,10 @@ def descargar_docx_solicitud(request, pk):
 
 @login_required
 def descargar_pdf_nota_elevacion(request, pk):
-    if request.user.puede_revisar:
-        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
-    else:
-        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    if not _puede_ver_solicitud(request.user, solicitud):
+        messages.error(request, 'No tenés permisos para descargar este documento.')
+        return redirect('solicitudes:lista')
     buffer = generar_pdf_nota_elevacion(solicitud)
     apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
     nombre = f"solicitud_protocolizacion_{solicitud.pk}_{apellido}.pdf"
@@ -218,10 +228,10 @@ def descargar_pdf_nota_elevacion(request, pk):
 
 @login_required
 def descargar_docx_nota_elevacion(request, pk):
-    if request.user.puede_revisar:
-        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
-    else:
-        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    if not _puede_ver_solicitud(request.user, solicitud):
+        messages.error(request, 'No tenés permisos para descargar este documento.')
+        return redirect('solicitudes:lista')
     buffer = generar_docx_nota_elevacion(solicitud)
     apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
     nombre = f"solicitud_protocolizacion_{solicitud.pk}_{apellido}.docx"
@@ -234,20 +244,117 @@ def descargar_docx_nota_elevacion(request, pk):
 
 
 @login_required
-def descargar_docx_nota_comision(request, pk):
-    if request.user.puede_revisar:
-        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
-    else:
-        solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
-    buffer = generar_docx_nota_comision(solicitud)
+def descargar_pdf_solicitud_completa(request, pk):
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    if not _puede_ver_solicitud(request.user, solicitud):
+        messages.error(request, 'No tenés permisos para descargar este documento.')
+        return redirect('solicitudes:lista')
+    buffer = generar_pdf_solicitud_completa(solicitud)
     apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
-    nombre = f"nota_elevacion_comision_{solicitud.pk}_{apellido}.docx"
+    nombre = f"solicitud_completa_{solicitud.pk}_{apellido}.pdf"
+    response = HttpResponse(buffer, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+    return response
+
+
+@login_required
+def descargar_docx_solicitud_completa(request, pk):
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    if not _puede_ver_solicitud(request.user, solicitud):
+        messages.error(request, 'No tenés permisos para descargar este documento.')
+        return redirect('solicitudes:lista')
+    buffer = generar_docx_solicitud_completa(solicitud)
+    apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
+    nombre = f"solicitud_completa_{solicitud.pk}_{apellido}.docx"
     response = HttpResponse(
         buffer,
         content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     )
     response['Content-Disposition'] = f'attachment; filename="{nombre}"'
     return response
+
+
+def _puede_generar_nota_comision(user, solicitud):
+    """Solo director del departamento correspondiente o administrador."""
+    if user.puede_revisar:
+        return True
+    if user.es_director_departamento:
+        dep = solicitud.usuario.departamento if solicitud.usuario else solicitud.departamento_docente
+        return dep == user.departamento
+    return False
+
+
+@login_required
+def descargar_pdf_nota_comision(request, pk):
+    from .pdf import generar_pdf_nota_comision
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    if not _puede_generar_nota_comision(request.user, solicitud):
+        messages.error(request, 'Solo el director del departamento puede generar este documento.')
+        return redirect('solicitudes:detalle', pk=pk)
+    buffer = generar_pdf_nota_comision(solicitud)
+    apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
+    nombre = f"nota_comision_{solicitud.pk}_{apellido}.pdf"
+    response = HttpResponse(buffer, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+    return response
+
+
+@login_required
+def descargar_docx_nota_comision(request, pk):
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    if not _puede_generar_nota_comision(request.user, solicitud):
+        messages.error(request, 'Solo el director del departamento puede generar este documento.')
+        return redirect('solicitudes:detalle', pk=pk)
+    buffer = generar_docx_nota_comision(solicitud)
+    apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
+    nombre = f"nota_comision_{solicitud.pk}_{apellido}.docx"
+    response = HttpResponse(
+        buffer,
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+    return response
+
+
+@login_required
+@solo_director_departamento
+def lista_solicitudes_departamento(request):
+    from apps.tramites.models import EstadoTramite
+    dep = request.user.departamento
+    qs = SolicitudProtocolizacion.objects.select_related('usuario').filter(
+        models.Q(usuario__departamento=dep) | models.Q(departamento_docente=dep)
+    )
+    # No aprobadas primero, luego por fecha descendente
+    from django.db.models import Case, When, IntegerField
+    qs = qs.annotate(
+        orden_estado=Case(
+            When(estado=EstadoTramite.APROBADO, then=1),
+            default=0,
+            output_field=IntegerField(),
+        )
+    ).order_by('orden_estado', '-fecha_creacion')
+    return render(request, 'solicitudes/lista_departamento.html', {
+        'solicitudes': qs,
+        'departamento': dep,
+    })
+
+
+@login_required
+@solo_director_departamento
+def agregar_codigo_materia(request, pk):
+    from django import forms as dj_forms
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    dep = request.user.departamento
+    dep_solicitud = solicitud.usuario.departamento if solicitud.usuario else solicitud.departamento_docente
+    if dep_solicitud != dep:
+        messages.error(request, 'Esta solicitud no pertenece a tu departamento.')
+        return redirect('solicitudes:lista_departamento')
+    if request.method == 'POST':
+        codigo = request.POST.get('codigo_materia', '').strip()
+        solicitud.codigo_materia = codigo
+        solicitud.save(update_fields=['codigo_materia'])
+        messages.success(request, f'Código de materia "{codigo}" guardado.')
+    return redirect('solicitudes:detalle', pk=pk)
 
 
 def planes_por_carrera(request):

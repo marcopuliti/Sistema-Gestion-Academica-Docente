@@ -35,26 +35,9 @@
   <p class="text-muted mb-0">Universidad Nacional de San Luis — Facultad de Ciencias Físico Matemáticas y Naturales</p>
 </div>
 
-<p class="lead mb-4">Completá el formulario correspondiente y descargá el PDF para presentar en la oficina.</p>
+<p class="lead mb-4">Completá el formulario y descargá el PDF para presentar en la oficina.</p>
 
 <div class="row g-4 mb-5">
-
-  <div class="col-sm-6 col-lg-4">
-    <a href="{% url 'informes:crear' %}" class="tramite-card">
-      <div class="icon text-primary"><i class="bi bi-file-earmark-text-fill"></i></div>
-      <h5>Informe de Actividad Anual</h5>
-      <p>Registrá tus actividades de docencia, investigación, extensión y gestión del año académico.</p>
-    </a>
-  </div>
-
-  <div class="col-sm-6 col-lg-4">
-    <a href="{% url 'planillas:crear' %}" class="tramite-card">
-      <div class="icon text-success"><i class="bi bi-table"></i></div>
-      <h5>Planificación de Actividades</h5>
-      <p>Completá la planilla de planificación de actividades docentes para el año en curso.</p>
-    </a>
-  </div>
-
   <div class="col-sm-6 col-lg-4">
     <a href="{% url 'solicitudes:crear' %}" class="tramite-card">
       <div class="icon text-warning"><i class="bi bi-journal-plus"></i></div>
@@ -62,13 +45,12 @@
       <p>Presentá el programa de una materia obligatoria, optativa, electiva o extracurricular.</p>
     </a>
   </div>
-
 </div>
 
 <div class="login-callout">
   <i class="bi bi-info-circle me-2 text-primary"></i>
   ¿Tenés cuenta en el sistema?
   <a href="{% url 'accounts:login' %}" class="fw-semibold ms-1">Iniciar sesión</a>
-  para acceder al historial de trámites y seguimiento de estados.
+  para acceder al historial de solicitudes y seguimiento de estados.
 </div>
 {% endblock %}

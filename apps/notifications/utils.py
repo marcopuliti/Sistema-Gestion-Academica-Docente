@@ -23,7 +23,7 @@ def _crear_notificacion(destinatario, tipo, titulo, mensaje, url=''):
         mensaje=mensaje,
         url=url,
     )
-    if destinatario.email:
+    if destinatario.email and destinatario.email.lower().endswith('@unsl.edu.ar'):
         try:
             send_mail(
                 subject=titulo,
@@ -37,21 +37,28 @@ def _crear_notificacion(destinatario, tipo, titulo, mensaje, url=''):
 
 
 def notificar_nuevo_tramite(tramite, tipo_tramite):
-    """Notifica a los revisores cuando un docente envía un trámite nuevo."""
-    revisores = User.objects.filter(
-        rol__in=['administrador'],
-        is_active=True,
-    )
+    """Notifica a administradores y director del departamento cuando llega un trámite nuevo."""
     docente = tramite.usuario
+    nombre_docente = docente.get_full_name() if docente else getattr(tramite, 'nombre_docente', 'Docente anónimo')
     titulo = f"Nuevo trámite: {tipo_tramite}"
     mensaje = (
-        f"El docente {docente.get_full_name()} ha enviado un nuevo trámite:\n"
+        f"El docente {nombre_docente} ha enviado un nuevo trámite:\n"
         f"Tipo: {tipo_tramite}\n"
         f"Fecha: {tramite.fecha_creacion.strftime('%d/%m/%Y %H:%M')}\n\n"
         f"Ingresá al sistema para revisarlo."
     )
-    for revisor in revisores:
-        _crear_notificacion(revisor, 'nuevo_tramite', titulo, mensaje)
+    destinatarios = User.objects.filter(rol__in=['administrador'], is_active=True)
+    # Notificar también al director del departamento correspondiente
+    departamento = (docente.departamento if docente else None) or getattr(tramite, 'departamento_docente', '')
+    if departamento:
+        directores = User.objects.filter(
+            rol='director_departamento',
+            departamento=departamento,
+            is_active=True,
+        )
+        destinatarios = destinatarios | directores
+    for dest in destinatarios.distinct():
+        _crear_notificacion(dest, 'nuevo_tramite', titulo, mensaje)
 
 
 def notificar_cambio_estado(tramite, tipo_tramite):

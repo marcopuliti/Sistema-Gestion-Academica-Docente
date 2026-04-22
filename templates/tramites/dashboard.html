@@ -8,37 +8,8 @@
   <p class="text-muted mb-0">Bienvenido/a, <strong>{{ user.get_full_name }}</strong> — {{ user.get_rol_display }}</p>
 </div>
 
-<!-- Tarjetas de resumen -->
 <div class="row g-3 mb-4">
-  <div class="col-sm-6 col-lg-3">
-    <div class="card h-100">
-      <div class="card-body d-flex align-items-center gap-3">
-        <div class="rounded-circle p-3 bg-primary bg-opacity-10">
-          <i class="bi bi-file-earmark-text fs-4" style="color:#2e86c1;"></i>
-        </div>
-        <div>
-          <div class="fs-4 fw-bold">{{ total_informes }}</div>
-          <div class="text-muted small">Informes Anuales</div>
-          {% if pendientes_informes %}<span class="badge bg-warning text-dark">{{ pendientes_informes }} pendiente{{ pendientes_informes|pluralize:"s" }}</span>{% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="col-sm-6 col-lg-3">
-    <div class="card h-100">
-      <div class="card-body d-flex align-items-center gap-3">
-        <div class="rounded-circle p-3 bg-success bg-opacity-10">
-          <i class="bi bi-table fs-4 text-success"></i>
-        </div>
-        <div>
-          <div class="fs-4 fw-bold">{{ total_planillas }}</div>
-          <div class="text-muted small">Planificaciones de Actividades</div>
-          {% if pendientes_planillas %}<span class="badge bg-warning text-dark">{{ pendientes_planillas }} pendiente{{ pendientes_planillas|pluralize:"s" }}</span>{% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="col-sm-6 col-lg-3">
+  <div class="col-sm-6 col-lg-4">
     <div class="card h-100">
       <div class="card-body d-flex align-items-center gap-3">
         <div class="rounded-circle p-3 bg-warning bg-opacity-10">
@@ -52,7 +23,7 @@
       </div>
     </div>
   </div>
-  <div class="col-sm-6 col-lg-3">
+  <div class="col-sm-6 col-lg-4">
     <div class="card h-100">
       <div class="card-body d-flex align-items-center gap-3">
         <div class="rounded-circle p-3 bg-danger bg-opacity-10">
@@ -67,17 +38,10 @@
   </div>
 </div>
 
-<!-- Acciones rápidas (solo docentes) -->
 {% if user.es_docente %}
 <div class="card mb-4">
   <div class="card-header"><h6 class="mb-0"><i class="bi bi-lightning me-2"></i>Acciones rápidas</h6></div>
   <div class="card-body d-flex flex-wrap gap-2">
-    <a href="{% url 'informes:crear' %}" class="btn btn-outline-primary">
-      <i class="bi bi-plus-circle me-2"></i>Nuevo Informe Anual
-    </a>
-    <a href="{% url 'planillas:crear' %}" class="btn btn-outline-success">
-      <i class="bi bi-plus-circle me-2"></i>Nueva Planificación
-    </a>
     <a href="{% url 'solicitudes:crear' %}" class="btn btn-outline-warning">
       <i class="bi bi-plus-circle me-2"></i>Nueva Solicitud de Protocolización
     </a>
@@ -85,74 +49,23 @@
 </div>
 {% endif %}
 
-<div class="row g-3">
-  <!-- Últimos informes -->
-  <div class="col-lg-4">
-    <div class="card h-100">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-file-earmark-text me-2"></i>Últimos Informes</span>
-        <a href="{% url 'informes:lista' %}" class="btn btn-sm btn-light">Ver todos</a>
-      </div>
-      <div class="list-group list-group-flush">
-        {% for informe in ultimos_informes %}
-        <a href="{% url 'informes:detalle' informe.pk %}" class="list-group-item list-group-item-action">
-          <div class="d-flex justify-content-between">
-            <span class="fw-semibold small">{{ informe.anno_academico }} — {{ informe.usuario.get_full_name }}</span>
-            <span class="badge {{ informe.estado_badge }} badge-estado">{{ informe.get_estado_display }}</span>
-          </div>
-          <small class="text-muted">{{ informe.fecha_creacion|date:"d/m/Y" }}</small>
-        </a>
-        {% empty %}
-        <div class="list-group-item text-muted text-center py-3 small">Sin informes aún.</div>
-        {% endfor %}
-      </div>
-    </div>
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-journal-plus me-2"></i>Últimas Solicitudes</span>
+    <a href="{% url 'solicitudes:lista' %}" class="btn btn-sm btn-light">Ver todas</a>
   </div>
-
-  <!-- Últimas planillas -->
-  <div class="col-lg-4">
-    <div class="card h-100">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-table me-2"></i>Últimas Planillas</span>
-        <a href="{% url 'planillas:lista' %}" class="btn btn-sm btn-light">Ver todas</a>
+  <div class="list-group list-group-flush">
+    {% for sol in ultimas_solicitudes %}
+    <a href="{% url 'solicitudes:detalle' sol.pk %}" class="list-group-item list-group-item-action">
+      <div class="d-flex justify-content-between">
+        <span class="fw-semibold small">{{ sol.nombre_curso|truncatechars:50 }}</span>
+        <span class="badge {{ sol.estado_badge }} badge-estado">{{ sol.get_estado_display }}</span>
       </div>
-      <div class="list-group list-group-flush">
-        {% for planilla in ultimas_planillas %}
-        <a href="{% url 'planillas:detalle' planilla.pk %}" class="list-group-item list-group-item-action">
-          <div class="d-flex justify-content-between">
-            <span class="fw-semibold small">{{ planilla.get_periodo_display }} {{ planilla.anno }}</span>
-            <span class="badge {{ planilla.estado_badge }} badge-estado">{{ planilla.get_estado_display }}</span>
-          </div>
-          <small class="text-muted">{{ planilla.usuario.get_full_name }} — {{ planilla.fecha_creacion|date:"d/m/Y" }}</small>
-        </a>
-        {% empty %}
-        <div class="list-group-item text-muted text-center py-3 small">Sin planillas aún.</div>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-
-  <!-- Últimas solicitudes -->
-  <div class="col-lg-4">
-    <div class="card h-100">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-journal-plus me-2"></i>Últimas Solicitudes</span>
-        <a href="{% url 'solicitudes:lista' %}" class="btn btn-sm btn-light">Ver todas</a>
-      </div>
-      <div class="list-group list-group-flush">
-        {% for sol in ultimas_solicitudes %}
-        <a href="{% url 'solicitudes:detalle' sol.pk %}" class="list-group-item list-group-item-action">
-          <div class="d-flex justify-content-between">
-            <span class="fw-semibold small">{{ sol.nombre_curso|truncatechars:30 }}</span>
-            <span class="badge {{ sol.estado_badge }} badge-estado">{{ sol.get_estado_display }}</span>
-          </div>
-          <small class="text-muted">{{ sol.usuario.get_full_name }} — {{ sol.fecha_creacion|date:"d/m/Y" }}</small>
-        </a>
-        {% empty %}
-        <div class="list-group-item text-muted text-center py-3 small">Sin solicitudes aún.</div>
-        {% endfor %}
-      </div>
-    </div>
+      <small class="text-muted">{{ sol.get_nombre_docente }} — {{ sol.fecha_creacion|date:"d/m/Y" }}</small>
+    </a>
+    {% empty %}
+    <div class="list-group-item text-muted text-center py-3 small">Sin solicitudes aún.</div>
+    {% endfor %}
   </div>
 </div>
 {% endblock %}

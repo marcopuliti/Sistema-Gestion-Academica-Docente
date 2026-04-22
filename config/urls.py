@@ -7,8 +7,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('apps.tramites.urls', namespace='tramites')),
     path('cuentas/', include('apps.accounts.urls', namespace='accounts')),
-    path('informes/', include('apps.informes.urls', namespace='informes')),
-    path('planillas/', include('apps.planillas.urls', namespace='planillas')),
     path('solicitudes/', include('apps.solicitudes.urls', namespace='solicitudes')),
     path('notificaciones/', include('apps.notifications.urls', namespace='notifications')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

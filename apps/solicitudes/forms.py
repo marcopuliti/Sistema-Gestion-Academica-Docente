@@ -3,6 +3,7 @@ from django.forms import inlineformset_factory
 
 from .models import SolicitudProtocolizacion, MiembroEquipoDocente, CONDICION_CHOICES
 from apps.planes.models import PlanEstudio, MateriaEnPlan
+from apps.tramites.models import DEPARTAMENTO_CHOICES
 
 
 # Tipificaciones que requieren datos curriculares (carrera, plan, crédito horario)
@@ -15,13 +16,9 @@ class SolicitudProtocolizacionForm(forms.ModelForm):
         label='Nombre y apellido', max_length=200, required=False,
         widget=forms.TextInput(attrs={'class': 'form-control'}),
     )
-    legajo_docente = forms.CharField(
-        label='Legajo', max_length=20, required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
-    )
-    departamento_docente = forms.CharField(
-        label='Departamento', max_length=150, required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    departamento_docente = forms.ChoiceField(
+        label='Departamento', choices=DEPARTAMENTO_CHOICES, required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
     )
     email_docente = forms.EmailField(
         label='Email', required=False,
@@ -44,8 +41,7 @@ class SolicitudProtocolizacionForm(forms.ModelForm):
             'bibliografia_basica', 'bibliografia_complementaria',
             'resumen_objetivos', 'resumen_programa',
             'imprevistos', 'contacto_otros',
-            # Datos de Comisión
-            'numero_comision', 'condicion',
+            'condicion',
         ]
         widgets = {
             'anno_carrera': forms.TextInput(attrs={'readonly': True}),
@@ -63,7 +59,6 @@ class SolicitudProtocolizacionForm(forms.ModelForm):
             'resumen_programa': forms.Textarea(attrs={'rows': 4}),
             'imprevistos': forms.Textarea(attrs={'rows': 3}),
             'contacto_otros': forms.Textarea(attrs={'rows': 3}),
-            'numero_comision': forms.TextInput(attrs={'placeholder': 'Ej: 1, A, Única'}),
             'condicion': forms.Select(choices=[('', '---------')] + list(CONDICION_CHOICES)),
         }
 
@@ -72,7 +67,6 @@ class SolicitudProtocolizacionForm(forms.ModelForm):
         self.anonimo = anonimo
         if anonimo:
             self.fields['nombre_docente'].required = True
-            self.fields['legajo_docente'].required = True
 
         # Pre-fijar tipificación y ocultarla si viene del URL
         if tipificacion:

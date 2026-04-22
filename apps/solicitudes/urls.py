@@ -16,7 +16,12 @@ urlpatterns = [
     path('<int:pk>/docx/', views.descargar_docx_solicitud, name='docx'),
     path('<int:pk>/nota-elevacion/pdf/', views.descargar_pdf_nota_elevacion, name='nota_elevacion_pdf'),
     path('<int:pk>/nota-elevacion/docx/', views.descargar_docx_nota_elevacion, name='nota_elevacion_docx'),
+    path('<int:pk>/solicitud-completa/pdf/', views.descargar_pdf_solicitud_completa, name='solicitud_completa_pdf'),
+    path('<int:pk>/solicitud-completa/docx/', views.descargar_docx_solicitud_completa, name='solicitud_completa_docx'),
+    path('<int:pk>/nota-comision/pdf/', views.descargar_pdf_nota_comision, name='nota_comision_pdf'),
     path('<int:pk>/nota-comision/docx/', views.descargar_docx_nota_comision, name='nota_comision_docx'),
+    path('departamento/', views.lista_solicitudes_departamento, name='lista_departamento'),
+    path('<int:pk>/codigo-materia/', views.agregar_codigo_materia, name='agregar_codigo_materia'),
     path('ajax/planes-por-carrera/', views.planes_por_carrera, name='planes_por_carrera'),
     path('ajax/optativas-por-plan/', views.optativas_por_plan, name='optativas_por_plan'),
 ]

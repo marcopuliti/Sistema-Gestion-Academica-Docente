@@ -34,9 +34,9 @@ DEDICACION_CHOICES = [
 ]
 
 TIPIFICACION_CHOICES = [
-    ('optativa', 'Optativa'),
-    ('electiva', 'Electiva'),
-    ('extracurricular', 'Extracurricular'),
+    ('optativa',  'Optativa'),
+    ('jornada',   'Jornada'),
+    ('congreso',  'Congreso'),
 ]
 
 MODALIDAD_CURSADO_CHOICES = [
@@ -49,6 +49,16 @@ MODALIDAD_CURSADO_CHOICES = [
 CONDICION_CHOICES = [
     ('regular',     'Regular'),
     ('promocional', 'Promocional'),
+]
+
+CONDICION_CORRELATIVA_CHOICES = [
+    ('aprobada',     'Aprobada'),
+    ('regularizada', 'Regularizada'),
+]
+
+TIPO_CORRELATIVA_CHOICES = [
+    ('cursar', 'Para cursar'),
+    ('rendir', 'Para rendir'),
 ]
 
 
@@ -173,6 +183,27 @@ class SolicitudProtocolizacion(TramiteBase):
         blank=True,
     )
 
+    # ── Resolución (asigna el Administrador al aprobar) ──────────────────────
+    numero_resolucion = models.CharField(
+        max_length=50,
+        verbose_name='Número de resolución',
+        blank=True,
+    )
+
+    # ── Actas de aval (sube el Director de Departamento) ─────────────────────
+    acta_comision_carrera = models.FileField(
+        upload_to='solicitudes/actas/',
+        blank=True,
+        null=True,
+        verbose_name='Acta Comisión de Carrera',
+    )
+    acta_consejo_departamental = models.FileField(
+        upload_to='solicitudes/actas/',
+        blank=True,
+        null=True,
+        verbose_name='Acta Consejo Departamental',
+    )
+
     class Meta(TramiteBase.Meta):
         verbose_name = 'Solicitud de Protocolización'
         verbose_name_plural = 'Solicitudes de Protocolización'
@@ -187,6 +218,37 @@ class SolicitudProtocolizacion(TramiteBase):
     @property
     def total_horas(self):
         return self.cantidad_semanas * self.total_horas_semanales
+
+
+class CorrelativaRequerida(models.Model):
+    solicitud = models.ForeignKey(
+        SolicitudProtocolizacion,
+        on_delete=models.CASCADE,
+        related_name='correlativas',
+    )
+    materia = models.ForeignKey(
+        'planes.Materia',
+        on_delete=models.CASCADE,
+        verbose_name='Materia',
+    )
+    condicion = models.CharField(
+        max_length=15,
+        choices=CONDICION_CORRELATIVA_CHOICES,
+        verbose_name='Condición',
+    )
+    tipo = models.CharField(
+        max_length=10,
+        choices=TIPO_CORRELATIVA_CHOICES,
+        verbose_name='Tipo',
+    )
+
+    class Meta:
+        ordering = ['tipo', 'materia__nombre']
+        verbose_name = 'Correlativa Requerida'
+        verbose_name_plural = 'Correlativas Requeridas'
+
+    def __str__(self):
+        return f'{self.materia.nombre} ({self.get_condicion_display()}, {self.get_tipo_display()})'
 
 
 class MiembroEquipoDocente(models.Model):
@@ -223,3 +285,77 @@ class MiembroEquipoDocente(models.Model):
 
     def get_dedicacion_display(self):
         return dict(DEDICACION_CHOICES).get(self.dedicacion, self.dedicacion)
+
+
+ROL_TALLER_CHOICES = [
+    ('responsable',             'Responsable'),
+    ('responsable_coordinador', 'Responsable y Coordinador'),
+    ('co_responsable',          'Co-responsable'),
+    ('coordinador',             'Coordinador'),
+    ('colaborador',             'Colaborador'),
+    ('auxiliar',                'Auxiliar'),
+]
+
+ROL_TALLER_CON_DETALLE = {'responsable', 'responsable_coordinador', 'co_responsable'}
+
+
+class SolicitudTaller(TramiteBase):
+    denominacion_curso = models.CharField(max_length=200, verbose_name='Denominación del curso')
+
+    # Características
+    credito_horario_total = models.PositiveIntegerField(default=0, verbose_name='Crédito horario total (hs)')
+    destinatarios         = models.TextField(verbose_name='Destinatarios')
+    cupo                  = models.PositiveIntegerField(default=0, verbose_name='Cupo')
+
+    # Calendario y fechas
+    calendario_actividades = models.TextField(blank=True, verbose_name='Calendario de actividades')
+    fecha_elevar_nomina    = models.DateField(null=True, blank=True, verbose_name='Fecha prevista para elevar la nómina de alumnos aprobados')
+
+    # Contenido académico
+    objetivos           = models.TextField(verbose_name='Objetivos')
+    contenidos_minimos  = models.TextField(verbose_name='Contenidos mínimos')
+    programa            = models.TextField(verbose_name='Programa')
+    sistema_evaluacion  = models.TextField(verbose_name='Sistema de evaluación')
+    bibliografia        = models.TextField(verbose_name='Bibliografía')
+    costos_financiamiento = models.TextField(blank=True, verbose_name='Costos y fuentes de financiamiento')
+
+    # Aval del director (solo consejo departamental)
+    acta_consejo_departamental = models.FileField(
+        upload_to='talleres/actas/',
+        blank=True, null=True,
+        verbose_name='Acta Consejo Departamental',
+    )
+
+    # Resolución (asigna el administrador al aprobar)
+    numero_resolucion = models.CharField(max_length=50, blank=True, verbose_name='Número de resolución')
+
+    class Meta(TramiteBase.Meta):
+        verbose_name = 'Solicitud de Curso/Taller'
+        verbose_name_plural = 'Solicitudes de Curso/Taller'
+
+    def __str__(self):
+        return f"Curso/Taller: {self.denominacion_curso} — {self.get_nombre_docente}"
+
+    @property
+    def nombre_curso(self):
+        return self.denominacion_curso
+
+
+class MiembroEquipoTaller(models.Model):
+    taller      = models.ForeignKey(SolicitudTaller, on_delete=models.CASCADE, related_name='equipo')
+    rol         = models.CharField(max_length=30, choices=ROL_TALLER_CHOICES, verbose_name='Rol')
+    nombre      = models.CharField(max_length=200, verbose_name='Nombre y apellido')
+    # Detalle adicional (solo para responsable y co-responsable)
+    titulo      = models.CharField(max_length=100, blank=True, verbose_name='Título')
+    documento   = models.CharField(max_length=20,  blank=True, verbose_name='N° Documento')
+    institucion = models.CharField(max_length=200, blank=True, verbose_name='Institución de origen')
+    email       = models.EmailField(blank=True, verbose_name='E-mail')
+    telefono    = models.CharField(max_length=50,  blank=True, verbose_name='Teléfono / FAX')
+    orden       = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+        verbose_name = 'Miembro del equipo (Taller)'
+
+    def __str__(self):
+        return f"{self.nombre} ({self.get_rol_display()})"

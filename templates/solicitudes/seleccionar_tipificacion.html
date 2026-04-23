@@ -26,17 +26,28 @@
   .tipo-card .icon { font-size: 2.8rem; margin-bottom: .75rem; }
   .tipo-card h5 { color: #1a3a5c; font-weight: 700; margin-bottom: .4rem; }
   .tipo-card p  { font-size: .88rem; color: #666; margin: 0; }
+  .grupo-label {
+    font-size: .78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #6c757d;
+    margin-bottom: .75rem;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: .4rem;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-header">
   <h2><i class="bi bi-journal-plus me-2"></i>Nueva Solicitud de Protocolización</h2>
-  <p class="text-muted mb-0">Seleccioná el tipo de curso para continuar con el formulario correspondiente.</p>
+  <p class="text-muted mb-0">Seleccioná el tipo de actividad para continuar con el formulario correspondiente.</p>
 </div>
 
-<div class="row g-4 mt-1">
-
+<!-- Materia curricular -->
+<div class="grupo-label mt-3"><i class="bi bi-mortarboard me-1"></i>Materia curricular</div>
+<div class="row g-4 mb-4">
   <div class="col-sm-6 col-lg-4">
     <a href="{% url 'solicitudes:crear_con_tipo' 'optativa' %}" class="tipo-card">
       <div class="icon text-success"><i class="bi bi-bookmark-check-fill"></i></div>
@@ -44,20 +55,33 @@
       <p>Materia optativa dentro de la oferta curricular. Las fechas se completan automáticamente.</p>
     </a>
   </div>
+</div>
 
-  <div class="col-sm-6 col-lg-4">
-    <a href="{% url 'solicitudes:crear_con_tipo' 'electiva' %}" class="tipo-card">
-      <div class="icon text-warning"><i class="bi bi-list-check"></i></div>
-      <h5>Electiva</h5>
-      <p>Materia electiva que el alumno puede elegir dentro del plan de estudios.</p>
+<!-- Actividades extracurriculares -->
+<div class="grupo-label"><i class="bi bi-stars me-1"></i>Actividad extracurricular</div>
+<div class="row g-4">
+
+  <div class="col-sm-6 col-lg-3">
+    <a href="{% url 'solicitudes:crear_taller' %}" class="tipo-card">
+      <div class="icon text-info"><i class="bi bi-journal-text"></i></div>
+      <h5>Curso / Taller</h5>
+      <p>Formación o actividad extracurricular con contenido teórico-práctico fuera del plan de estudios formal.</p>
     </a>
   </div>
 
-  <div class="col-sm-6 col-lg-4">
-    <a href="{% url 'solicitudes:crear_con_tipo' 'extracurricular' %}" class="tipo-card">
-      <div class="icon text-danger"><i class="bi bi-stars"></i></div>
-      <h5>Extracurricular</h5>
-      <p>Curso fuera del plan de estudios formal, abierto a la comunidad.</p>
+  <div class="col-sm-6 col-lg-3">
+    <a href="{% url 'solicitudes:crear_con_tipo' 'jornada' %}" class="tipo-card">
+      <div class="icon text-warning"><i class="bi bi-calendar-event"></i></div>
+      <h5>Jornada</h5>
+      <p>Encuentro académico de uno o varios días con exposiciones y debate en torno a un tema.</p>
+    </a>
+  </div>
+
+  <div class="col-sm-6 col-lg-3">
+    <a href="{% url 'solicitudes:crear_con_tipo' 'congreso' %}" class="tipo-card">
+      <div class="icon text-danger"><i class="bi bi-people-fill"></i></div>
+      <h5>Congreso</h5>
+      <p>Evento científico o académico con presentación de trabajos e intercambio entre especialistas.</p>
     </a>
   </div>
 

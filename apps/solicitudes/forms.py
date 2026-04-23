@@ -1,12 +1,17 @@
 from django import forms
 from django.forms import inlineformset_factory
 
-from .models import SolicitudProtocolizacion, MiembroEquipoDocente, CONDICION_CHOICES
-from apps.planes.models import PlanEstudio, MateriaEnPlan
+from .models import (
+    SolicitudProtocolizacion, MiembroEquipoDocente, CorrelativaRequerida,
+    CONDICION_CHOICES, CONDICION_CORRELATIVA_CHOICES, TIPO_CORRELATIVA_CHOICES,
+    SolicitudTaller, MiembroEquipoTaller,
+)
+from apps.planes.models import PlanEstudio, MateriaEnPlan, Materia
 from apps.tramites.models import DEPARTAMENTO_CHOICES
 
 
 # Tipificaciones que requieren datos curriculares (carrera, plan, crédito horario)
+# electiva/extracurricular kept for backward compat with existing records
 TIPIFICACIONES_CURRICULARES = {'optativa', 'electiva'}
 
 
@@ -177,14 +182,201 @@ EquipoDocenteFormSet = inlineformset_factory(
 )
 
 
-class RevisionForm(forms.Form):
-    estado = forms.ChoiceField(
-        choices=[('aprobado', 'Aprobar'), ('rechazado', 'Rechazar'), ('en_revision', 'Marcar en revisión')],
+class CorrelativaForm(forms.ModelForm):
+    materia = forms.ModelChoiceField(
+        queryset=Materia.objects.none(),
+        label='Materia',
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm correlativa-materia-select'}),
+    )
+
+    class Meta:
+        model = CorrelativaRequerida
+        fields = ['materia', 'condicion', 'tipo']
+        widgets = {
+            'condicion': forms.Select(attrs={'class': 'form-select form-select-sm'}),
+            'tipo':      forms.Select(attrs={'class': 'form-select form-select-sm'}),
+        }
+
+
+CorrelativaFormSet = inlineformset_factory(
+    SolicitudProtocolizacion,
+    CorrelativaRequerida,
+    form=CorrelativaForm,
+    extra=0,
+    can_delete=True,
+)
+
+
+class ActasAvalForm(forms.Form):
+    acta_comision_carrera = forms.FileField(
+        label='Acta Comisión de Carrera (PDF)',
+        required=False,
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf'}),
+    )
+    acta_consejo_departamental = forms.FileField(
+        label='Acta Consejo Departamental (PDF)',
+        required=False,
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf'}),
+    )
+
+    def _validar_pdf(self, f):
+        if f and not f.name.lower().endswith('.pdf'):
+            raise forms.ValidationError('Solo se aceptan archivos PDF.')
+        return f
+
+    def clean_acta_comision_carrera(self):
+        return self._validar_pdf(self.cleaned_data.get('acta_comision_carrera'))
+
+    def clean_acta_consejo_departamental(self):
+        return self._validar_pdf(self.cleaned_data.get('acta_consejo_departamental'))
+
+
+class RevisionDirectorForm(forms.Form):
+    """Formulario de revisión para el Director de Departamento."""
+    accion = forms.ChoiceField(
+        choices=[
+            ('devuelta', 'Devolver al docente con observaciones'),
+            ('elevada',  'Elevar al Administrador'),
+        ],
+        label='Acción',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    comentarios = forms.CharField(
+        label='Observaciones / Comentarios',
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+        required=False,
+    )
+
+
+class RevisionAdminForm(forms.Form):
+    """Formulario de revisión para el Administrador (solicitud ya elevada)."""
+    accion = forms.ChoiceField(
+        choices=[
+            ('aprobado',  'Aprobar'),
+            ('observada', 'Devolver con observaciones'),
+        ],
         label='Decisión',
         widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    numero_resolucion = forms.CharField(
+        label='Número de resolución',
+        max_length=50,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 01-24'}),
     )
     comentarios = forms.CharField(
         label='Comentarios',
         widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
         required=False,
     )
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('accion') == 'aprobado' and not cleaned.get('numero_resolucion'):
+            raise forms.ValidationError('Debe ingresar el número de resolución para aprobar.')
+        return cleaned
+
+
+_T  = {'class': 'form-control'}
+_TA = lambda r: {'class': 'form-control', 'rows': r}
+_TN = {'class': 'form-control', 'min': 0}
+
+
+class SolicitudTallerForm(forms.ModelForm):
+    class Meta:
+        model = SolicitudTaller
+        fields = [
+            'denominacion_curso',
+            'credito_horario_total', 'destinatarios', 'cupo',
+            'calendario_actividades', 'fecha_elevar_nomina',
+            'objetivos', 'contenidos_minimos', 'programa',
+            'sistema_evaluacion', 'bibliografia', 'costos_financiamiento',
+        ]
+        widgets = {
+            'denominacion_curso':     forms.TextInput(attrs=_T),
+            'credito_horario_total':  forms.NumberInput(attrs=_TN),
+            'destinatarios':          forms.Textarea(attrs=_TA(3)),
+            'cupo':                   forms.NumberInput(attrs=_TN),
+            'calendario_actividades': forms.Textarea(attrs=_TA(6)),
+            'fecha_elevar_nomina':    forms.DateInput(attrs={**_T, 'type': 'date'}),
+            'objetivos':              forms.Textarea(attrs=_TA(5)),
+            'contenidos_minimos':     forms.Textarea(attrs=_TA(4)),
+            'programa':               forms.Textarea(attrs=_TA(8)),
+            'sistema_evaluacion':     forms.Textarea(attrs=_TA(4)),
+            'bibliografia':           forms.Textarea(attrs=_TA(5)),
+            'costos_financiamiento':  forms.Textarea(attrs=_TA(4)),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.required = True
+
+
+_DETALLE_TALLER = {'titulo', 'documento', 'institucion', 'email', 'telefono'}
+
+
+class MiembroEquipoTallerForm(forms.ModelForm):
+    class Meta:
+        model = MiembroEquipoTaller
+        fields = ['rol', 'nombre', 'titulo', 'documento', 'institucion', 'email', 'telefono']
+        widgets = {
+            'rol':        forms.Select(attrs={'class': 'form-select equipo-taller-rol'}),
+            'nombre':     forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Apellido, Nombre'}),
+            'titulo':     forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Lic., Dr., Prof.'}),
+            'documento':  forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'DNI'}),
+            'institucion': forms.TextInput(attrs={'class': 'form-control'}),
+            'email':      forms.EmailInput(attrs={'class': 'form-control'}),
+            'telefono':   forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Teléfono / FAX'}),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        from .models import ROL_TALLER_CON_DETALLE
+        if cleaned.get('rol') in ROL_TALLER_CON_DETALLE and not cleaned.get('DELETE'):
+            for f in _DETALLE_TALLER:
+                if not cleaned.get(f):
+                    self.add_error(f, 'Requerido para este rol.')
+        return cleaned
+
+
+class EquipoTallerFormSetBase(forms.BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        activos = [
+            f.cleaned_data for f in self.forms
+            if f.cleaned_data and not f.cleaned_data.get('DELETE', False)
+        ]
+        roles = {d.get('rol') for d in activos}
+        tiene_responsable  = bool(roles & {'responsable', 'responsable_coordinador'})
+        tiene_coordinador  = bool(roles & {'coordinador', 'responsable_coordinador'})
+        if not tiene_responsable:
+            raise forms.ValidationError('Debe haber al menos un Responsable en el equipo.')
+        if not tiene_coordinador:
+            raise forms.ValidationError('Debe haber al menos un Coordinador en el equipo.')
+
+
+EquipoTallerFormSet = inlineformset_factory(
+    SolicitudTaller,
+    MiembroEquipoTaller,
+    form=MiembroEquipoTallerForm,
+    formset=EquipoTallerFormSetBase,
+    extra=1,
+    can_delete=True,
+    min_num=1,
+    validate_min=True,
+)
+
+
+class ActaConsejoTallerForm(forms.Form):
+    acta_consejo_departamental = forms.FileField(
+        label='Acta Consejo Departamental (PDF)',
+        required=False,
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf'}),
+    )
+
+    def clean_acta_consejo_departamental(self):
+        f = self.cleaned_data.get('acta_consejo_departamental')
+        if f and not f.name.lower().endswith('.pdf'):
+            raise forms.ValidationError('Solo se aceptan archivos PDF.')
+        return f

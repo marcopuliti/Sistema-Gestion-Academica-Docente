@@ -2,6 +2,7 @@ import os
 from io import BytesIO
 
 from django.conf import settings
+from pypdf import PdfWriter, PdfReader
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -113,6 +114,19 @@ def _sec_titulo(texto, s):
     return Paragraph(f'<u>{texto}</u>', s['sec_titulo'])
 
 
+def _fecha_larga(dt):
+    meses = {
+        'January': 'enero', 'February': 'febrero', 'March': 'marzo',
+        'April': 'abril', 'May': 'mayo', 'June': 'junio',
+        'July': 'julio', 'August': 'agosto', 'September': 'septiembre',
+        'October': 'octubre', 'November': 'noviembre', 'December': 'diciembre',
+    }
+    txt = dt.strftime('%d de %B de %Y')
+    for en, es in meses.items():
+        txt = txt.replace(en, es)
+    return txt
+
+
 def _pie_pagina(canvas, doc):
     canvas.saveState()
     canvas.setFont('Times-Roman', 9)
@@ -222,6 +236,24 @@ def generar_pdf_solicitud(solicitud):
         col_widths=[w * 0.40, w * 0.28, w * 0.16, w * 0.16],
         extra_cmds=[('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey)],
     ))
+
+    # ── Correlatividades ────────────────────────────────────────────────────────
+    correlativas = list(solicitud.correlativas.all())
+    if correlativas:
+        E.append(Spacer(1, 0.5 * cm))
+        E.append(_sec_titulo('Correlatividades', s))
+        filas_cor = [[_p('Materia', s['th']), _p('Condición', s['th']), _p('Tipo', s['th'])]]
+        for c in correlativas:
+            filas_cor.append([
+                _p(c.materia.nombre, s['td']),
+                _p(c.get_condicion_display(), s['td']),
+                _p(c.get_tipo_display(), s['td']),
+            ])
+        E.append(_tabla(
+            filas_cor,
+            col_widths=[w * 0.60, w * 0.20, w * 0.20],
+            extra_cmds=[('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey)],
+        ))
 
     # ── III — Características del Curso ────────────────────────────────────────
     E.append(Spacer(1, 0.5 * cm))
@@ -534,13 +566,7 @@ def generar_pdf_nota_elevacion(solicitud):
     E.append(Spacer(1, 0.8 * cm))
 
     # Lugar y fecha
-    fecha = solicitud.fecha_creacion.strftime('%d de %B de %Y').replace(
-        'January', 'enero').replace('February', 'febrero').replace(
-        'March', 'marzo').replace('April', 'abril').replace(
-        'May', 'mayo').replace('June', 'junio').replace(
-        'July', 'julio').replace('August', 'agosto').replace(
-        'September', 'septiembre').replace('October', 'octubre').replace(
-        'November', 'noviembre').replace('December', 'diciembre')
+    fecha = _fecha_larga(solicitud.fecha_creacion)
     E.append(Paragraph(f'San Luis, {fecha}', nota_right))
     E.append(Spacer(1, 0.8 * cm))
 
@@ -646,13 +672,7 @@ def generar_pdf_solicitud_completa(solicitud):
         E.append(Paragraph(linea, nota_center))
     E.append(Spacer(1, 0.8 * cm))
 
-    fecha = solicitud.fecha_creacion.strftime('%d de %B de %Y').replace(
-        'January', 'enero').replace('February', 'febrero').replace(
-        'March', 'marzo').replace('April', 'abril').replace(
-        'May', 'mayo').replace('June', 'junio').replace(
-        'July', 'julio').replace('August', 'agosto').replace(
-        'September', 'septiembre').replace('October', 'octubre').replace(
-        'November', 'noviembre').replace('December', 'diciembre')
+    fecha = _fecha_larga(solicitud.fecha_creacion)
     E.append(Paragraph(f'San Luis, {fecha}', nota_right))
     E.append(Spacer(1, 0.8 * cm))
 
@@ -796,6 +816,24 @@ def generar_pdf_solicitud_completa(solicitud):
         extra_cmds=[('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey)],
     ))
 
+    # ── Correlatividades ────────────────────────────────────────────────────────
+    correlativas = list(solicitud.correlativas.all())
+    if correlativas:
+        E.append(Spacer(1, 0.5 * cm))
+        E.append(_sec_titulo('Correlatividades', s))
+        filas_cor = [[_p('Materia', s['th']), _p('Condición', s['th']), _p('Tipo', s['th'])]]
+        for c in correlativas:
+            filas_cor.append([
+                _p(c.materia.nombre, s['td']),
+                _p(c.get_condicion_display(), s['td']),
+                _p(c.get_tipo_display(), s['td']),
+            ])
+        E.append(_tabla(
+            filas_cor,
+            col_widths=[cw * 0.60, cw * 0.20, cw * 0.20],
+            extra_cmds=[('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey)],
+        ))
+
     # ── III — Características del Curso ────────────────────────────────────────
     E.append(Spacer(1, 0.5 * cm))
     E.append(_sec_titulo('III - Características del Curso', s))
@@ -914,4 +952,284 @@ def generar_pdf_solicitud_completa(solicitud):
 
     doc.build(E, onFirstPage=_pie_pagina, onLaterPages=_pie_pagina)
     buffer.seek(0)
-    return buffer
+
+    # ── Agregar actas de aval si existen ───────────────────────────────────────
+    actas = []
+    if solicitud.acta_comision_carrera:
+        actas.append(solicitud.acta_comision_carrera.path)
+    if solicitud.acta_consejo_departamental:
+        actas.append(solicitud.acta_consejo_departamental.path)
+
+    if not actas:
+        return buffer
+
+    writer = PdfWriter()
+    for page in PdfReader(buffer).pages:
+        writer.add_page(page)
+    for path in actas:
+        try:
+            for page in PdfReader(path).pages:
+                writer.add_page(page)
+        except Exception:
+            pass  # Si el archivo está corrupto se omite sin romper la descarga
+
+    merged = BytesIO()
+    writer.write(merged)
+    merged.seek(0)
+    return merged
+
+
+# ── PDF Taller ─────────────────────────────────────────────────────────────────
+def generar_pdf_taller(taller):
+    from apps.solicitudes.models import ROL_TALLER_CON_DETALLE
+
+    COMB_MARGIN = 3 * cm
+    cw = PAGE_W - 2 * COMB_MARGIN
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        rightMargin=COMB_MARGIN, leftMargin=COMB_MARGIN,
+        topMargin=2.5 * cm, bottomMargin=2.5 * cm,
+    )
+    s = _s()
+    base = getSampleStyleSheet()
+    E = []
+
+    nota = ParagraphStyle(
+        'TallerNota', parent=base['Normal'],
+        fontName='Times-Roman', fontSize=12, leading=18, spaceAfter=0,
+    )
+    nota_right  = ParagraphStyle('TallerNotaRight',  parent=nota, alignment=TA_RIGHT)
+    nota_center = ParagraphStyle('TallerNotaCenter', parent=nota, alignment=TA_CENTER)
+
+    logo_path = os.path.join(settings.BASE_DIR, 'static', 'escudo.gif')
+
+    # ── PÁGINA 1: NOTA DE ELEVACIÓN ─────────────────────────────────────────────
+    if os.path.exists(logo_path):
+        logo = Image(logo_path, width=2.2 * cm, height=2.2 * cm)
+        logo.hAlign = 'CENTER'
+        E.append(logo)
+        E.append(Spacer(1, 0.2 * cm))
+
+    for linea in [
+        'Universidad Nacional de San Luis',
+        'Facultad de Ciencias Físico Matemáticas y Naturales',
+    ]:
+        E.append(Paragraph(linea, nota_center))
+    E.append(Spacer(1, 0.8 * cm))
+
+    E.append(Paragraph(f'San Luis, {_fecha_larga(taller.fecha_creacion)}', nota_right))
+    E.append(Spacer(1, 0.8 * cm))
+
+    for linea in [
+        'Señor/a Secretario/a Académico/a',
+        'Facultad de Ciencias Físico Matemáticas y Naturales',
+        'S / D',
+    ]:
+        E.append(Paragraph(linea, nota))
+    E.append(Spacer(1, 0.8 * cm))
+
+    E.append(Paragraph('De mi mayor consideración:', nota))
+    E.append(Spacer(1, 0.5 * cm))
+
+    nombre_curso = taller.denominacion_curso or '(denominación del curso)'
+    cuerpo = (
+        f'Tengo el agrado de dirigirme a Ud. a fin de solicitar se <b>protocolice</b> '
+        f'el curso/taller denominado <b>"{nombre_curso}"</b>, cuyo programa adjunto a la presente.'
+    )
+    E.append(Paragraph(cuerpo, nota))
+    E.append(Spacer(1, 0.5 * cm))
+    E.append(Paragraph('Sin otro particular, saludo a Ud. muy atentamente.', nota))
+    E.append(Spacer(1, 2.0 * cm))
+
+    responsable = (
+        taller.equipo.filter(rol__in=['responsable', 'responsable_coordinador']).first()
+        or taller.equipo.first()
+    )
+    nombre_resp = responsable.nombre if responsable else taller.get_nombre_docente
+
+    lf = Table([['']], colWidths=[8 * cm])
+    lf.setStyle(TableStyle([('LINEABOVE', (0, 0), (0, 0), 0.5, NEGRO)]))
+    lf.hAlign = 'LEFT'
+    E.append(lf)
+    E.append(Paragraph(nombre_resp or '', nota))
+    E.append(Paragraph('Responsable', nota))
+
+    # ── SALTO DE PÁGINA → PROGRAMA ─────────────────────────────────────────────
+    E.append(PageBreak())
+
+    # ── ENCABEZADO DEL PROGRAMA ────────────────────────────────────────────────
+    estado_txt = ESTADO_LABEL.get(taller.estado, taller.estado)
+    fecha_pres = taller.fecha_creacion.strftime('%d/%m/%Y %H:%M:%S')
+
+    left_items = []
+    if os.path.exists(logo_path):
+        logo2 = Image(logo_path, width=2.8 * cm, height=2.8 * cm)
+        logo2.hAlign = 'CENTER'
+        left_items.append(logo2)
+        left_items.append(Spacer(1, 0.15 * cm))
+
+    dpto = (taller.usuario.departamento if taller.usuario else None) \
+        or taller.departamento_docente or '—'
+    for linea in [
+        'Ministerio de Cultura y Educación',
+        'Universidad Nacional de San Luis',
+        'Facultad de Ciencias Físico Matemáticas y Naturales',
+        f'Departamento: {dpto}',
+    ]:
+        left_items.append(Paragraph(linea, s['inst_bold']))
+
+    right_items = [
+        Spacer(1, 0.8 * cm),
+        Paragraph(f'(Programa {estado_txt})', s['status']),
+        Paragraph(f'(Presentado el {fecha_pres})', s['status']),
+    ]
+
+    cab = Table(
+        [[left_items, right_items]],
+        colWidths=[cw * 0.62, cw * 0.38],
+    )
+    cab.setStyle(TableStyle([
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 0),
+        ('TOPPADDING',    (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    E.append(cab)
+    E.append(Spacer(1, 0.4 * cm))
+
+    # ── I — Denominación ────────────────────────────────────────────────────────
+    E.append(_sec_titulo('I - Denominación del Curso', s))
+    E.append(_tabla(
+        [[_p('Denominación', s['th']), _p(taller.denominacion_curso, s['td'])]],
+        col_widths=[cw * 0.28, cw * 0.72],
+        extra_cmds=[('BACKGROUND', (0, 0), (0, 0), colors.lightgrey)],
+    ))
+
+    # ── II — Equipo ─────────────────────────────────────────────────────────────
+    E.append(Spacer(1, 0.5 * cm))
+    E.append(_sec_titulo('II - Equipo', s))
+
+    equipo = list(taller.equipo.all())
+    con_det = [m for m in equipo if m.rol in ROL_TALLER_CON_DETALLE]
+    sin_det = [m for m in equipo if m.rol not in ROL_TALLER_CON_DETALLE]
+
+    if con_det:
+        filas_det = [[
+            _p('Rol', s['th']), _p('Nombre', s['th']), _p('Título', s['th']),
+            _p('N° Doc.', s['th']), _p('Institución', s['th']),
+            _p('E-mail', s['th']), _p('Tel./FAX', s['th']),
+        ]]
+        for m in con_det:
+            filas_det.append([
+                _p(m.get_rol_display(), s['td']),
+                _p(m.nombre, s['td']),
+                _p(m.titulo or '', s['td']),
+                _p(m.documento or '', s['td']),
+                _p(m.institucion or '', s['td']),
+                _p(m.email or '', s['td']),
+                _p(m.telefono or '', s['td']),
+            ])
+        E.append(_tabla(
+            filas_det,
+            col_widths=[cw*0.18, cw*0.18, cw*0.10, cw*0.10, cw*0.20, cw*0.14, cw*0.10],
+            extra_cmds=[('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey)],
+        ))
+
+    if sin_det:
+        if con_det:
+            E.append(Spacer(1, 0.2 * cm))
+        filas_sin = [[_p('Rol', s['th']), _p('Nombre', s['th'])]]
+        for m in sin_det:
+            filas_sin.append([_p(m.get_rol_display(), s['td']), _p(m.nombre, s['td'])])
+        E.append(_tabla(
+            filas_sin,
+            col_widths=[cw * 0.28, cw * 0.72],
+            extra_cmds=[('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey)],
+        ))
+
+    # ── III — Características ───────────────────────────────────────────────────
+    E.append(Spacer(1, 0.5 * cm))
+    E.append(_sec_titulo('III - Características', s))
+    E.append(_tabla(
+        [
+            [_p('Crédito Horario Total', s['th_c']),
+             _p('Cupo', s['th_c']),
+             _p('Destinatarios', s['th_c'])],
+            [_p(f'{taller.credito_horario_total} Hs', s['td_c']),
+             _p(str(taller.cupo), s['td_c']),
+             _p(taller.destinatarios, s['td'])],
+        ],
+        col_widths=[cw * 0.22, cw * 0.12, cw * 0.66],
+        extra_cmds=[('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey)],
+    ))
+
+    # ── IV — Calendario ─────────────────────────────────────────────────────────
+    E.append(Spacer(1, 0.5 * cm))
+    E.append(_sec_titulo('IV - Calendario de Actividades', s))
+    E.append(_caja(taller.calendario_actividades or '', s, content_w=cw))
+    if taller.fecha_elevar_nomina:
+        E.append(Spacer(1, 0.2 * cm))
+        E.append(_tabla(
+            [[_p('Fecha prevista para elevar nómina de alumnos aprobados', s['th']),
+              _p(taller.fecha_elevar_nomina.strftime('%d/%m/%Y'), s['td'])]],
+            col_widths=[cw * 0.65, cw * 0.35],
+            extra_cmds=[('BACKGROUND', (0, 0), (0, 0), colors.lightgrey)],
+        ))
+
+    # ── V–X — Secciones de texto ────────────────────────────────────────────────
+    def sec(num, titulo, texto):
+        E.append(Spacer(1, 0.5 * cm))
+        E.append(_sec_titulo(f'{num} - {titulo}', s))
+        E.append(_caja(texto or '', s, content_w=cw))
+
+    sec('V',    'Objetivos',                         taller.objetivos)
+    sec('VI',   'Contenidos Mínimos',                taller.contenidos_minimos)
+    sec('VII',  'Programa',                          taller.programa)
+    sec('VIII', 'Sistema de Evaluación',             taller.sistema_evaluacion)
+    sec('IX',   'Bibliografía',                      taller.bibliografia)
+    sec('X',    'Costos y Fuentes de Financiamiento', taller.costos_financiamiento)
+
+    # ── FIRMA ───────────────────────────────────────────────────────────────────
+    E.append(PageBreak())
+    ROW_H = 1.8 * cm
+    E.append(_tabla(
+        [
+            [_p('ELEVACIÓN y APROBACIÓN DE ESTE PROGRAMA', s['th_c']), ''],
+            ['', _p('Responsable', s['th_c'])],
+            [_p('Firma:', s['td']), ''],
+            [_p('Aclaración:', s['td']), ''],
+            [_p('Fecha:', s['td']), ''],
+        ],
+        col_widths=[cw * 0.30, cw * 0.70],
+        extra_cmds=[
+            ('SPAN', (0, 0), (1, 0)),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('ALIGN', (1, 1), (1, 1), 'CENTER'),
+            ('BACKGROUND', (0, 0), (1, 0), colors.lightgrey),
+            ('ROWHEIGHT', (0, 2), (-1, -1), ROW_H),
+        ],
+    ))
+
+    doc.build(E, onFirstPage=_pie_pagina, onLaterPages=_pie_pagina)
+    buffer.seek(0)
+
+    # ── Adjuntar acta del consejo departamental si fue subida ──────────────────
+    if not taller.acta_consejo_departamental:
+        return buffer
+
+    writer = PdfWriter()
+    for page in PdfReader(buffer).pages:
+        writer.add_page(page)
+    try:
+        for page in PdfReader(taller.acta_consejo_departamental.path).pages:
+            writer.add_page(page)
+    except Exception:
+        return buffer
+
+    merged = BytesIO()
+    writer.write(merged)
+    merged.seek(0)
+    return merged

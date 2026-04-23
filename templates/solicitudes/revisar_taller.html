@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}Revisar Curso/Taller — Administrador{% endblock %}
+{% block nav_solicitudes %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-pencil-square me-2"></i>Revisión — Administrador</h2>
+  <p class="text-muted mb-0">{{ taller.denominacion_curso }}</p>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-5">
+
+    <div class="card mb-3">
+      <div class="card-header"><h6 class="mb-0"><i class="bi bi-person me-2"></i>Docente</h6></div>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item">
+          <small class="text-muted d-block">Nombre</small>
+          <strong>{{ taller.get_nombre_docente|default:"—" }}</strong>
+        </li>
+      </ul>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><h6 class="mb-0"><i class="bi bi-journal-text me-2"></i>Resumen</h6></div>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item">
+          <small class="text-muted d-block">Estado</small>
+          <span class="badge {{ taller.estado_badge }}">{{ taller.get_estado_display }}</span>
+        </li>
+        <li class="list-group-item">
+          <small class="text-muted d-block">Responsable</small>{{ taller.responsable_nombre }}
+        </li>
+        <li class="list-group-item">
+          <small class="text-muted d-block">Crédito horario total</small>{{ taller.credito_horario_total }} hs
+        </li>
+      </ul>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><h6 class="mb-0"><i class="bi bi-file-earmark-check me-2"></i>Acta de Aval</h6></div>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span class="small">Acta Consejo Departamental</span>
+          {% if taller.acta_consejo_departamental %}
+            <a href="{{ taller.acta_consejo_departamental.url }}" target="_blank" class="btn btn-sm btn-outline-danger py-0">
+              <i class="bi bi-file-pdf me-1"></i>Ver
+            </a>
+          {% else %}
+            <span class="badge bg-secondary">No cargada</span>
+          {% endif %}
+        </li>
+      </ul>
+    </div>
+
+    <a href="{% url 'solicitudes:detalle_taller' taller.pk %}" class="btn btn-outline-secondary w-100 mb-3">
+      <i class="bi bi-eye me-2"></i>Ver solicitud completa
+    </a>
+
+  </div>
+
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header"><h6 class="mb-0">Decisión del Administrador</h6></div>
+      <div class="card-body">
+        <form method="post" id="form-revision-admin">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.accion.label }}</label>
+            {{ form.accion }}
+          </div>
+          <div class="mb-3" id="div-nro-resolucion" style="display:none;">
+            <label class="form-label fw-semibold">{{ form.numero_resolucion.label }}</label>
+            {{ form.numero_resolucion }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.comentarios.label }}</label>
+            {{ form.comentarios }}
+          </div>
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger py-2">{{ form.non_field_errors.0 }}</div>
+          {% endif %}
+          <div class="d-flex gap-2 justify-content-end">
+            <a href="{% url 'solicitudes:detalle_taller' taller.pk %}" class="btn btn-outline-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-circle me-2"></i>Confirmar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% block extra_js %}
+<script>
+(function () {
+  const sel = document.getElementById('id_accion');
+  const div = document.getElementById('div-nro-resolucion');
+  function toggle() { div.style.display = sel.value === 'aprobado' ? '' : 'none'; }
+  sel.addEventListener('change', toggle);
+  toggle();
+})();
+</script>
+{% endblock %}
+{% endblock %}

@@ -240,6 +240,21 @@ def generar_docx_solicitud(solicitud):
 
     doc.add_paragraph()
 
+    # ── Correlatividades ─────────────────────────────────────────────────────────
+    correlativas = list(solicitud.correlativas.all())
+    if correlativas:
+        _sec_titulo(doc, 'Correlatividades')
+        t_cor = doc.add_table(rows=len(correlativas) + 1, cols=3)
+        t_cor.style = 'Table Grid'
+        _header_row(t_cor, 0, ['Materia', 'Condición', 'Tipo'])
+        for i, c in enumerate(correlativas):
+            row = t_cor.rows[i + 1]
+            _p_cell(row.cells[0], c.materia.nombre)
+            _p_cell(row.cells[1], c.get_condicion_display())
+            _p_cell(row.cells[2], c.get_tipo_display())
+        _set_col_widths(t_cor, [9.6, 3.2, 3.2])
+        doc.add_paragraph()
+
     # ── III — Características del Curso ───────────────────────────────────────
     _sec_titulo(doc, 'III - Características del Curso')
 
@@ -786,6 +801,21 @@ def generar_docx_solicitud_completa(solicitud):
             _p_cell(c, '')
     _set_col_widths(t2, [6.4, 4.5, 2.6, 2.5])
     doc.add_paragraph()
+
+    # ── Correlatividades ─────────────────────────────────────────────────────────
+    correlativas = list(solicitud.correlativas.all())
+    if correlativas:
+        _sec_titulo(doc, 'Correlatividades')
+        t_cor = doc.add_table(rows=len(correlativas) + 1, cols=3)
+        t_cor.style = 'Table Grid'
+        _header_row(t_cor, 0, ['Materia', 'Condición', 'Tipo'])
+        for i, c in enumerate(correlativas):
+            row = t_cor.rows[i + 1]
+            _p_cell(row.cells[0], c.materia.nombre)
+            _p_cell(row.cells[1], c.get_condicion_display())
+            _p_cell(row.cells[2], c.get_tipo_display())
+        _set_col_widths(t_cor, [9.6, 3.2, 3.2])
+        doc.add_paragraph()
 
     # ── III — Características del Curso ───────────────────────────────────────
     _sec_titulo(doc, 'III - Características del Curso')

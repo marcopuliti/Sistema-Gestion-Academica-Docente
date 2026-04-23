@@ -1,5 +1,6 @@
-from django.contrib.auth import login, logout
+from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.views import LoginView
@@ -90,7 +91,28 @@ def perfil(request):
             return redirect('accounts:perfil')
     else:
         form = PerfilForm(instance=request.user)
-    return render(request, 'accounts/perfil.html', {'form': form})
+    pw_form = PasswordChangeForm(user=request.user)
+    for field in pw_form.fields.values():
+        field.widget.attrs['class'] = 'form-control'
+    return render(request, 'accounts/perfil.html', {'form': form, 'pw_form': pw_form})
+
+
+@login_required
+def cambiar_password(request):
+    if request.method == 'POST':
+        form = PasswordChangeForm(user=request.user, data=request.POST)
+        if form.is_valid():
+            form.save()
+            update_session_auth_hash(request, form.user)
+            messages.success(request, 'Contraseña actualizada correctamente.')
+            return redirect('accounts:perfil')
+        else:
+            messages.error(request, 'Corregí los errores antes de continuar.')
+    else:
+        form = PasswordChangeForm(user=request.user)
+    for field in form.fields.values():
+        field.widget.attrs['class'] = 'form-control'
+    return render(request, 'accounts/perfil.html', {'form': PerfilForm(instance=request.user), 'pw_form': form})
 
 
 @login_required

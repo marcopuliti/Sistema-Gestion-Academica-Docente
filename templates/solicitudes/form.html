@@ -27,6 +27,7 @@
 <form method="post" id="solicitud-form">
   {% csrf_token %}
   {{ form.tipificacion }}{# campo oculto con la tipificación fija #}
+  {{ correlativas_formset.management_form }}{# siempre presente para que el formset valide #}
   {% if form.non_field_errors %}
     <div class="alert alert-danger">{{ form.non_field_errors.0 }}</div>
   {% endif %}
@@ -214,6 +215,73 @@
       </div>
     </div>
   </div>
+
+  {% if es_curricular %}
+  <!-- Correlatividades -->
+  <div class="seccion-header"><i class="bi bi-arrow-right-circle me-2"></i>Correlatividades</div>
+  <div class="card mb-3">
+    <div class="card-body">
+      {% if correlativas_formset.non_form_errors %}
+        <div class="alert alert-danger py-2">{{ correlativas_formset.non_form_errors.0 }}</div>
+      {% endif %}
+      <div id="correlativas-container">
+        {% for cor_form in correlativas_formset %}
+        <div class="formset-row correlativa-row">
+          {% if correlativas_formset.can_delete %}
+            <div class="form-check formset-row-delete d-none">{{ cor_form.DELETE }}</div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-delete-row" title="Eliminar">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          {% endif %}
+          <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Materia</label>
+              {{ cor_form.materia }}
+              {% if cor_form.materia.errors %}<div class="text-danger small">{{ cor_form.materia.errors.0 }}</div>{% endif %}
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Condición</label>
+              {{ cor_form.condicion }}
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Tipo</label>
+              {{ cor_form.tipo }}
+            </div>
+            {% for hidden in cor_form.hidden_fields %}{{ hidden }}{% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" id="add-correlativa" class="btn btn-sm btn-outline-secondary mt-2">
+        <i class="bi bi-plus-circle me-1"></i>Agregar correlativa
+      </button>
+      <!-- Plantilla vacía para JS -->
+      <div id="correlativa-empty-form" class="d-none">
+        <div class="formset-row correlativa-row">
+          <div class="form-check formset-row-delete d-none">{{ correlativas_formset.empty_form.DELETE }}</div>
+          <button type="button" class="btn btn-sm btn-outline-danger btn-delete-row" title="Eliminar">
+            <i class="bi bi-x-lg"></i>
+          </button>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Materia</label>
+              {{ correlativas_formset.empty_form.materia }}
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Condición</label>
+              {{ correlativas_formset.empty_form.condicion }}
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Tipo</label>
+              {{ correlativas_formset.empty_form.tipo }}
+            </div>
+            {% for hidden in correlativas_formset.empty_form.hidden_fields %}{{ hidden }}{% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- IV - Fundamentación -->
   <div class="seccion-header"><i class="bi bi-justify me-2"></i>IV — Fundamentación *</div>
@@ -453,7 +521,10 @@ function cargarPlanes(carreraId, planSeleccionado) {
         if (planSeleccionado && p.id == planSeleccionado) opt.selected = true;
         planSelect.appendChild(opt);
       });
-      if (planSeleccionado) cargarOptativas(planSeleccionado, optativaSelect ? optativaSelect.value : null);
+      if (planSeleccionado) {
+        cargarOptativas(planSeleccionado, optativaSelect ? optativaSelect.value : null);
+        cargarMaterias(planSeleccionado);
+      }
     });
 }
 
@@ -530,15 +601,19 @@ function autocompletarDesdeOptativa(datos) {
 if (carreraSelect) {
   carreraSelect.addEventListener('change', function() {
     cargarPlanes(this.value, null);
+    cargarMaterias(null);
   });
   const planActual      = planSelect     ? planSelect.value     : null;
   const optativaActual  = optativaSelect ? optativaSelect.value : null;
   if (carreraSelect.value) cargarPlanes(carreraSelect.value, planActual);
 }
+// Si no hay carreraSelect pero sí hay plan (p.ej. recarga tras error), cargar materias
+if (!carreraSelect && planSelect && planSelect.value) cargarMaterias(planSelect.value);
 
 if (planSelect) {
   planSelect.addEventListener('change', function() {
     cargarOptativas(this.value, null);
+    cargarMaterias(this.value);
   });
 }
 
@@ -547,6 +622,78 @@ if (optativaSelect) {
     const datos = (this._datos || {})[this.value];
     if (datos) autocompletarDesdeOptativa(datos);
     else unlockPeriodo();
+  });
+}
+
+// ── Correlatividades ──────────────────────────────────────────────────────────
+const URL_MATERIAS_POR_PLAN = '{% url "solicitudes:materias_por_plan" %}';
+const correlativasContainer  = document.getElementById('correlativas-container');
+const addCorrelativaBtn      = document.getElementById('add-correlativa');
+const correlativasTotalForms = document.getElementById('id_correlativas-TOTAL_FORMS');
+
+function cargarMaterias(planId) {
+  const selects = document.querySelectorAll('.correlativa-materia-select');
+  if (!selects.length) return;
+  if (!planId) {
+    selects.forEach(s => { s.innerHTML = '<option value="">---------</option>'; });
+    return;
+  }
+  fetch(URL_MATERIAS_POR_PLAN + '?plan_id=' + planId)
+    .then(r => r.json())
+    .then(data => {
+      selects.forEach(s => {
+        const current = s.value;
+        s.innerHTML = '<option value="">---------</option>';
+        data.materias.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.nombre;
+          if (String(m.id) === String(current)) opt.selected = true;
+          s.appendChild(opt);
+        });
+      });
+    });
+}
+
+// Cargar materias para el plan ya seleccionado al abrir la página (modo edición)
+if (planSelect && planSelect.value) cargarMaterias(planSelect.value);
+
+if (addCorrelativaBtn && correlativasContainer && correlativasTotalForms) {
+  addCorrelativaBtn.addEventListener('click', function() {
+    const template = document.getElementById('correlativa-empty-form');
+    if (!template) return;
+    const idx = parseInt(correlativasTotalForms.value);
+    const newRow = template.querySelector('.correlativa-row').cloneNode(true);
+    newRow.querySelectorAll('input, select, textarea').forEach(el => {
+      el.name = el.name.replace(/__prefix__/g, idx);
+      el.id   = el.id.replace(/__prefix__/g, idx);
+      if (el.type === 'checkbox') el.checked = false;
+      else el.value = '';
+    });
+    newRow.querySelectorAll('label').forEach(el => {
+      if (el.htmlFor) el.htmlFor = el.htmlFor.replace(/__prefix__/g, idx);
+    });
+    correlativasContainer.appendChild(newRow);
+    correlativasTotalForms.value = idx + 1;
+    // Populate materia options for the new row
+    const planId = planSelect ? planSelect.value : null;
+    if (planId) {
+      const newSelect = newRow.querySelector('.correlativa-materia-select');
+      if (newSelect) {
+        fetch(URL_MATERIAS_POR_PLAN + '?plan_id=' + planId)
+          .then(r => r.json())
+          .then(data => {
+            newSelect.innerHTML = '<option value="">---------</option>';
+            data.materias.forEach(m => {
+              const opt = document.createElement('option');
+              opt.value = m.id;
+              opt.textContent = m.nombre;
+              newSelect.appendChild(opt);
+            });
+          });
+      }
+    }
+    attachDeleteListener(newRow);
   });
 }
 </script>

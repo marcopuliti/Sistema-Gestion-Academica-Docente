@@ -10,12 +10,32 @@ from django.db import models
 from apps.planes.models import PlanEstudio
 from apps.tramites.decorators import puede_revisar, solo_director_departamento
 from apps.tramites.models import EstadoTramite, CalendarioAcademico
-from .forms import SolicitudProtocolizacionForm, EquipoDocenteFormSet, RevisionForm, TIPIFICACIONES_CURRICULARES
-from .models import SolicitudProtocolizacion, TIPIFICACION_CHOICES
-from .pdf import generar_pdf_solicitud, generar_pdf_nota_elevacion, generar_pdf_solicitud_completa
+from .forms import (
+    SolicitudProtocolizacionForm, EquipoDocenteFormSet,
+    CorrelativaFormSet, ActasAvalForm,
+    RevisionDirectorForm, RevisionAdminForm,
+    SolicitudTallerForm, ActaConsejoTallerForm, EquipoTallerFormSet,
+    TIPIFICACIONES_CURRICULARES,
+)
+from .models import SolicitudProtocolizacion, SolicitudTaller, TIPIFICACION_CHOICES
+from .pdf import generar_pdf_solicitud, generar_pdf_nota_elevacion, generar_pdf_solicitud_completa, generar_pdf_taller
 from .docx_gen import generar_docx_solicitud, generar_docx_nota_elevacion, generar_docx_nota_comision, generar_docx_solicitud_completa
 
 TIPIFICACIONES_VALIDAS = {t[0] for t in TIPIFICACION_CHOICES}
+
+
+def _materia_qs_para_plan(plan_id):
+    from apps.planes.models import MateriaEnPlan, Materia
+    if not plan_id:
+        return Materia.objects.none()
+    ids = MateriaEnPlan.objects.filter(plan_id=plan_id).values_list('materia_id', flat=True).distinct()
+    return Materia.objects.filter(id__in=ids).order_by('nombre')
+
+
+def _set_correlativas_materia_qs(formset, plan_id):
+    qs = _materia_qs_para_plan(plan_id)
+    for form in formset.forms:
+        form.fields['materia'].queryset = qs
 
 
 def _calendario_json():
@@ -36,11 +56,18 @@ def _calendario_json():
 
 @login_required
 def lista_solicitudes(request):
+    if request.user.es_director_departamento:
+        return redirect('solicitudes:lista_departamento')
     if request.user.puede_revisar:
         solicitudes = SolicitudProtocolizacion.objects.select_related('usuario').all()
+        talleres    = SolicitudTaller.objects.select_related('usuario').all()
     else:
         solicitudes = SolicitudProtocolizacion.objects.filter(usuario=request.user)
-    return render(request, 'solicitudes/lista.html', {'solicitudes': solicitudes})
+        talleres    = SolicitudTaller.objects.filter(usuario=request.user)
+    return render(request, 'solicitudes/lista.html', {
+        'solicitudes': solicitudes,
+        'talleres':    talleres,
+    })
 
 
 def seleccionar_tipificacion(request):
@@ -60,7 +87,10 @@ def crear_solicitud(request, tipificacion):
     if request.method == 'POST':
         form = SolicitudProtocolizacionForm(request.POST, tipificacion=tipificacion, anonimo=anonimo)
         formset = EquipoDocenteFormSet(request.POST)
-        if form.is_valid() and formset.is_valid():
+        plan_id = request.POST.get('plan_estudio') or None
+        correlativas_formset = CorrelativaFormSet(request.POST, prefix='correlativas')
+        _set_correlativas_materia_qs(correlativas_formset, plan_id)
+        if form.is_valid() and formset.is_valid() and correlativas_formset.is_valid():
             solicitud = form.save(commit=False)
             if anonimo:
                 solicitud.usuario = None
@@ -72,6 +102,8 @@ def crear_solicitud(request, tipificacion):
             solicitud.save()
             formset.instance = solicitud
             formset.save()
+            correlativas_formset.instance = solicitud
+            correlativas_formset.save()
             if anonimo:
                 from .pdf import generar_pdf_solicitud
                 buffer = generar_pdf_solicitud(solicitud)
@@ -88,10 +120,13 @@ def crear_solicitud(request, tipificacion):
     else:
         form = SolicitudProtocolizacionForm(tipificacion=tipificacion, anonimo=anonimo)
         formset = EquipoDocenteFormSet()
+        correlativas_formset = CorrelativaFormSet(prefix='correlativas')
+        _set_correlativas_materia_qs(correlativas_formset, None)
 
     return render(request, 'solicitudes/form.html', {
         'form': form,
         'formset': formset,
+        'correlativas_formset': correlativas_formset,
         'tipificacion': tipificacion,
         'es_curricular': es_curricular,
         'titulo': f'Nueva Solicitud — {dict(TIPIFICACION_CHOICES)[tipificacion]}',
@@ -123,8 +158,9 @@ def detalle_solicitud(request, pk):
 @login_required
 def editar_solicitud(request, pk):
     solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
-    if solicitud.estado not in (EstadoTramite.PENDIENTE, EstadoTramite.RECHAZADO):
-        messages.error(request, 'Solo podés editar solicitudes pendientes o rechazadas.')
+    EDITABLES = (EstadoTramite.DEVUELTA, EstadoTramite.RECHAZADO, EstadoTramite.OBSERVADA)
+    if solicitud.estado not in EDITABLES:
+        messages.error(request, 'Solo podés editar solicitudes pendientes o con observaciones.')
         return redirect('solicitudes:detalle', pk=pk)
 
     tip = solicitud.tipificacion
@@ -133,17 +169,25 @@ def editar_solicitud(request, pk):
     if request.method == 'POST':
         form = SolicitudProtocolizacionForm(request.POST, instance=solicitud, tipificacion=tip)
         formset = EquipoDocenteFormSet(request.POST, instance=solicitud)
-        if form.is_valid() and formset.is_valid():
+        plan_id = request.POST.get('plan_estudio') or None
+        correlativas_formset = CorrelativaFormSet(request.POST, instance=solicitud, prefix='correlativas')
+        _set_correlativas_materia_qs(correlativas_formset, plan_id)
+        if form.is_valid() and formset.is_valid() and correlativas_formset.is_valid():
             solicitud = form.save(commit=False)
             solicitud.estado = EstadoTramite.PENDIENTE
             solicitud.save()
             formset.instance = solicitud
             formset.save()
+            correlativas_formset.instance = solicitud
+            correlativas_formset.save()
             messages.success(request, 'Solicitud actualizada y enviada nuevamente.')
             return redirect('solicitudes:detalle', pk=solicitud.pk)
     else:
         form = SolicitudProtocolizacionForm(instance=solicitud, tipificacion=tip)
         formset = EquipoDocenteFormSet(instance=solicitud)
+        plan_id = solicitud.plan_estudio_id
+        correlativas_formset = CorrelativaFormSet(instance=solicitud, prefix='correlativas')
+        _set_correlativas_materia_qs(correlativas_formset, plan_id)
 
     hs_totales_plan = (
         solicitud.optativa_vinculada.hs_totales
@@ -152,6 +196,7 @@ def editar_solicitud(request, pk):
     return render(request, 'solicitudes/form.html', {
         'form': form,
         'formset': formset,
+        'correlativas_formset': correlativas_formset,
         'tipificacion': tip,
         'es_curricular': es_curricular,
         'titulo': 'Editar Solicitud',
@@ -162,22 +207,65 @@ def editar_solicitud(request, pk):
 
 
 @login_required
-@puede_revisar
-def revisar_solicitud(request, pk):
+@solo_director_departamento
+def revisar_director(request, pk):
+    """Director revisa una solicitud pendiente: la devuelve o la eleva al admin."""
     solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    dep = request.user.departamento
+    dep_solicitud = solicitud.usuario.departamento if solicitud.usuario else solicitud.departamento_docente
+    if dep_solicitud != dep:
+        messages.error(request, 'Esta solicitud no pertenece a tu departamento.')
+        return redirect('solicitudes:lista_departamento')
+    if solicitud.estado not in (EstadoTramite.PENDIENTE, EstadoTramite.OBSERVADA):
+        messages.error(request, 'Solo podés revisar solicitudes en estado Pendiente o Con Observaciones.')
+        return redirect('solicitudes:detalle', pk=pk)
+
     if request.method == 'POST':
-        form = RevisionForm(request.POST)
+        form = RevisionDirectorForm(request.POST)
         if form.is_valid():
-            solicitud.estado = form.cleaned_data['estado']
+            accion = form.cleaned_data['accion']
+            if accion == 'elevada':
+                if not solicitud.acta_comision_carrera or not solicitud.acta_consejo_departamental:
+                    messages.error(request, 'Debés subir ambas actas (Comisión de Carrera y Consejo Departamental) antes de elevar.')
+                    return render(request, 'solicitudes/revision_director.html', {'solicitud': solicitud, 'form': form})
+            solicitud.estado = accion  # 'devuelta' | 'elevada'
             solicitud.comentarios_revision = form.cleaned_data['comentarios']
             solicitud.revisor = request.user
+            solicitud.save()
+            from apps.notifications.utils import notificar_cambio_estado
+            notificar_cambio_estado(solicitud, 'Solicitud de Protocolización')
+            label = 'elevada al Administrador' if accion == 'elevada' else 'devuelta al docente con observaciones'
+            messages.success(request, f'Solicitud {label}.')
+            return redirect('solicitudes:detalle', pk=pk)
+    else:
+        form = RevisionDirectorForm()
+    return render(request, 'solicitudes/revision_director.html', {'solicitud': solicitud, 'form': form})
+
+
+@login_required
+@puede_revisar
+def revisar_solicitud(request, pk):
+    """Administrador revisa una solicitud elevada: la aprueba o la devuelve."""
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    if solicitud.estado != EstadoTramite.ELEVADA:
+        messages.error(request, 'Solo podés revisar solicitudes elevadas al administrador.')
+        return redirect('solicitudes:detalle', pk=pk)
+    if request.method == 'POST':
+        form = RevisionAdminForm(request.POST)
+        if form.is_valid():
+            accion = form.cleaned_data['accion']
+            solicitud.estado = accion
+            solicitud.comentarios_revision = form.cleaned_data['comentarios']
+            solicitud.revisor = request.user
+            if accion == 'aprobado':
+                solicitud.numero_resolucion = form.cleaned_data['numero_resolucion']
             solicitud.save()
             from apps.notifications.utils import notificar_cambio_estado
             notificar_cambio_estado(solicitud, 'Solicitud de Protocolización')
             messages.success(request, 'Revisión guardada.')
             return redirect('solicitudes:detalle', pk=pk)
     else:
-        form = RevisionForm()
+        form = RevisionAdminForm()
     return render(request, 'solicitudes/revision.html', {'solicitud': solicitud, 'form': form})
 
 
@@ -319,22 +407,33 @@ def descargar_docx_nota_comision(request, pk):
 @login_required
 @solo_director_departamento
 def lista_solicitudes_departamento(request):
-    from apps.tramites.models import EstadoTramite
-    dep = request.user.departamento
-    qs = SolicitudProtocolizacion.objects.select_related('usuario').filter(
-        models.Q(usuario__departamento=dep) | models.Q(departamento_docente=dep)
-    )
-    # No aprobadas primero, luego por fecha descendente
     from django.db.models import Case, When, IntegerField
-    qs = qs.annotate(
-        orden_estado=Case(
-            When(estado=EstadoTramite.APROBADO, then=1),
-            default=0,
-            output_field=IntegerField(),
-        )
-    ).order_by('orden_estado', '-fecha_creacion')
+    dep = request.user.departamento
+    dep_q = models.Q(usuario__departamento=dep) | models.Q(departamento_docente=dep)
+
+    orden = Case(
+        When(estado=EstadoTramite.APROBADO, then=1),
+        default=0,
+        output_field=IntegerField(),
+    )
+
+    solicitudes = (
+        SolicitudProtocolizacion.objects
+        .select_related('usuario')
+        .filter(dep_q)
+        .annotate(orden_estado=orden)
+        .order_by('orden_estado', '-fecha_creacion')
+    )
+    talleres = (
+        SolicitudTaller.objects
+        .select_related('usuario')
+        .filter(dep_q)
+        .annotate(orden_estado=orden)
+        .order_by('orden_estado', '-fecha_creacion')
+    )
     return render(request, 'solicitudes/lista_departamento.html', {
-        'solicitudes': qs,
+        'solicitudes': solicitudes,
+        'talleres': talleres,
         'departamento': dep,
     })
 
@@ -355,6 +454,45 @@ def agregar_codigo_materia(request, pk):
         solicitud.save(update_fields=['codigo_materia'])
         messages.success(request, f'Código de materia "{codigo}" guardado.')
     return redirect('solicitudes:detalle', pk=pk)
+
+
+@login_required
+@solo_director_departamento
+def subir_actas_aval(request, pk):
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    dep = request.user.departamento
+    dep_solicitud = solicitud.usuario.departamento if solicitud.usuario else solicitud.departamento_docente
+    if dep_solicitud != dep:
+        messages.error(request, 'Esta solicitud no pertenece a tu departamento.')
+        return redirect('solicitudes:lista_departamento')
+
+    if request.method == 'POST':
+        form = ActasAvalForm(request.POST, request.FILES)
+        if form.is_valid():
+            campos = []
+            if form.cleaned_data.get('acta_comision_carrera'):
+                solicitud.acta_comision_carrera = form.cleaned_data['acta_comision_carrera']
+                campos.append('acta_comision_carrera')
+            if form.cleaned_data.get('acta_consejo_departamental'):
+                solicitud.acta_consejo_departamental = form.cleaned_data['acta_consejo_departamental']
+                campos.append('acta_consejo_departamental')
+            if campos:
+                solicitud.save(update_fields=campos)
+                messages.success(request, 'Acta(s) guardada(s) correctamente.')
+            else:
+                messages.warning(request, 'No se seleccionó ningún archivo.')
+        else:
+            for error in form.errors.values():
+                messages.error(request, error[0])
+
+    return redirect('solicitudes:detalle', pk=pk)
+
+
+def materias_por_plan(request):
+    """AJAX: devuelve las materias de un plan para correlatividades."""
+    plan_id = request.GET.get('plan_id')
+    qs = _materia_qs_para_plan(plan_id)
+    return JsonResponse({'materias': [{'id': m.id, 'nombre': m.nombre} for m in qs]})
 
 
 def planes_por_carrera(request):
@@ -393,3 +531,181 @@ def optativas_por_plan(request):
         for m in qs
     ]
     return JsonResponse({'optativas': data})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TALLERES
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _puede_ver_taller(user, taller):
+    if user.puede_revisar:
+        return True
+    if user.es_director_departamento:
+        dep = taller.usuario.departamento if taller.usuario else taller.departamento_docente
+        return dep == user.departamento
+    return taller.usuario == user
+
+
+@login_required
+def lista_talleres(request):
+    if request.user.puede_revisar:
+        talleres = SolicitudTaller.objects.all()
+    elif request.user.es_director_departamento:
+        dep = request.user.departamento
+        talleres = SolicitudTaller.objects.filter(
+            models.Q(usuario__departamento=dep) | models.Q(departamento_docente=dep)
+        )
+    else:
+        talleres = SolicitudTaller.objects.filter(usuario=request.user)
+    return render(request, 'solicitudes/lista_talleres.html', {'talleres': talleres})
+
+
+@login_required
+def crear_taller(request):
+    if request.method == 'POST':
+        form = SolicitudTallerForm(request.POST)
+        equipo_fs = EquipoTallerFormSet(request.POST, prefix='equipo')
+        if form.is_valid() and equipo_fs.is_valid():
+            taller = form.save(commit=False)
+            taller.usuario = request.user
+            taller.estado = EstadoTramite.PENDIENTE
+            taller.save()
+            equipo_fs.instance = taller
+            equipo_fs.save()
+            messages.success(request, 'Solicitud de taller creada correctamente.')
+            return redirect('solicitudes:detalle_taller', pk=taller.pk)
+    else:
+        form = SolicitudTallerForm()
+        equipo_fs = EquipoTallerFormSet(prefix='equipo')
+    return render(request, 'solicitudes/taller_form.html', {
+        'form': form, 'equipo_fs': equipo_fs, 'titulo': 'Nueva Solicitud de Curso/Taller',
+    })
+
+
+@login_required
+def detalle_taller(request, pk):
+    taller = get_object_or_404(SolicitudTaller, pk=pk)
+    if not _puede_ver_taller(request.user, taller):
+        messages.error(request, 'No tenés permisos para ver esta solicitud.')
+        return redirect('solicitudes:lista_talleres')
+    return render(request, 'solicitudes/taller_detalle.html', {'taller': taller})
+
+
+@login_required
+def editar_taller(request, pk):
+    taller = get_object_or_404(SolicitudTaller, pk=pk, usuario=request.user)
+    EDITABLES = (EstadoTramite.DEVUELTA, EstadoTramite.RECHAZADO, EstadoTramite.OBSERVADA)
+    if taller.estado not in EDITABLES:
+        messages.error(request, 'Solo podés editar solicitudes que te fueron devueltas.')
+        return redirect('solicitudes:detalle_taller', pk=pk)
+    if request.method == 'POST':
+        form = SolicitudTallerForm(request.POST, instance=taller)
+        equipo_fs = EquipoTallerFormSet(request.POST, instance=taller, prefix='equipo')
+        if form.is_valid() and equipo_fs.is_valid():
+            t = form.save(commit=False)
+            t.estado = EstadoTramite.PENDIENTE
+            t.save()
+            equipo_fs.instance = t
+            equipo_fs.save()
+            messages.success(request, 'Solicitud actualizada y enviada nuevamente.')
+            return redirect('solicitudes:detalle_taller', pk=t.pk)
+    else:
+        form = SolicitudTallerForm(instance=taller)
+        equipo_fs = EquipoTallerFormSet(instance=taller, prefix='equipo')
+    return render(request, 'solicitudes/taller_form.html', {
+        'form': form, 'equipo_fs': equipo_fs, 'titulo': 'Editar Solicitud de Curso/Taller', 'taller': taller,
+    })
+
+
+@login_required
+@solo_director_departamento
+def subir_acta_taller(request, pk):
+    taller = get_object_or_404(SolicitudTaller, pk=pk)
+    dep = request.user.departamento
+    dep_taller = taller.usuario.departamento if taller.usuario else taller.departamento_docente
+    if dep_taller != dep:
+        messages.error(request, 'Esta solicitud no pertenece a tu departamento.')
+        return redirect('solicitudes:lista_departamento')
+    if request.method == 'POST':
+        form = ActaConsejoTallerForm(request.POST, request.FILES)
+        if form.is_valid():
+            f = form.cleaned_data.get('acta_consejo_departamental')
+            if f:
+                taller.acta_consejo_departamental = f
+                taller.save(update_fields=['acta_consejo_departamental'])
+                messages.success(request, 'Acta subida correctamente.')
+            else:
+                messages.warning(request, 'No se seleccionó ningún archivo.')
+    return redirect('solicitudes:detalle_taller', pk=pk)
+
+
+@login_required
+@solo_director_departamento
+def revisar_director_taller(request, pk):
+    taller = get_object_or_404(SolicitudTaller, pk=pk)
+    dep = request.user.departamento
+    dep_taller = taller.usuario.departamento if taller.usuario else taller.departamento_docente
+    if dep_taller != dep:
+        messages.error(request, 'Esta solicitud no pertenece a tu departamento.')
+        return redirect('solicitudes:lista_departamento')
+    if taller.estado not in (EstadoTramite.PENDIENTE, EstadoTramite.OBSERVADA):
+        messages.error(request, 'Solo podés revisar solicitudes en estado Pendiente o Con Observaciones.')
+        return redirect('solicitudes:detalle_taller', pk=pk)
+    if request.method == 'POST':
+        form = RevisionDirectorForm(request.POST)
+        if form.is_valid():
+            accion = form.cleaned_data['accion']
+            if accion == 'elevada' and not taller.acta_consejo_departamental:
+                messages.error(request, 'Debés subir el Acta del Consejo Departamental antes de elevar.')
+                return render(request, 'solicitudes/revisar_director_taller.html', {'taller': taller, 'form': form})
+            taller.estado = accion
+            taller.comentarios_revision = form.cleaned_data['comentarios']
+            taller.revisor = request.user
+            taller.save()
+            from apps.notifications.utils import notificar_cambio_estado
+            notificar_cambio_estado(taller, 'Solicitud de Taller')
+            label = 'elevada al Administrador' if accion == 'elevada' else 'devuelta al docente con observaciones'
+            messages.success(request, f'Solicitud {label}.')
+            return redirect('solicitudes:detalle_taller', pk=pk)
+    else:
+        form = RevisionDirectorForm()
+    return render(request, 'solicitudes/revisar_director_taller.html', {'taller': taller, 'form': form})
+
+
+@login_required
+@puede_revisar
+def revisar_taller(request, pk):
+    taller = get_object_or_404(SolicitudTaller, pk=pk)
+    if taller.estado != EstadoTramite.ELEVADA:
+        messages.error(request, 'Solo podés revisar solicitudes elevadas al administrador.')
+        return redirect('solicitudes:detalle_taller', pk=pk)
+    if request.method == 'POST':
+        form = RevisionAdminForm(request.POST)
+        if form.is_valid():
+            accion = form.cleaned_data['accion']
+            taller.estado = accion
+            taller.comentarios_revision = form.cleaned_data['comentarios']
+            taller.revisor = request.user
+            if accion == 'aprobado':
+                taller.numero_resolucion = form.cleaned_data['numero_resolucion']
+            taller.save()
+            from apps.notifications.utils import notificar_cambio_estado
+            notificar_cambio_estado(taller, 'Solicitud de Taller')
+            messages.success(request, 'Revisión guardada.')
+            return redirect('solicitudes:detalle_taller', pk=pk)
+    else:
+        form = RevisionAdminForm()
+    return render(request, 'solicitudes/revisar_taller.html', {'taller': taller, 'form': form})
+
+
+@login_required
+def descargar_pdf_taller(request, pk):
+    taller = get_object_or_404(SolicitudTaller, pk=pk)
+    if not _puede_ver_taller(request.user, taller):
+        messages.error(request, 'No tenés permisos para descargar este documento.')
+        return redirect('solicitudes:lista_talleres')
+    buffer = generar_pdf_taller(taller)
+    nombre = f"taller_{taller.pk}_{taller.denominacion_curso[:30].replace(' ', '_')}.pdf"
+    response = HttpResponse(buffer, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+    return response

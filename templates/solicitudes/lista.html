@@ -20,35 +20,60 @@
           <tr>
             {% if user.puede_revisar %}<th>Docente</th>{% endif %}
             <th>Nombre del curso</th>
-            <th>Modalidad</th>
-            <th>Destinatarios</th>
-            <th>Duración</th>
+            <th>Tipo</th>
             <th>Estado</th>
             <th>Fecha envío</th>
             <th class="text-center">Acciones</th>
           </tr>
         </thead>
         <tbody>
+
           {% for sol in solicitudes %}
           <tr>
-            {% if user.puede_revisar %}<td>{{ sol.usuario.get_full_name }}</td>{% endif %}
-            <td><strong>{{ sol.nombre_curso|truncatechars:40 }}</strong></td>
-            <td>{{ sol.get_modalidad_display }}</td>
-            <td>{{ sol.get_destinatarios_display }}</td>
-            <td>{{ sol.duracion_horas }} hs</td>
+            {% if user.puede_revisar %}<td>{{ sol.get_nombre_docente }}</td>{% endif %}
+            <td><strong>{{ sol.nombre_curso|truncatechars:45 }}</strong></td>
+            <td><span class="badge bg-success">Optativa</span></td>
             <td><span class="badge {{ sol.estado_badge }}">{{ sol.get_estado_display }}</span></td>
             <td>{{ sol.fecha_creacion|date:"d/m/Y" }}</td>
             <td class="text-center">
               <a href="{% url 'solicitudes:detalle' sol.pk %}" class="btn btn-sm btn-outline-primary me-1" title="Ver"><i class="bi bi-eye"></i></a>
-              {% if user.puede_revisar %}
+              {% if user.puede_revisar and sol.estado == 'elevada' %}
               <a href="{% url 'solicitudes:revisar' sol.pk %}" class="btn btn-sm btn-outline-warning me-1" title="Revisar"><i class="bi bi-pencil-square"></i></a>
               {% endif %}
+              {% if user.puede_revisar %}
+              <a href="{% url 'solicitudes:solicitud_completa_pdf' sol.pk %}" class="btn btn-sm btn-outline-danger" title="PDF completo"><i class="bi bi-file-pdf"></i></a>
+              {% else %}
               <a href="{% url 'solicitudes:pdf' sol.pk %}" class="btn btn-sm btn-outline-danger" title="PDF"><i class="bi bi-file-pdf"></i></a>
+              {% endif %}
             </td>
           </tr>
-          {% empty %}
-          <tr><td colspan="8" class="text-center text-muted py-4">No hay solicitudes registradas.</td></tr>
           {% endfor %}
+
+          {% for t in talleres %}
+          <tr>
+            {% if user.puede_revisar %}<td>{{ t.get_nombre_docente }}</td>{% endif %}
+            <td><strong>{{ t.denominacion_curso|truncatechars:45 }}</strong></td>
+            <td><span class="badge bg-info text-dark">Curso/Taller</span></td>
+            <td><span class="badge {{ t.estado_badge }}">{{ t.get_estado_display }}</span></td>
+            <td>{{ t.fecha_creacion|date:"d/m/Y" }}</td>
+            <td class="text-center">
+              <a href="{% url 'solicitudes:detalle_taller' t.pk %}" class="btn btn-sm btn-outline-primary me-1" title="Ver"><i class="bi bi-eye"></i></a>
+              {% if user.puede_revisar and t.estado == 'elevada' %}
+              <a href="{% url 'solicitudes:revisar_taller' t.pk %}" class="btn btn-sm btn-outline-warning me-1" title="Revisar"><i class="bi bi-pencil-square"></i></a>
+              {% endif %}
+              <a href="{% url 'solicitudes:pdf_taller' t.pk %}" class="btn btn-sm btn-outline-danger" title="PDF"><i class="bi bi-file-pdf"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+
+          {% if not solicitudes and not talleres %}
+          <tr>
+            <td colspan="{% if user.puede_revisar %}6{% else %}5{% endif %}" class="text-center text-muted py-4">
+              No hay solicitudes registradas.
+            </td>
+          </tr>
+          {% endif %}
+
         </tbody>
       </table>
     </div>

@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
-{% block title %}Revisar Solicitud — Administrador{% endblock %}
+{% block title %}Revisar Solicitud — Director{% endblock %}
 {% block nav_solicitudes %}active{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h2><i class="bi bi-pencil-square me-2"></i>Revisión — Administrador</h2>
+  <h2><i class="bi bi-person-check me-2"></i>Revisión — Director de Departamento</h2>
   <p class="text-muted mb-0">{{ solicitud.nombre_curso }}</p>
 </div>
 
@@ -23,13 +23,6 @@
         {% if email %}
         <li class="list-group-item">
           <small class="text-muted d-block">Email</small>{{ email }}
-        </li>
-        {% endif %}
-        {% endwith %}
-        {% with dep=solicitud.usuario.departamento|default:solicitud.departamento_docente %}
-        {% if dep %}
-        <li class="list-group-item">
-          <small class="text-muted d-block">Departamento</small>{{ dep }}
         </li>
         {% endif %}
         {% endwith %}
@@ -79,7 +72,7 @@
               <i class="bi bi-file-pdf me-1"></i>Ver
             </a>
           {% else %}
-            <span class="badge bg-secondary">No cargada</span>
+            <span class="badge bg-danger">Falta</span>
           {% endif %}
         </li>
         <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -89,10 +82,18 @@
               <i class="bi bi-file-pdf me-1"></i>Ver
             </a>
           {% else %}
-            <span class="badge bg-secondary">No cargada</span>
+            <span class="badge bg-danger">Falta</span>
           {% endif %}
         </li>
       </ul>
+      {% if not solicitud.acta_comision_carrera or not solicitud.acta_consejo_departamental %}
+      <div class="card-footer text-muted small">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        Necesitás subir ambas actas desde el
+        <a href="{% url 'solicitudes:detalle' solicitud.pk %}">detalle de la solicitud</a>
+        antes de elevar.
+      </div>
+      {% endif %}
     </div>
 
     <a href="{% url 'solicitudes:detalle' solicitud.pk %}" class="btn btn-outline-secondary w-100 mb-3">
@@ -101,27 +102,23 @@
 
   </div>
 
-  <!-- Formulario de decisión -->
+  <!-- Formulario de acción -->
   <div class="col-md-7">
     <div class="card">
-      <div class="card-header"><h6 class="mb-0">Decisión del Administrador</h6></div>
+      <div class="card-header"><h6 class="mb-0">Acción del Director</h6></div>
       <div class="card-body">
-        <form method="post" id="form-revision-admin">
+        <form method="post">
           {% csrf_token %}
           <div class="mb-3">
             <label class="form-label fw-semibold">{{ form.accion.label }}</label>
             {{ form.accion }}
-          </div>
-          <div class="mb-3" id="div-nro-resolucion" style="display:none;">
-            <label class="form-label fw-semibold">{{ form.numero_resolucion.label }}</label>
-            {{ form.numero_resolucion }}
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">{{ form.comentarios.label }}</label>
             {{ form.comentarios }}
             <div class="form-text">
               Al devolver: los comentarios se enviarán al docente.<br>
-              Al aprobar: quedan registrados como nota interna.
+              Al elevar: quedan registrados como nota interna.
             </div>
           </div>
           {% if form.non_field_errors %}
@@ -138,18 +135,4 @@
     </div>
   </div>
 </div>
-
-{% block extra_js %}
-<script>
-(function () {
-  const accionSelect = document.getElementById('id_accion');
-  const divNro = document.getElementById('div-nro-resolucion');
-  function toggle() {
-    divNro.style.display = accionSelect.value === 'aprobado' ? '' : 'none';
-  }
-  accionSelect.addEventListener('change', toggle);
-  toggle();
-})();
-</script>
-{% endblock %}
 {% endblock %}

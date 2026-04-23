@@ -18,35 +18,50 @@
           <tr>
             <th>Docente</th>
             <th>Nombre del curso</th>
-            <th>Código materia</th>
-            <th>Tipificación</th>
+            <th>Tipo</th>
             <th>Estado</th>
             <th>Fecha envío</th>
             <th class="text-center">Acciones</th>
           </tr>
         </thead>
         <tbody>
+
           {% for sol in solicitudes %}
           <tr>
             <td>{{ sol.get_nombre_docente }}</td>
             <td><strong>{{ sol.nombre_curso|truncatechars:40 }}</strong></td>
-            <td>
-              {% if sol.codigo_materia %}
-                <span class="badge bg-secondary">{{ sol.codigo_materia }}</span>
-              {% else %}
-                <span class="text-muted small">—</span>
-              {% endif %}
-            </td>
-            <td>{{ sol.get_tipificacion_display }}</td>
+            <td><span class="badge bg-success">Optativa</span></td>
             <td><span class="badge {{ sol.estado_badge }}">{{ sol.get_estado_display }}</span></td>
             <td>{{ sol.fecha_creacion|date:"d/m/Y" }}</td>
             <td class="text-center">
-              <a href="{% url 'solicitudes:detalle' sol.pk %}" class="btn btn-sm btn-outline-primary" title="Ver detalle"><i class="bi bi-eye"></i></a>
+              <a href="{% url 'solicitudes:detalle' sol.pk %}" class="btn btn-sm btn-outline-primary me-1" title="Ver detalle"><i class="bi bi-eye"></i></a>
+              {% if sol.estado in 'pendiente observada' %}
+              <a href="{% url 'solicitudes:revisar_director' sol.pk %}" class="btn btn-sm btn-outline-warning" title="Revisar"><i class="bi bi-person-check"></i></a>
+              {% endif %}
             </td>
           </tr>
-          {% empty %}
-          <tr><td colspan="7" class="text-center text-muted py-4">No hay solicitudes para este departamento.</td></tr>
           {% endfor %}
+
+          {% for t in talleres %}
+          <tr>
+            <td>{{ t.get_nombre_docente }}</td>
+            <td><strong>{{ t.denominacion_curso|truncatechars:40 }}</strong></td>
+            <td><span class="badge bg-info text-dark">Curso/Taller</span></td>
+            <td><span class="badge {{ t.estado_badge }}">{{ t.get_estado_display }}</span></td>
+            <td>{{ t.fecha_creacion|date:"d/m/Y" }}</td>
+            <td class="text-center">
+              <a href="{% url 'solicitudes:detalle_taller' t.pk %}" class="btn btn-sm btn-outline-primary me-1" title="Ver detalle"><i class="bi bi-eye"></i></a>
+              {% if t.estado in 'pendiente observada' %}
+              <a href="{% url 'solicitudes:revisar_director_taller' t.pk %}" class="btn btn-sm btn-outline-warning" title="Revisar"><i class="bi bi-person-check"></i></a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+
+          {% if not solicitudes and not talleres %}
+          <tr><td colspan="6" class="text-center text-muted py-4">No hay solicitudes para este departamento.</td></tr>
+          {% endif %}
+
         </tbody>
       </table>
     </div>

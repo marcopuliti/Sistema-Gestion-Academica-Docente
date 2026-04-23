@@ -4,9 +4,6 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
 
-from .validators import validate_unsl_email
-
-
 class CustomUser(AbstractUser):
     DOCENTE = 'docente'
     ADMINISTRADOR = 'administrador'
@@ -27,7 +24,6 @@ class CustomUser(AbstractUser):
     email = models.EmailField(
         verbose_name='Correo electrónico',
         blank=True,
-        validators=[validate_unsl_email],
     )
     departamento = models.CharField(
         max_length=150,

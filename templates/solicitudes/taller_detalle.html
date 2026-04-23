@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+{% block title %}{{ taller.denominacion_curso }}{% endblock %}
+{% block nav_solicitudes %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .seccion-header { background-color:#1a3a5c; color:#fff; padding:.4rem 1rem; border-radius:4px; margin-top:1.2rem; margin-bottom:.5rem; font-weight:600; font-size:.9rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h2><i class="bi bi-tools me-2"></i>{{ taller.denominacion_curso }}</h2>
+    <span class="badge {{ taller.estado_badge }} fs-6">{{ taller.get_estado_display }}</span>
+    {% if taller.numero_resolucion %}
+    <span class="badge bg-success fs-6 ms-1"><i class="bi bi-award me-1"></i>Res. N° {{ taller.numero_resolucion }}</span>
+    {% endif %}
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if user.puede_revisar and taller.estado == 'elevada' %}
+    <a href="{% url 'solicitudes:revisar_taller' taller.pk %}" class="btn btn-warning"><i class="bi bi-pencil-square me-2"></i>Revisar (Admin)</a>
+    {% endif %}
+    {% if user.es_director_departamento and taller.estado in 'pendiente observada' %}
+    <a href="{% url 'solicitudes:revisar_director_taller' taller.pk %}" class="btn btn-warning"><i class="bi bi-person-check me-2"></i>Revisar (Director)</a>
+    {% endif %}
+    {% if not user.puede_revisar and not user.es_director_departamento and taller.estado in 'devuelta observada' %}
+    <a href="{% url 'solicitudes:editar_taller' taller.pk %}" class="btn btn-outline-primary"><i class="bi bi-pencil me-2"></i>Editar</a>
+    {% endif %}
+    <a href="{% url 'solicitudes:pdf_taller' taller.pk %}" class="btn btn-outline-danger"><i class="bi bi-file-pdf me-2"></i>PDF</a>
+    <a href="{% url 'solicitudes:lista_talleres' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-2"></i>Volver</a>
+  </div>
+</div>
+
+{% if taller.comentarios_revision %}
+<div class="alert alert-info mt-2">
+  <strong><i class="bi bi-chat-left-text me-2"></i>Comentarios del revisor:</strong><br>
+  {{ taller.comentarios_revision }}
+  {% if taller.revisor %}<br><small class="text-muted">— {{ taller.revisor.get_full_name }}</small>{% endif %}
+</div>
+{% endif %}
+
+<!-- Equipo -->
+<div class="seccion-header">Equipo</div>
+<div class="card mb-3">
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <thead>
+        <tr><th>Rol</th><th>Nombre</th><th>Título</th><th>Documento</th><th>Institución</th><th>E-mail</th><th>Tel./FAX</th></tr>
+      </thead>
+      <tbody>
+        {% for m in taller.equipo.all %}
+        <tr>
+          <td><span class="badge bg-secondary">{{ m.get_rol_display }}</span></td>
+          <td><strong>{{ m.nombre }}</strong></td>
+          <td>{{ m.titulo|default:"—" }}</td>
+          <td>{{ m.documento|default:"—" }}</td>
+          <td>{{ m.institucion|default:"—" }}</td>
+          <td>{{ m.email|default:"—" }}</td>
+          <td>{{ m.telefono|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-muted text-center">Sin miembros registrados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Características -->
+<div class="seccion-header">Características</div>
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-3 small">
+      <div class="col-md-3"><span class="text-muted d-block">Crédito horario total</span><strong>{{ taller.credito_horario_total }} hs</strong></div>
+      <div class="col-md-2"><span class="text-muted d-block">Cupo</span>{{ taller.cupo }}</div>
+      <div class="col-md-7"><span class="text-muted d-block">Destinatarios</span>{{ taller.destinatarios }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Calendario -->
+{% if taller.calendario_actividades or taller.fecha_elevar_nomina %}
+<div class="seccion-header">Calendario de actividades</div>
+<div class="card mb-3">
+  <div class="card-body">
+    {% if taller.calendario_actividades %}
+    <div class="small mb-3" style="white-space:pre-wrap;">{{ taller.calendario_actividades }}</div>
+    {% endif %}
+    {% if taller.fecha_elevar_nomina %}
+    <p class="mb-0 small"><span class="text-muted">Fecha prevista para elevar nómina de alumnos aprobados:</span> <strong>{{ taller.fecha_elevar_nomina|date:"d/m/Y" }}</strong></p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Objetivos -->
+<div class="seccion-header">Objetivos</div>
+<div class="card mb-3"><div class="card-body small" style="white-space:pre-wrap;">{{ taller.objetivos }}</div></div>
+
+<!-- Contenidos mínimos -->
+<div class="seccion-header">Contenidos mínimos</div>
+<div class="card mb-3"><div class="card-body small" style="white-space:pre-wrap;">{{ taller.contenidos_minimos }}</div></div>
+
+<!-- Programa -->
+<div class="seccion-header">Programa</div>
+<div class="card mb-3"><div class="card-body small" style="white-space:pre-wrap;">{{ taller.programa }}</div></div>
+
+<!-- Sistema de evaluación -->
+<div class="seccion-header">Sistema de evaluación</div>
+<div class="card mb-3"><div class="card-body small" style="white-space:pre-wrap;">{{ taller.sistema_evaluacion }}</div></div>
+
+<!-- Bibliografía -->
+<div class="seccion-header">Bibliografía</div>
+<div class="card mb-3"><div class="card-body small" style="white-space:pre-wrap;">{{ taller.bibliografia }}</div></div>
+
+{% if taller.costos_financiamiento %}
+<div class="seccion-header">Costos y fuentes de financiamiento</div>
+<div class="card mb-3"><div class="card-body small" style="white-space:pre-wrap;">{{ taller.costos_financiamiento }}</div></div>
+{% endif %}
+
+{% if user.es_director_departamento or user.puede_revisar %}
+<div class="seccion-header"><i class="bi bi-file-earmark-check me-2"></i>Acta de Aval</div>
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-3 mb-3">
+      <div class="col-md-6">
+        <p class="small text-muted mb-1 fw-semibold">Acta Consejo Departamental</p>
+        {% if taller.acta_consejo_departamental %}
+          <a href="{{ taller.acta_consejo_departamental.url }}" target="_blank" class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-file-pdf me-1"></i>Ver / Descargar
+          </a>
+        {% else %}
+          <span class="text-muted small">No cargada</span>
+        {% endif %}
+      </div>
+    </div>
+    {% if user.es_director_departamento %}
+    <form method="post" action="{% url 'solicitudes:subir_acta_taller' taller.pk %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="row g-3 align-items-end">
+        <div class="col-md-8">
+          <label class="form-label small fw-semibold">Acta Consejo Departamental (PDF)</label>
+          <input type="file" name="acta_consejo_departamental" accept=".pdf" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-4">
+          <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-upload me-1"></i>Subir</button>
+        </div>
+      </div>
+      <div class="form-text mt-1">Subir un nuevo archivo reemplaza el anterior.</div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

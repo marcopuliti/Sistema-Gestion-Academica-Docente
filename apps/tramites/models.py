@@ -32,10 +32,13 @@ class CalendarioAcademico(models.Model):
 
 
 class EstadoTramite(models.TextChoices):
-    PENDIENTE = 'pendiente', 'Pendiente'
-    EN_REVISION = 'en_revision', 'En Revisión'
-    APROBADO = 'aprobado', 'Aprobado'
-    RECHAZADO = 'rechazado', 'Rechazado'
+    PENDIENTE  = 'pendiente',  'Pendiente'          # con el director, esperando revisión
+    OBSERVADA  = 'observada',  'Con Observaciones'  # admin la devolvió al director
+    DEVUELTA   = 'devuelta',   'Devuelta al Docente' # director la devolvió al docente para editar
+    ELEVADA    = 'elevada',    'Elevada al Admin'    # director la elevó al administrador
+    EN_REVISION = 'en_revision', 'En Revisión'      # mantenido por compatibilidad
+    APROBADO   = 'aprobado',   'Aprobado'
+    RECHAZADO  = 'rechazado',  'Rechazado'
 
 
 class TramiteBase(models.Model):
@@ -92,9 +95,12 @@ class TramiteBase(models.Model):
     @property
     def estado_badge(self):
         clases = {
-            EstadoTramite.PENDIENTE: 'bg-warning text-dark',
+            EstadoTramite.PENDIENTE:   'bg-warning text-dark',
+            EstadoTramite.OBSERVADA:   'bg-danger',
+            EstadoTramite.DEVUELTA:    'bg-danger',
+            EstadoTramite.ELEVADA:     'bg-info text-dark',
             EstadoTramite.EN_REVISION: 'bg-info text-dark',
-            EstadoTramite.APROBADO: 'bg-success',
-            EstadoTramite.RECHAZADO: 'bg-danger',
+            EstadoTramite.APROBADO:    'bg-success',
+            EstadoTramite.RECHAZADO:   'bg-secondary',
         }
         return clases.get(self.estado, 'bg-secondary')

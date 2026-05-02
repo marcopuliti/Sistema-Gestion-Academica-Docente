@@ -102,6 +102,26 @@
             <i class="bi bi-journal-plus me-2"></i>Solicitudes de Protocolización
           </a>
         </li>
+        {% if user.es_director_departamento %}
+        <li class="mt-2 mb-1 px-2 text-uppercase text-muted small fw-bold">Departamento</li>
+        <li class="nav-item">
+          <a class="nav-link {% block nav_planes %}{% endblock %}" href="{% url 'planes:materias_servicio' %}">
+            <i class="bi bi-diagram-3 me-2"></i>Materias del Departamento
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% block nav_tribunales %}{% endblock %}" href="{% url 'planes:lista_tribunales' %}">
+            <i class="bi bi-people me-2"></i>Tribunales Examinadores
+          </a>
+        </li>
+        {% endif %}
+        {% if user.es_administrador %}
+        <li class="nav-item">
+          <a class="nav-link {% block nav_comparacion_tribunales %}{% endblock %}" href="{% url 'planes:lista_comparacion_tribunales' %}">
+            <i class="bi bi-person-check me-2"></i>Tribunales
+          </a>
+        </li>
+        {% endif %}
         {% if user.es_administrador %}
         <li class="mt-2 mb-1 px-2 text-uppercase text-muted small fw-bold">Administración</li>
         <li class="nav-item">

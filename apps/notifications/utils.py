@@ -36,7 +36,7 @@ def _crear_notificacion(destinatario, tipo, titulo, mensaje, url=''):
             pass
 
 
-def notificar_nuevo_tramite(tramite, tipo_tramite):
+def notificar_nuevo_tramite(tramite, tipo_tramite, url=''):
     """Notifica a administradores y director del departamento cuando llega un trámite nuevo."""
     docente = tramite.usuario
     nombre_docente = docente.get_full_name() if docente else getattr(tramite, 'nombre_docente', 'Docente anónimo')
@@ -58,10 +58,10 @@ def notificar_nuevo_tramite(tramite, tipo_tramite):
         )
         destinatarios = destinatarios | directores
     for dest in destinatarios.distinct():
-        _crear_notificacion(dest, 'nuevo_tramite', titulo, mensaje)
+        _crear_notificacion(dest, 'nuevo_tramite', titulo, mensaje, url=url)
 
 
-def notificar_cambio_estado(tramite, tipo_tramite):
+def notificar_cambio_estado(tramite, tipo_tramite, url=''):
     """Notifica al docente cuando cambia el estado de su trámite."""
     estado_display = ESTADOS_DISPLAY.get(tramite.estado, tramite.estado)
     titulo = f"Tu trámite fue actualizado: {estado_display}"
@@ -72,4 +72,4 @@ def notificar_cambio_estado(tramite, tipo_tramite):
         mensaje += f"\nComentarios del revisor:\n{tramite.comentarios_revision}\n"
     mensaje += "\nIngresá al sistema para ver los detalles."
 
-    _crear_notificacion(tramite.usuario, 'cambio_estado', titulo, mensaje)
+    _crear_notificacion(tramite.usuario, 'cambio_estado', titulo, mensaje, url=url)

@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+{% block title %}Tribunales{% endblock %}
+{% block nav_comparacion_tribunales %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .materia-header {
+    background-color: #f0f4f8;
+    border-left: 3px solid var(--color-secundario);
+    padding: .45rem .75rem;
+  }
+  .dept-card .card-header { cursor: pointer; }
+  .table thead th { font-size: .82rem; }
+  .table tbody td { font-size: .85rem; vertical-align: middle; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-people me-2"></i>Tribunales — Comparación con sistema externo</h2>
+</div>
+
+{# ── Controles ─────────────────────────────────────────────────────────────── #}
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-5">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" name="q" class="form-control" placeholder="Buscar por nombre o código de materia…" value="{{ q }}">
+          {% if q %}<button type="button" class="btn btn-outline-secondary" onclick="this.form.q.value='';this.form.submit()"><i class="bi bi-x"></i></button>{% endif %}
+        </div>
+      </div>
+      <div class="col-md-4">
+        <select name="departamento" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">Todos los departamentos</option>
+          {% for val, label in departamento_opciones %}
+          <option value="{{ val }}" {% if dept_filtro == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+      </div>
+      <div class="col-auto ms-auto">
+        {% if solo_pendientes %}
+          <a href="?{% if dept_filtro %}departamento={{ dept_filtro }}&{% endif %}{% if q %}q={{ q }}&{% endif %}"
+             class="btn btn-sm btn-warning">
+            <i class="bi bi-clock-fill me-1"></i>Solo pendientes <i class="bi bi-x ms-1"></i>
+          </a>
+        {% else %}
+          <a href="?{% if dept_filtro %}departamento={{ dept_filtro }}&{% endif %}{% if q %}q={{ q }}&{% endif %}pendientes=1"
+             class="btn btn-sm btn-outline-warning">
+            <i class="bi bi-clock me-1"></i>Solo pendientes
+          </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="text-muted small mb-3">
+  {{ total }} registro{{ total|pluralize }} encontrado{{ total|pluralize }}
+  {% if q %} para <strong>"{{ q }}"</strong>{% endif %}
+  {% if dept_filtro %} en <strong>{{ dept_filtro }}</strong>{% endif %}
+  {% if solo_pendientes %} — <strong>solo pendientes</strong>{% endif %}
+</div>
+
+{# ── Grupos por departamento ───────────────────────────────────────────────── #}
+{% if grupos %}
+  {% for grupo in grupos %}
+  <div class="card mb-4 dept-card">
+    <div class="card-header d-flex justify-content-between align-items-center"
+         data-bs-toggle="collapse" data-bs-target="#dept-{{ forloop.counter }}">
+      <span>
+        <i class="bi bi-building me-2"></i><strong>{{ grupo.departamento_label }}</strong>
+      </span>
+      <span class="badge bg-light text-dark border">{{ grupo.materias|length }} materia{{ grupo.materias|length|pluralize }}</span>
+    </div>
+
+    <div id="dept-{{ forloop.counter }}" class="collapse show">
+      {% for materia in grupo.materias %}
+      <div class="materia-header d-flex justify-content-between align-items-center">
+        <span>
+          <strong>{{ materia.nombre }}</strong>
+          <span class="text-muted ms-2 small">{{ materia.codigo }}</span>
+        </span>
+        <span class="badge bg-secondary">{{ materia.meps|length }} plan{{ materia.meps|length|pluralize }}</span>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Plan / Carrera / Año</th>
+              <th>Tribunal (Director)</th>
+              <th>Tribunal (Sistema externo)</th>
+              <th>Últ. sincronización</th>
+              <th class="text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for mep in materia.meps %}
+            {% with t_dir=mep.t_dir t_adm=mep.t_adm %}
+            <tr {% if t_dir and t_dir.pendiente_sincronizacion %}class="table-warning"{% endif %}>
+              <td>
+                <div>{{ mep.plan.carrera.nombre }}</div>
+                <div class="small text-muted">Plan {{ mep.plan.codigo }} &middot; {{ mep.ano }}° año</div>
+              </td>
+              <td>
+                {% if t_dir %}
+                  {% if t_dir.presidente_nombre %}
+                    <div class="fw-semibold">{{ t_dir.presidente_nombre }}</div>
+                    {% if t_dir.dia_semana %}
+                    <div class="small text-muted">{{ t_dir.get_dia_semana_display }}{% if t_dir.hora %} {{ t_dir.hora|time:"H:i" }}{% endif %}</div>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-muted fst-italic">Sin datos</span>
+                  {% endif %}
+                  {% if t_dir.pendiente_sincronizacion %}
+                  <div class="mt-1"><span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Pendiente</span></div>
+                  {% endif %}
+                {% else %}
+                  <span class="text-danger">Sin tribunal</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if t_adm and t_adm.presidente_nombre %}
+                  <div>{{ t_adm.presidente_nombre }}</div>
+                  {% if t_adm.dia_semana %}
+                  <div class="small text-muted">{{ t_adm.get_dia_semana_display }}{% if t_adm.hora %} {{ t_adm.hora|time:"H:i" }}{% endif %}</div>
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted fst-italic">Sin datos</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if t_adm and t_adm.ultima_sincronizacion %}
+                  <span class="small">{{ t_adm.ultima_sincronizacion|date:"d/m/Y H:i" }}</span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if t_dir %}
+                <div class="d-flex gap-1 justify-content-center">
+                  <a href="{% url 'planes:detalle_tribunal_admin' mep.pk %}"
+                     class="btn btn-sm btn-outline-primary" title="Ver detalle">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                  {% if t_dir.pendiente_sincronizacion %}
+                  <form method="post" action="{% url 'planes:sincronizar_tribunal' mep.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-success" title="Marcar como sincronizado">
+                      <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                  </form>
+                  {% endif %}
+                </div>
+                {% endif %}
+              </td>
+            </tr>
+            {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-search fs-1 d-block mb-2"></i>
+  No se encontraron resultados{% if q %} para "<strong>{{ q }}</strong>"{% endif %}.
+</div>
+{% endif %}
+
+{% endblock %}

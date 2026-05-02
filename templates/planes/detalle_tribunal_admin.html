@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+{% block title %}Detalle de tribunal{% endblock %}
+{% block nav_comparacion_tribunales %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .diff-changed td { background-color: #fff3cd !important; }
+  .diff-val-dir { font-weight: 600; }
+  .diff-val-adm { color: #6c757d; font-size: .88rem; }
+  .diff-arrow { color: #f0ad4e; font-size: .85rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-people me-2"></i>Detalle de tribunal</h2>
+  <div class="text-muted small">
+    {{ mep.materia.nombre }} &middot; {{ mep.plan.carrera.nombre }} &middot; Plan {{ mep.plan.codigo }} &middot; {{ mep.ano }}° año
+  </div>
+</div>
+
+<div class="row g-4">
+
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Comparación de datos</strong>
+        {% if t_dir.pendiente_sincronizacion %}
+        <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Pendiente de sincronización</span>
+        {% else %}
+        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Sincronizado</span>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:18%">Campo</th>
+              <th style="width:41%">Director</th>
+              <th style="width:4%"></th>
+              <th style="width:37%">Sistema externo</th>
+            </tr>
+          </thead>
+          <tbody>
+
+            {# Presidente #}
+            <tr {% if diffs.presidente %}class="diff-changed"{% endif %}>
+              <td class="fw-semibold small align-middle">Presidente</td>
+              <td class="align-middle diff-val-dir">
+                {% if t_dir.presidente_nombre %}
+                  {{ t_dir.presidente_nombre }}<br>
+                  <span style="font-size:.78rem;font-weight:400">DNI {{ t_dir.presidente_dni }}</span>
+                {% else %}<span class="fst-italic text-muted">Sin asignar</span>{% endif %}
+              </td>
+              <td class="text-center align-middle diff-arrow">{% if diffs.presidente %}<i class="bi bi-arrow-right"></i>{% endif %}</td>
+              <td class="align-middle diff-val-adm">
+                {% if t_adm.presidente_nombre %}
+                  {{ t_adm.presidente_nombre }}<br>
+                  <span style="font-size:.78rem">DNI {{ t_adm.presidente_dni }}</span>
+                {% else %}<span class="fst-italic">Sin datos</span>{% endif %}
+              </td>
+            </tr>
+
+            {# 1er. Vocal #}
+            <tr {% if diffs.vocal_1 %}class="diff-changed"{% endif %}>
+              <td class="fw-semibold small align-middle">1er. Vocal</td>
+              <td class="align-middle diff-val-dir">
+                {% if t_dir.vocal_1_nombre %}
+                  {{ t_dir.vocal_1_nombre }}<br>
+                  <span style="font-size:.78rem;font-weight:400">DNI {{ t_dir.vocal_1_dni }}</span>
+                {% else %}<span class="fst-italic text-muted">Sin asignar</span>{% endif %}
+              </td>
+              <td class="text-center align-middle diff-arrow">{% if diffs.vocal_1 %}<i class="bi bi-arrow-right"></i>{% endif %}</td>
+              <td class="align-middle diff-val-adm">
+                {% if t_adm.vocal_1_nombre %}
+                  {{ t_adm.vocal_1_nombre }}<br>
+                  <span style="font-size:.78rem">DNI {{ t_adm.vocal_1_dni }}</span>
+                {% else %}<span class="fst-italic">Sin datos</span>{% endif %}
+              </td>
+            </tr>
+
+            {# 2do. Vocal #}
+            <tr {% if diffs.vocal_2 %}class="diff-changed"{% endif %}>
+              <td class="fw-semibold small align-middle">2do. Vocal</td>
+              <td class="align-middle diff-val-dir">
+                {% if t_dir.vocal_2_nombre %}
+                  {{ t_dir.vocal_2_nombre }}<br>
+                  <span style="font-size:.78rem;font-weight:400">DNI {{ t_dir.vocal_2_dni }}</span>
+                {% else %}<span class="fst-italic text-muted">Sin asignar</span>{% endif %}
+              </td>
+              <td class="text-center align-middle diff-arrow">{% if diffs.vocal_2 %}<i class="bi bi-arrow-right"></i>{% endif %}</td>
+              <td class="align-middle diff-val-adm">
+                {% if t_adm.vocal_2_nombre %}
+                  {{ t_adm.vocal_2_nombre }}<br>
+                  <span style="font-size:.78rem">DNI {{ t_adm.vocal_2_dni }}</span>
+                {% else %}<span class="fst-italic">Sin datos</span>{% endif %}
+              </td>
+            </tr>
+
+            {# Día y hora #}
+            <tr {% if diffs.dia_hora %}class="diff-changed"{% endif %}>
+              <td class="fw-semibold small align-middle">Día y hora</td>
+              <td class="align-middle diff-val-dir">
+                {% if t_dir.dia_semana %}{{ t_dir.get_dia_semana_display }}{% if t_dir.hora %} {{ t_dir.hora|time:"H:i" }}{% endif %}
+                {% else %}<span class="fst-italic text-muted">Sin asignar</span>{% endif %}
+              </td>
+              <td class="text-center align-middle diff-arrow">{% if diffs.dia_hora %}<i class="bi bi-arrow-right"></i>{% endif %}</td>
+              <td class="align-middle diff-val-adm">
+                {% if t_adm.dia_semana %}{{ t_adm.get_dia_semana_display }}{% if t_adm.hora %} {{ t_adm.hora|time:"H:i" }}{% endif %}
+                {% else %}<span class="fst-italic">Sin datos</span>{% endif %}
+              </td>
+            </tr>
+
+            {# Modalidad #}
+            <tr {% if diffs.modalidad %}class="diff-changed"{% endif %}>
+              <td class="fw-semibold small align-middle">Modalidad</td>
+              <td class="align-middle diff-val-dir">
+                {% if t_dir.permite_libres %}Libres y regulares{% else %}Solo regulares{% endif %}
+              </td>
+              <td class="text-center align-middle diff-arrow">{% if diffs.modalidad %}<i class="bi bi-arrow-right"></i>{% endif %}</td>
+              <td class="align-middle diff-val-adm">
+                {% if t_adm.permite_libres %}Libres y regulares{% else %}Solo regulares{% endif %}
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header"><strong>Información</strong></div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-5 text-muted small">Materia</dt>
+          <dd class="col-7">{{ mep.materia.nombre }}</dd>
+          <dt class="col-5 text-muted small">Código</dt>
+          <dd class="col-7">{{ mep.materia.codigo }}</dd>
+          <dt class="col-5 text-muted small">Plan</dt>
+          <dd class="col-7">{{ mep.plan.codigo }} — {{ mep.plan.carrera.nombre }}</dd>
+          <dt class="col-5 text-muted small">Año</dt>
+          <dd class="col-7">{{ mep.ano }}° año &middot; {{ mep.get_cuatrimestre_display }}</dd>
+          {% if t_adm.ultima_sincronizacion %}
+          <dt class="col-5 text-muted small">Últ. sincronización</dt>
+          <dd class="col-7">{{ t_adm.ultima_sincronizacion|date:"d/m/Y H:i" }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    {% if t_dir.pendiente_sincronizacion %}
+    <div class="card mt-3 border-warning">
+      <div class="card-header bg-warning text-dark"><strong>Sincronizar</strong></div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Una vez que actualizaste el sistema externo con los datos del director, marcá como sincronizado acá.
+        </p>
+        <form method="post" action="{% url 'planes:sincronizar_tribunal' mep.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-success btn-sm w-100">
+            <i class="bi bi-arrow-repeat me-2"></i>Marcar como sincronizado
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-12">
+    <a href="{% url 'planes:lista_comparacion_tribunales' %}" class="btn btn-outline-secondary btn-sm">Volver</a>
+  </div>
+
+</div>
+{% endblock %}

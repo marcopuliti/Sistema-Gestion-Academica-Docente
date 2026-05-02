@@ -3,16 +3,24 @@ from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.html import format_html
-from .models import Carrera, PlanEstudio, Materia, MateriaEnPlan
+from .models import Carrera, PlanEstudio, Materia, MateriaEnPlan, AnioDictado, Docente, TribunalExaminador, TribunalAdmin
 from .management.commands.importar_materias import PlanParser, fetch_html
 
 
 
 
+class AnioDictadoInline(admin.TabularInline):
+    model = AnioDictado
+    extra = 1
+    fields = ('ano',)
+    verbose_name = 'Año dictado'
+    verbose_name_plural = 'Años que se están dictando'
+
+
 class MateriaEnPlanInline(admin.TabularInline):
     model = MateriaEnPlan
     extra = 1
-    fields = ('materia', 'nombre', 'ano', 'cuatrimestre', 'es_optativa', 'hs_totales', 'tope_hs')
+    fields = ('materia', 'ano', 'cuatrimestre', 'es_optativa', 'es_servicio', 'hs_totales', 'tope_hs')
     autocomplete_fields = ['materia']
     ordering = ('ano', 'cuatrimestre')
 
@@ -22,7 +30,9 @@ class MateriaEnPlanInline(admin.TabularInline):
 
 @admin.register(Carrera)
 class CarreraAdmin(admin.ModelAdmin):
-    list_display = ('codigo', 'nombre', 'duracion_anos', 'cantidad_planes')
+    list_display = ('codigo', 'nombre', 'departamento', 'duracion_anos', 'cantidad_planes')
+    list_filter = ('departamento',)
+    list_editable = ('departamento',)
     search_fields = ('codigo', 'nombre')
     ordering = ('nombre',)
 
@@ -33,13 +43,13 @@ class CarreraAdmin(admin.ModelAdmin):
 
 @admin.register(PlanEstudio)
 class PlanEstudioAdmin(admin.ModelAdmin):
-    list_display = ('carrera', 'codigo', 'vigente', 'cantidad_materias')
+    list_display = ('carrera', 'codigo', 'vigente', 'activo', 'anos_dictados_display', 'cantidad_materias')
     list_display_links = ('codigo',)
-    list_filter = ('vigente', 'carrera')
-    list_editable = ('vigente',)
+    list_filter = ('vigente', 'activo', 'carrera')
+    list_editable = ('vigente', 'activo')
     search_fields = ('codigo', 'carrera__nombre', 'carrera__codigo')
     autocomplete_fields = ['carrera']
-    inlines = [MateriaEnPlanInline]
+    inlines = [AnioDictadoInline, MateriaEnPlanInline]
 
     def get_urls(self):
         urls = super().get_urls()
@@ -103,17 +113,23 @@ class PlanEstudioAdmin(admin.ModelAdmin):
         )
         return HttpResponseRedirect(redirect_url)
 
+    @admin.display(description='Años dictados')
+    def anos_dictados_display(self, obj):
+        return obj.get_anos_dictados_display()
+
     @admin.display(description='Materias')
     def cantidad_materias(self, obj):
         return obj.materias_en_plan.count()
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('carrera').prefetch_related('materias_en_plan')
+        return super().get_queryset(request).select_related('carrera').prefetch_related('materias_en_plan', 'anos_dictados')
 
 
 @admin.register(Materia)
 class MateriaAdmin(admin.ModelAdmin):
-    list_display = ('codigo', 'nombre', 'en_cuantos_planes')
+    list_display = ('codigo', 'nombre', 'departamento', 'en_cuantos_planes')
+    list_filter = ('departamento',)
+    list_editable = ('departamento',)
     search_fields = ('codigo', 'nombre')
     ordering = ('nombre',)
 
@@ -125,23 +141,37 @@ class MateriaAdmin(admin.ModelAdmin):
         return super().get_queryset(request).prefetch_related('en_planes')
 
 
+class TribunalInline(admin.StackedInline):
+    model = TribunalExaminador
+    extra = 0
+    max_num = 1
+    can_delete = True
+    fields = (
+        ('presidente_nombre', 'presidente_dni'),
+        ('vocal_1_nombre', 'vocal_1_dni'),
+        ('vocal_2_nombre', 'vocal_2_dni'),
+        ('dia_semana', 'hora', 'permite_libres'),
+    )
+    verbose_name_plural = 'Tribunal Examinador'
+
+
 @admin.register(MateriaEnPlan)
 class MateriaEnPlanAdmin(admin.ModelAdmin):
-    list_display = ('get_nombre_display', 'materia', 'plan', 'ano', 'cuatrimestre', 'es_optativa', 'hs_totales', 'tope_hs_display')
+    list_display = ('get_nombre_display', 'materia', 'plan', 'ano', 'cuatrimestre', 'es_optativa', 'es_servicio', 'hs_totales', 'tope_hs_display', 'tiene_tribunal')
     list_display_links = ('get_nombre_display',)
-    list_filter = ('es_optativa', 'ano', 'cuatrimestre', 'plan__vigente', 'plan__carrera', 'plan')
+    list_filter = ('es_optativa', 'es_servicio', 'ano', 'cuatrimestre', 'plan__vigente', 'plan__activo', 'plan__carrera', 'plan')
     list_editable = ('hs_totales',)
-    search_fields = ('materia__nombre', 'materia__codigo', 'nombre', 'plan__carrera__nombre')
+    search_fields = ('materia__nombre', 'materia__codigo', 'plan__carrera__nombre')
     autocomplete_fields = ['materia', 'plan']
     ordering = ('plan__carrera__nombre', 'plan__codigo', 'ano', 'cuatrimestre')
+    inlines = [TribunalInline]
 
     fieldsets = (
         ('Ubicación en el plan', {
             'fields': ('plan', 'materia', 'ano', 'cuatrimestre'),
         }),
         ('Datos académicos', {
-            'fields': ('nombre', 'es_optativa', 'hs_totales', 'tope_hs'),
-            'description': 'El nombre es opcional: si se deja vacío se usa el nombre de la materia.',
+            'fields': ('es_optativa', 'es_servicio', 'departamento_dictante', 'hs_totales', 'tope_hs'),
         }),
     )
 
@@ -155,5 +185,54 @@ class MateriaEnPlanAdmin(admin.ModelAdmin):
             return obj.tope_hs
         return format_html('<span style="color:#aaa">—</span>')
 
+    @admin.display(description='Tribunal', boolean=True)
+    def tiene_tribunal(self, obj):
+        return hasattr(obj, 'tribunal')
+
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('materia', 'plan__carrera')
+        return super().get_queryset(request).select_related('materia', 'plan__carrera').prefetch_related('tribunal')
+
+
+@admin.register(Docente)
+class DocenteAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'dni')
+    search_fields = ('nombre', 'dni')
+    ordering = ('nombre',)
+
+
+@admin.register(TribunalExaminador)
+class TribunalExaminadorAdmin(admin.ModelAdmin):
+    list_display = ('materia_en_plan', 'get_plan', 'get_ano', 'presidente_nombre', 'vocal_1_nombre', 'vocal_2_nombre', 'dia_semana', 'hora', 'permite_libres')
+    list_filter = ('permite_libres', 'materia_en_plan__plan__vigente', 'materia_en_plan__plan__activo', 'materia_en_plan__plan__carrera', 'materia_en_plan__ano')
+    search_fields = ('materia_en_plan__materia__nombre', 'presidente_nombre', 'vocal_1_nombre', 'vocal_2_nombre')
+    autocomplete_fields = ['materia_en_plan']
+    ordering = ('materia_en_plan__plan__carrera__nombre', 'materia_en_plan__plan__codigo', 'materia_en_plan__ano')
+
+    @admin.display(description='Plan', ordering='materia_en_plan__plan__codigo')
+    def get_plan(self, obj):
+        return obj.materia_en_plan.plan
+
+    @admin.display(description='Año', ordering='materia_en_plan__ano')
+    def get_ano(self, obj):
+        return f'{obj.materia_en_plan.ano}°'
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'materia_en_plan__materia',
+            'materia_en_plan__plan__carrera',
+        )
+
+
+@admin.register(TribunalAdmin)
+class TribunalAdminAdmin(admin.ModelAdmin):
+    list_display = ('materia_en_plan', 'presidente_nombre', 'vocal_1_nombre', 'vocal_2_nombre', 'dia_semana', 'hora', 'ultima_sincronizacion')
+    list_filter = ('permite_libres', 'materia_en_plan__plan__carrera', 'materia_en_plan__ano')
+    search_fields = ('materia_en_plan__materia__nombre', 'presidente_nombre', 'vocal_1_nombre', 'vocal_2_nombre')
+    ordering = ('materia_en_plan__plan__carrera__nombre', 'materia_en_plan__plan__codigo', 'materia_en_plan__ano')
+    readonly_fields = ('ultima_sincronizacion',)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'materia_en_plan__materia',
+            'materia_en_plan__plan__carrera',
+        )

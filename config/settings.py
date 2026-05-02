@@ -25,8 +25,6 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     'apps.accounts',
     'apps.tramites',
-    'apps.informes',
-    'apps.planillas',
     'apps.solicitudes',
     'apps.notifications',
     'apps.planes',

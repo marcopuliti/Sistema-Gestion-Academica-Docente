@@ -114,7 +114,9 @@ def crear_solicitud(request, tipificacion):
                 response['Content-Disposition'] = f'attachment; filename="{nombre}"'
                 return response
             from apps.notifications.utils import notificar_nuevo_tramite
-            notificar_nuevo_tramite(solicitud, 'Solicitud de Protocolización')
+            from django.urls import reverse
+            notificar_nuevo_tramite(solicitud, 'Solicitud de Protocolización',
+                                    url=reverse('solicitudes:detalle', args=[solicitud.pk]))
             messages.success(request, 'Solicitud enviada. Quedó pendiente de revisión.')
             return redirect('solicitudes:detalle', pk=solicitud.pk)
     else:
@@ -233,7 +235,9 @@ def revisar_director(request, pk):
             solicitud.revisor = request.user
             solicitud.save()
             from apps.notifications.utils import notificar_cambio_estado
-            notificar_cambio_estado(solicitud, 'Solicitud de Protocolización')
+            from django.urls import reverse
+            notificar_cambio_estado(solicitud, 'Solicitud de Protocolización',
+                                    url=reverse('solicitudes:detalle', args=[solicitud.pk]))
             label = 'elevada al Administrador' if accion == 'elevada' else 'devuelta al docente con observaciones'
             messages.success(request, f'Solicitud {label}.')
             return redirect('solicitudes:detalle', pk=pk)
@@ -261,7 +265,9 @@ def revisar_solicitud(request, pk):
                 solicitud.numero_resolucion = form.cleaned_data['numero_resolucion']
             solicitud.save()
             from apps.notifications.utils import notificar_cambio_estado
-            notificar_cambio_estado(solicitud, 'Solicitud de Protocolización')
+            from django.urls import reverse
+            notificar_cambio_estado(solicitud, 'Solicitud de Protocolización',
+                                    url=reverse('solicitudes:detalle', args=[solicitud.pk]))
             messages.success(request, 'Revisión guardada.')
             return redirect('solicitudes:detalle', pk=pk)
     else:
@@ -663,7 +669,9 @@ def revisar_director_taller(request, pk):
             taller.revisor = request.user
             taller.save()
             from apps.notifications.utils import notificar_cambio_estado
-            notificar_cambio_estado(taller, 'Solicitud de Taller')
+            from django.urls import reverse
+            notificar_cambio_estado(taller, 'Solicitud de Taller',
+                                    url=reverse('solicitudes:detalle_taller', args=[taller.pk]))
             label = 'elevada al Administrador' if accion == 'elevada' else 'devuelta al docente con observaciones'
             messages.success(request, f'Solicitud {label}.')
             return redirect('solicitudes:detalle_taller', pk=pk)
@@ -690,7 +698,9 @@ def revisar_taller(request, pk):
                 taller.numero_resolucion = form.cleaned_data['numero_resolucion']
             taller.save()
             from apps.notifications.utils import notificar_cambio_estado
-            notificar_cambio_estado(taller, 'Solicitud de Taller')
+            from django.urls import reverse
+            notificar_cambio_estado(taller, 'Solicitud de Taller',
+                                    url=reverse('solicitudes:detalle_taller', args=[taller.pk]))
             messages.success(request, 'Revisión guardada.')
             return redirect('solicitudes:detalle_taller', pk=pk)
     else:

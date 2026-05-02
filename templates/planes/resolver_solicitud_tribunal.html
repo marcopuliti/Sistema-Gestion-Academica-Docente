@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+{% block title %}Confirmar cambio de tribunal{% endblock %}
+{% block nav_solicitudes_tribunal %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .diff-changed td { background-color: #fff3cd !important; }
+  .diff-val-old { color: #6c757d; font-size: .82rem; }
+  .diff-arrow { color: #f0ad4e; font-size: .85rem; }
+  .diff-val-new { font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-people me-2"></i>Confirmar cambio de tribunal</h2>
+  <div class="text-muted small">
+    {{ sol.tribunal.materia_en_plan.materia.nombre }} &middot;
+    {{ sol.tribunal.materia_en_plan.plan.carrera.nombre }} &middot;
+    Plan {{ sol.tribunal.materia_en_plan.plan.codigo }}
+  </div>
+</div>
+
+<div class="row g-4">
+
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Detalle del cambio</strong>
+        <span class="badge {{ sol.estado_badge }}">{{ sol.get_estado_display }}</span>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:18%">Campo</th>
+              <th style="width:38%">Valor anterior</th>
+              <th style="width:4%"></th>
+              <th style="width:40%">Valor nuevo</th>
+            </tr>
+          </thead>
+          <tbody>
+
+            {# Presidente #}
+            {% with changed=sol.presidente_propuesto_nombre != sol.presidente_anterior_nombre or sol.presidente_propuesto_dni != sol.presidente_anterior_dni %}
+            <tr {% if changed %}class="diff-changed"{% endif %}>
+              <td class="fw-semibold small align-middle">Presidente</td>
+              <td class="align-middle diff-val-old">
+                {% if sol.presidente_anterior_nombre %}
+                  {{ sol.presidente_anterior_nombre }}<br>
+                  <span style="font-size:.78rem">DNI {{ sol.presidente_anterior_dni }}</span>
+                {% else %}<span class="fst-italic">Sin asignar</span>{% endif %}
+              </td>
+              <td class="text-center align-middle diff-arrow">{% if changed %}<i class="bi bi-arrow-right"></i>{% endif %}</td>
+              <td class="align-middle diff-val-new">
+                {% if sol.presidente_propuesto_nombre %}
+                  {{ sol.presidente_propuesto_nombre }}<br>
+                  <span style="font-size:.78rem;font-weight:400">DNI {{ sol.presidente_propuesto_dni }}</span>
+                {% else %}<span class="fst-italic text-muted">Sin asignar</span>{% endif %}
+              </td>
+            </tr>
+            {% endwith %}
+
+            {# 1er. Vocal #}
+            {% with changed=sol.vocal_1_propuesto_nombre != sol.vocal_1_anterior_nombre or sol.vocal_1_propuesto_dni != sol.vocal_1_anterior_dni %}
+            <tr {% if changed %}class="diff-changed"{% endif %}>
+              <td class="fw-semibold small align-middle">1er. Vocal</td>
+              <td class="align-middle diff-val-old">
+                {% if sol.vocal_1_anterior_nombre %}
+                  {{ sol.vocal_1_anterior_nombre }}<br>
+                  <span style="font-size:.78rem">DNI {{ sol.vocal_1_anterior_dni }}</span>
+                {% else %}<span class="fst-italic">Sin asignar</span>{% endif %}
+              </td>
+              <td class="text-center align-middle diff-arrow">{% if changed %}<i class="bi bi-arrow-right"></i>{% endif %}</td>
+              <td class="align-middle diff-val-new">
+                {% if sol.vocal_1_propuesto_nombre %}
+                  {{ sol.vocal_1_propuesto_nombre }}<br>
+                  <span style="font-size:.78rem;font-weight:400">DNI {{ sol.vocal_1_propuesto_dni }}</span>
+                {% else %}<span class="fst-italic text-muted">Sin asignar</span>{% endif %}
+              </td>
+            </tr>
+            {% endwith %}
+
+            {# 2do. Vocal #}
+            {% with changed=sol.vocal_2_propuesto_nombre != sol.vocal_2_anterior_nombre or sol.vocal_2_propuesto_dni != sol.vocal_2_anterior_dni %}
+            <tr {% if changed %}class="diff-changed"{% endif %}>
+              <td class="fw-semibold small align-middle">2do. Vocal</td>
+              <td class="align-middle diff-val-old">
+                {% if sol.vocal_2_anterior_nombre %}
+                  {{ sol.vocal_2_anterior_nombre }}<br>
+                  <span style="font-size:.78rem">DNI {{ sol.vocal_2_anterior_dni }}</span>
+                {% else %}<span class="fst-italic">Sin asignar</span>{% endif %}
+              </td>
+              <td class="text-center align-middle diff-arrow">{% if changed %}<i class="bi bi-arrow-right"></i>{% endif %}</td>
+              <td class="align-middle diff-val-new">
+                {% if sol.vocal_2_propuesto_nombre %}
+                  {{ sol.vocal_2_propuesto_nombre }}<br>
+                  <span style="font-size:.78rem;font-weight:400">DNI {{ sol.vocal_2_propuesto_dni }}</span>
+                {% else %}<span class="fst-italic text-muted">Sin asignar</span>{% endif %}
+              </td>
+            </tr>
+            {% endwith %}
+
+            {# Día y hora #}
+            {% with changed=sol.dia_semana_propuesto != sol.dia_semana_anterior or sol.hora_propuesta != sol.hora_anterior %}
+            <tr {% if changed %}class="diff-changed"{% endif %}>
+              <td class="fw-semibold small align-middle">Día y hora</td>
+              <td class="align-middle diff-val-old">
+                {% if sol.dia_semana_anterior %}{{ sol.get_dia_semana_anterior_display }}{% if sol.hora_anterior %} {{ sol.hora_anterior|time:"H:i" }}{% endif %}
+                {% else %}<span class="fst-italic">Sin asignar</span>{% endif %}
+              </td>
+              <td class="text-center align-middle diff-arrow">{% if changed %}<i class="bi bi-arrow-right"></i>{% endif %}</td>
+              <td class="align-middle diff-val-new">
+                {% if sol.dia_semana_propuesto %}{{ sol.get_dia_semana_propuesto_display }}{% if sol.hora_propuesta %} {{ sol.hora_propuesta|time:"H:i" }}{% endif %}
+                {% else %}<span class="fst-italic text-muted">Sin asignar</span>{% endif %}
+              </td>
+            </tr>
+            {% endwith %}
+
+            {# Modalidad #}
+            {% with changed=sol.permite_libres_propuesto != sol.permite_libres_anterior %}
+            <tr {% if changed %}class="diff-changed"{% endif %}>
+              <td class="fw-semibold small align-middle">Modalidad</td>
+              <td class="align-middle diff-val-old">
+                {% if sol.permite_libres_anterior is not None %}
+                  {% if sol.permite_libres_anterior %}Libres y regulares{% else %}Solo regulares{% endif %}
+                {% else %}<span class="fst-italic">—</span>{% endif %}
+              </td>
+              <td class="text-center align-middle diff-arrow">{% if changed %}<i class="bi bi-arrow-right"></i>{% endif %}</td>
+              <td class="align-middle diff-val-new">
+                {% if sol.permite_libres_propuesto %}Libres y regulares{% else %}Solo regulares{% endif %}
+              </td>
+            </tr>
+            {% endwith %}
+
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header"><strong>Información</strong></div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-5 text-muted small">Director</dt>
+          <dd class="col-7">{{ sol.solicitante.get_full_name }}<br><small class="text-muted">Dpto. {{ sol.solicitante.departamento }}</small></dd>
+          <dt class="col-5 text-muted small">Fecha</dt>
+          <dd class="col-7">{{ sol.fecha_solicitud|date:"d/m/Y H:i" }}</dd>
+          {% if sol.observaciones %}
+          <dt class="col-5 text-muted small">Observaciones</dt>
+          <dd class="col-7">{{ sol.observaciones }}</dd>
+          {% endif %}
+          {% if sol.fecha_resolucion %}
+          <dt class="col-5 text-muted small">Confirmado</dt>
+          <dd class="col-7">{{ sol.fecha_resolucion|date:"d/m/Y H:i" }}</dd>
+          {% if sol.respuesta_admin %}
+          <dt class="col-5 text-muted small">Nota</dt>
+          <dd class="col-7">{{ sol.respuesta_admin }}</dd>
+          {% endif %}
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  {% if sol.estado == 'pendiente' %}
+  <div class="col-12">
+    <div class="card border-warning">
+      <div class="card-header bg-warning text-dark"><strong>Confirmar en sistema externo</strong></div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Una vez que cargaste este cambio en el sistema externo, confirmalo acá para notificar al director.
+        </p>
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Observaciones (opcional)</label>
+            <textarea name="respuesta_admin" class="form-control" rows="2"
+              placeholder="Comentario para el director…"></textarea>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success">
+              <i class="bi bi-check-circle me-2"></i>Marcar como realizada
+            </button>
+            <a href="{% url 'planes:lista_solicitudes_tribunal' %}" class="btn btn-outline-secondary ms-auto">Volver</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12">
+    <a href="{% url 'planes:lista_solicitudes_tribunal' %}" class="btn btn-outline-secondary">Volver</a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

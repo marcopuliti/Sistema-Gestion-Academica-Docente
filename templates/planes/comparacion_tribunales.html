@@ -148,6 +148,23 @@
                      class="btn btn-sm btn-outline-primary" title="Ver detalle">
                     <i class="bi bi-eye"></i>
                   </a>
+                  <button type="button" class="btn btn-sm btn-outline-secondary"
+                          data-bs-toggle="modal" data-bs-target="#modalAdminTribunal"
+                          data-url="{% url 'planes:admin_modificar_tribunal' t_dir.pk %}"
+                          data-materia="{{ mep.materia.nombre }}"
+                          data-plan="Plan {{ mep.plan.codigo }} — {{ mep.plan.carrera.nombre }} — {{ mep.ano }}° año"
+                          data-presidente-nombre="{{ t_dir.presidente_nombre|default:'' }}"
+                          data-presidente-dni="{{ t_dir.presidente_dni|default:'' }}"
+                          data-vocal1-nombre="{{ t_dir.vocal_1_nombre|default:'' }}"
+                          data-vocal1-dni="{{ t_dir.vocal_1_dni|default:'' }}"
+                          data-vocal2-nombre="{{ t_dir.vocal_2_nombre|default:'' }}"
+                          data-vocal2-dni="{{ t_dir.vocal_2_dni|default:'' }}"
+                          data-dia-semana="{{ t_dir.dia_semana|default:'' }}"
+                          data-hora="{% if t_dir.hora %}{{ t_dir.hora|time:'H:i' }}{% endif %}"
+                          data-permite-libres="{{ t_dir.permite_libres|yesno:'true,false' }}"
+                          title="Modificar tribunal">
+                    <i class="bi bi-pencil"></i>
+                  </button>
                   {% if t_dir.pendiente_sincronizacion %}
                   <form method="post" action="{% url 'planes:sincronizar_tribunal' mep.pk %}" class="d-inline">
                     {% csrf_token %}
@@ -176,4 +193,101 @@
 </div>
 {% endif %}
 
+{# ── Modal único para edición admin ──────────────────────────────────────────── #}
+<div class="modal fade" id="modalAdminTribunal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" id="formAdminTribunal" action="">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
+          <h5 class="modal-title" id="modalAdminTribunalTitulo">Modificar tribunal</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3" id="modalAdminTribunalSubtitulo"></p>
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label fw-semibold small">Presidente — Nombre completo</label>
+              <input type="text" name="presidente_nombre" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">Presidente — DNI</label>
+              <input type="text" name="presidente_dni" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold small">1er. Vocal — Nombre completo</label>
+              <input type="text" name="vocal_1_nombre" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">1er. Vocal — DNI</label>
+              <input type="text" name="vocal_1_dni" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold small">2do. Vocal — Nombre completo</label>
+              <input type="text" name="vocal_2_nombre" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">2do. Vocal — DNI</label>
+              <input type="text" name="vocal_2_dni" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">Día de la semana</label>
+              <select name="dia_semana" class="form-select form-select-sm">
+                <option value="">— Seleccionar —</option>
+                <option value="1">Lunes</option>
+                <option value="2">Martes</option>
+                <option value="3">Miércoles</option>
+                <option value="4">Jueves</option>
+                <option value="5">Viernes</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">Hora del examen</label>
+              <input type="time" name="hora" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-4 d-flex align-items-end pb-1">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="permite_libres" id="adminPermiteLibres">
+                <label class="form-check-label" for="adminPermiteLibres">Pueden rendir libres</label>
+              </div>
+            </div>
+          </div>
+          <div class="alert alert-info mt-3 mb-0 py-2 small">
+            <i class="bi bi-info-circle me-1"></i>
+            Al guardar, los cambios se aplicarán al tribunal del director y quedarán sincronizados con el sistema externo.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg me-1"></i>Guardar y sincronizar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('modalAdminTribunal').addEventListener('show.bs.modal', function (e) {
+  const btn = e.relatedTarget;
+  const form = document.getElementById('formAdminTribunal');
+  form.action = btn.dataset.url;
+  document.getElementById('modalAdminTribunalTitulo').textContent = 'Modificar tribunal — ' + btn.dataset.materia;
+  document.getElementById('modalAdminTribunalSubtitulo').textContent = btn.dataset.plan;
+  form.querySelector('[name=presidente_nombre]').value = btn.dataset.presidenteNombre || '';
+  form.querySelector('[name=presidente_dni]').value    = btn.dataset.presidenteDni   || '';
+  form.querySelector('[name=vocal_1_nombre]').value   = btn.dataset.vocal1Nombre    || '';
+  form.querySelector('[name=vocal_1_dni]').value      = btn.dataset.vocal1Dni       || '';
+  form.querySelector('[name=vocal_2_nombre]').value   = btn.dataset.vocal2Nombre    || '';
+  form.querySelector('[name=vocal_2_dni]').value      = btn.dataset.vocal2Dni       || '';
+  form.querySelector('[name=dia_semana]').value        = btn.dataset.diaSemana      || '';
+  form.querySelector('[name=hora]').value              = btn.dataset.hora            || '';
+  form.querySelector('[name=permite_libres]').checked  = btn.dataset.permiteLibres  === 'true';
+});
+</script>
 {% endblock %}

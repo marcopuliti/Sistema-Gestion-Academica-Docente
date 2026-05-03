@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.html import format_html
-from .models import Carrera, PlanEstudio, Materia, MateriaEnPlan, AnioDictado, Docente, TribunalExaminador, TribunalAdmin
+from .models import Carrera, PlanEstudio, Materia, MateriaEnPlan, AnioDictado, Docente, TribunalExaminador, TribunalAdmin, SolicitudInformeTribunal, InformeTribunalesEnviado
 from .management.commands.importar_materias import PlanParser, fetch_html
 
 
@@ -221,6 +221,22 @@ class TribunalExaminadorAdmin(admin.ModelAdmin):
             'materia_en_plan__materia',
             'materia_en_plan__plan__carrera',
         )
+
+
+@admin.register(SolicitudInformeTribunal)
+class SolicitudInformeTribunalAdmin(admin.ModelAdmin):
+    list_display = ('fecha', 'solicitante', 'activa')
+    list_filter = ('activa',)
+    readonly_fields = ('fecha', 'solicitante')
+    ordering = ('-fecha',)
+
+
+@admin.register(InformeTribunalesEnviado)
+class InformeTribunalesEnviadoAdmin(admin.ModelAdmin):
+    list_display = ('solicitud', 'departamento', 'director', 'fecha_envio')
+    list_filter = ('departamento', 'solicitud')
+    readonly_fields = ('fecha_envio',)
+    ordering = ('-fecha_envio',)
 
 
 @admin.register(TribunalAdmin)

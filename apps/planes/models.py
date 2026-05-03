@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from apps.tramites.models import DEPARTAMENTO_CHOICES
 
@@ -207,3 +208,58 @@ class TribunalAdmin(models.Model):
 
     def __str__(self):
         return f'Tribunal Admin — {self.materia_en_plan}'
+
+
+class SolicitudInformeTribunal(models.Model):
+    """Registro de cada solicitud anual de informe de tribunales enviada por el admin."""
+    fecha = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de solicitud')
+    solicitante = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='solicitudes_informe_tribunal',
+        verbose_name='Solicitante',
+    )
+    activa = models.BooleanField(default=True, verbose_name='Activa')
+
+    class Meta:
+        ordering = ['-fecha']
+        verbose_name = 'Solicitud de informe de tribunal'
+        verbose_name_plural = 'Solicitudes de informe de tribunal'
+
+    def __str__(self):
+        return f'Solicitud informe tribunales — {self.fecha:%d/%m/%Y}'
+
+
+class InformeTribunalesEnviado(models.Model):
+    """Registra que un director ya envió su informe anual para una solicitud dada."""
+    solicitud = models.ForeignKey(
+        SolicitudInformeTribunal,
+        on_delete=models.CASCADE,
+        related_name='informes_enviados',
+        verbose_name='Solicitud',
+    )
+    departamento = models.CharField(
+        max_length=50, choices=DEPARTAMENTO_CHOICES, verbose_name='Departamento',
+    )
+    director = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='informes_tribunales_enviados',
+        verbose_name='Director',
+    )
+    fecha_envio = models.DateTimeField(verbose_name='Fecha de envío')
+
+    class Meta:
+        unique_together = [('solicitud', 'departamento')]
+        ordering = ['-fecha_envio']
+        verbose_name = 'Informe de tribunales enviado'
+        verbose_name_plural = 'Informes de tribunales enviados'
+
+    def __str__(self):
+        return f'Informe {self.departamento} — {self.solicitud.fecha.year}'
+
+    @property
+    def ano(self):
+        return self.solicitud.fecha.year

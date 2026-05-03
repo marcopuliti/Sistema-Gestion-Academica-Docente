@@ -1,0 +1,287 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — Dpto. {{ departamento }}{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .stat-card { transition: box-shadow .15s; }
+  .stat-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); }
+  .stat-icon {
+    width: 52px; height: 52px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 12px; flex-shrink: 0;
+  }
+  .accion-card {
+    border: 1px solid #dee2e6; border-radius: 10px;
+    padding: 1.25rem 1rem;
+    display: flex; flex-direction: column; align-items: flex-start;
+    gap: .5rem; text-decoration: none; color: inherit;
+    transition: background .15s, box-shadow .15s;
+    height: 100%;
+  }
+  .accion-card:hover { background: #f8f9fa; box-shadow: 0 2px 8px rgba(0,0,0,.08); color: inherit; }
+  .accion-card .accion-icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem;
+  }
+  .notif-item { border-left: 3px solid transparent; }
+  .notif-item.no-leida { border-left-color: var(--color-primario); background: #f0f4ff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+  <div>
+    <h2><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
+    <p class="text-muted mb-0">
+      Bienvenido/a, <strong>{{ user.get_full_name }}</strong>
+      &middot; Director/a del Departamento de <strong>{{ departamento }}</strong>
+    </p>
+  </div>
+</div>
+
+{# ── Alerta de informe anual ──────────────────────────────────────────────── #}
+{% if solicitud_informe_activa %}
+<div class="alert alert-warning d-flex align-items-start gap-3 mb-4" role="alert">
+  <i class="bi bi-megaphone-fill fs-4 mt-1 flex-shrink-0"></i>
+  <div class="flex-grow-1">
+    <strong>Solicitud de informe anual de tribunales activa.</strong><br>
+    <span class="small">Revisá los tribunales de tu departamento, realizá los cambios necesarios y enviá el informe a la Secretaría Académica.</span>
+  </div>
+  <a href="{% url 'planes:lista_tribunales' %}" class="btn btn-warning btn-sm text-nowrap">
+    <i class="bi bi-people me-1"></i>Ir a tribunales
+  </a>
+</div>
+{% elif informe_enviado %}
+<div class="alert alert-success d-flex align-items-center gap-2 mb-4" role="alert">
+  <i class="bi bi-check-circle-fill fs-5"></i>
+  <div>
+    <strong>Informe anual {{ informe_enviado.ano }} enviado.</strong>
+    Enviado el {{ informe_enviado.fecha_envio|date:"d/m/Y" }}. Podés descargarlo desde el botón superior.
+  </div>
+</div>
+{% endif %}
+
+{# ── Estadísticas ─────────────────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+
+  <div class="col-6 col-lg-3">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="stat-icon bg-warning bg-opacity-15">
+          <i class="bi bi-folder2-open fs-4 text-warning"></i>
+        </div>
+        <div>
+          <div class="fs-3 fw-bold lh-1">{{ por_revisar }}</div>
+          <div class="text-muted small mt-1">Solicitud{{ por_revisar|pluralize:"es" }} por revisar</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-3">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="stat-icon {% if sin_tribunal %}bg-danger bg-opacity-15{% else %}bg-success bg-opacity-15{% endif %}">
+          <i class="bi bi-people fs-4 {% if sin_tribunal %}text-danger{% else %}text-success{% endif %}"></i>
+        </div>
+        <div>
+          <div class="fs-3 fw-bold lh-1">{{ total_tribunales }}</div>
+          <div class="text-muted small mt-1">Tribunales a cargo</div>
+          <div class="d-flex flex-wrap gap-1 mt-1">
+            {% if sin_tribunal %}
+            <span class="badge bg-danger" style="font-size:.7rem">{{ sin_tribunal }} sin registro</span>
+            {% endif %}
+            {% if con_datos_faltantes %}
+            <span class="badge bg-warning text-dark" style="font-size:.7rem">{{ con_datos_faltantes }} incompleto{{ con_datos_faltantes|pluralize:"s" }}</span>
+            {% endif %}
+            {% if not sin_tribunal and not con_datos_faltantes %}
+            <span class="badge bg-success-subtle text-success" style="font-size:.7rem">Todos completos</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-3">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="stat-icon {% if pendientes_sinc %}bg-warning bg-opacity-15{% else %}bg-secondary bg-opacity-10{% endif %}">
+          <i class="bi bi-clock-history fs-4 {% if pendientes_sinc %}text-warning{% else %}text-secondary{% endif %}"></i>
+        </div>
+        <div>
+          <div class="fs-3 fw-bold lh-1">{{ pendientes_sinc }}</div>
+          <div class="text-muted small mt-1">Pendiente{{ pendientes_sinc|pluralize:"s" }} de sincronización</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-3">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="stat-icon {% if notificaciones_no_leidas %}bg-danger bg-opacity-15{% else %}bg-secondary bg-opacity-10{% endif %}">
+          <i class="bi bi-bell fs-4 {% if notificaciones_no_leidas %}text-danger{% else %}text-secondary{% endif %}"></i>
+        </div>
+        <div>
+          <div class="fs-3 fw-bold lh-1">{{ notificaciones_no_leidas }}</div>
+          <div class="text-muted small mt-1">Notificacion{{ notificaciones_no_leidas|pluralize:"es" }} sin leer</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Acciones rápidas ─────────────────────────────────────────────────────── #}
+<h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size:.75rem;letter-spacing:.06em">
+  <i class="bi bi-lightning me-1"></i>Acciones rápidas
+</h6>
+<div class="row g-3 mb-4">
+
+  <div class="col-sm-6 col-lg-4">
+    <a href="{% url 'planes:lista_tribunales' %}" class="accion-card">
+      <div class="accion-icon bg-primary bg-opacity-10 text-primary">
+        <i class="bi bi-people-fill"></i>
+      </div>
+      <div>
+        <div class="fw-semibold">Tribunales Examinadores</div>
+        <div class="text-muted small">Consultá y modificá los tribunales de tu departamento.</div>
+      </div>
+      {% if sin_tribunal %}
+      <span class="badge bg-danger mt-1">{{ sin_tribunal }} sin asignar</span>
+      {% endif %}
+      {% if pendientes_sinc %}
+      <span class="badge bg-warning text-dark mt-1">{{ pendientes_sinc }} pendiente{{ pendientes_sinc|pluralize:"s" }} sinc.</span>
+      {% endif %}
+    </a>
+  </div>
+
+  <div class="col-sm-6 col-lg-4">
+    <a href="{% url 'solicitudes:lista_departamento' %}" class="accion-card">
+      <div class="accion-icon bg-warning bg-opacity-10 text-warning">
+        <i class="bi bi-folder2-open"></i>
+      </div>
+      <div>
+        <div class="fw-semibold">Solicitudes del Departamento</div>
+        <div class="text-muted small">Revisá las solicitudes de protocolización y talleres.</div>
+      </div>
+      {% if por_revisar %}
+      <span class="badge bg-warning text-dark mt-1">{{ por_revisar }} por revisar</span>
+      {% endif %}
+    </a>
+  </div>
+
+  <div class="col-sm-6 col-lg-4">
+    <a href="{% url 'planes:materias_servicio' %}" class="accion-card">
+      <div class="accion-icon bg-info bg-opacity-10 text-info">
+        <i class="bi bi-book"></i>
+      </div>
+      <div>
+        <div class="fw-semibold">Materias del Departamento</div>
+        <div class="text-muted small">Gestioná las materias y materias de servicio.</div>
+      </div>
+    </a>
+  </div>
+
+</div>
+
+{# ── Últimas notificaciones ───────────────────────────────────────────────── #}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-bell me-2"></i>Últimas notificaciones</span>
+    <a href="{% url 'notifications:lista' %}" class="btn btn-sm btn-light">Ver todas</a>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for notif in ultimas_notificaciones %}
+    {% if notif.url %}
+    <a href="{{ notif.url }}" class="list-group-item list-group-item-action notif-item {% if not notif.leida %}no-leida{% endif %}">
+    {% else %}
+    <div class="list-group-item notif-item {% if not notif.leida %}no-leida{% endif %}">
+    {% endif %}
+      <div class="d-flex justify-content-between align-items-start">
+        <div class="fw-semibold small">{{ notif.titulo }}</div>
+        <div class="d-flex align-items-center gap-2 ms-2 flex-shrink-0">
+          {% if not notif.leida %}<span class="badge bg-primary" style="font-size:.65rem">Nueva</span>{% endif %}
+          <span class="text-muted" style="font-size:.75rem">{{ notif.fecha|date:"d/m/Y H:i" }}</span>
+        </div>
+      </div>
+      <div class="text-muted small text-truncate mt-1" style="max-width:600px">{{ notif.mensaje|truncatechars:100 }}</div>
+    {% if notif.url %}
+    </a>
+    {% else %}
+    </div>
+    {% endif %}
+    {% empty %}
+    <div class="list-group-item text-muted text-center py-3 small">Sin notificaciones recientes.</div>
+    {% endfor %}
+  </div>
+</div>
+
+{# ── Modal enviar informe ─────────────────────────────────────────────────── #}
+{% if solicitud_informe_activa %}
+<div class="modal fade" id="modalEnviarInforme" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-send me-2"></i>Enviar informe de tribunales</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Al confirmar se registrará el informe de tribunales del Departamento de <strong>{{ departamento }}</strong> y se notificará a la Secretaría Académica.</p>
+        <p class="mb-0 text-muted small">Una vez enviado, podrás descargar el PDF desde el botón <strong>Informe anual</strong> en la parte superior del dashboard.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <form id="formEnviarInforme" method="post" action="{% url 'planes:enviar_informe_tribunales' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-success btn-sm">
+            <i class="bi bi-send me-1"></i>Confirmar y enviar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const form = document.getElementById('formEnviarInforme');
+  if (!form) return;
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const btn = form.querySelector('[type=submit]');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando…';
+    try {
+      const resp = await fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        const modalEl = document.getElementById('modalEnviarInforme');
+        modalEl.addEventListener('hidden.bs.modal', () => location.reload(), { once: true });
+        bootstrap.Modal.getInstance(modalEl).hide();
+      } else {
+        alert(data.error || 'Error al enviar el informe.');
+        btn.disabled = false;
+        btn.innerHTML = original;
+      }
+    } catch {
+      alert('Error de conexión. Intentá de nuevo.');
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+  });
+})();
+</script>
+{% endblock %}

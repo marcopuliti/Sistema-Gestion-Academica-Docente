@@ -25,10 +25,111 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header d-flex justify-content-between align-items-center">
-  <h2><i class="bi bi-people me-2"></i>Tribunales Examinadores — Dpto. {{ departamento }}</h2>
-  <span class="text-muted small">{{ page_obj.paginator.count }} materia{{ page_obj.paginator.count|pluralize:"s" }} en plan</span>
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h2><i class="bi bi-people me-2"></i>Tribunales Examinadores — Dpto. {{ departamento }}</h2>
+    <span class="text-muted small">{{ page_obj.paginator.count }} materia{{ page_obj.paginator.count|pluralize:"s" }}</span>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if pendientes_count %}
+    <a href="{% url 'planes:generar_pdf_modificaciones' %}" class="btn btn-outline-warning">
+      <i class="bi bi-file-earmark-diff me-1"></i>PDF modificaciones
+      <span class="badge bg-warning text-dark ms-1">{{ pendientes_count }}</span>
+    </a>
+    {% endif %}
+    {% if informe_enviado %}
+    <a href="{% url 'planes:descargar_informe_tribunales' %}" class="btn btn-outline-primary">
+      <i class="bi bi-file-earmark-pdf me-1"></i>Informe anual {{ informe_enviado.ano }}
+    </a>
+    {% endif %}
+    {% if solicitud_activa %}
+    <button type="button" class="btn btn-success"
+            data-bs-toggle="modal" data-bs-target="#modalEnviarInforme">
+      <i class="bi bi-send me-2"></i>Enviar informe de tribunales
+    </button>
+    {% endif %}
+  </div>
 </div>
+
+{# ── Barra de búsqueda y filtros ──────────────────────────────────────────── #}
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-5">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" name="q" class="form-control" placeholder="Buscar por nombre o código de materia…" value="{{ q }}">
+          {% if q %}<button type="button" class="btn btn-outline-secondary" onclick="this.form.q.value='';this.form.submit()"><i class="bi bi-x"></i></button>{% endif %}
+        </div>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Buscar</button>
+      </div>
+      <input type="hidden" name="filtro" value="{{ filtro }}">
+    </form>
+  </div>
+</div>
+
+<div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+  <span class="text-muted small me-1">Filtrar:</span>
+  <a href="?{% if q %}q={{ q }}&{% endif %}"
+     class="btn btn-sm {% if not filtro %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+    Todos
+  </a>
+  <a href="?{% if q %}q={{ q }}&{% endif %}filtro=incompletos"
+     class="btn btn-sm {% if filtro == 'incompletos' %}btn-warning text-dark{% else %}btn-outline-warning{% endif %}">
+    Incompletos
+    {% if incompletos_count %}<span class="badge {% if filtro == 'incompletos' %}bg-dark{% else %}bg-warning text-dark{% endif %} ms-1">{{ incompletos_count }}</span>{% endif %}
+  </a>
+  <a href="?{% if q %}q={{ q }}&{% endif %}filtro=pendientes"
+     class="btn btn-sm {% if filtro == 'pendientes' %}btn-info text-dark{% else %}btn-outline-info{% endif %}">
+    Pendientes sinc.
+    {% if pendientes_count %}<span class="badge bg-white text-dark ms-1">{{ pendientes_count }}</span>{% endif %}
+  </a>
+</div>
+
+{% if solicitud_activa %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
+  <i class="bi bi-megaphone-fill fs-5"></i>
+  <div>
+    <strong>Solicitud de informe anual activa.</strong>
+    Revisá los tribunales de tu departamento, realizá los cambios necesarios y luego enviá el informe usando el botón superior. Se generará un PDF con el listado completo para elevar a la Secretaría Académica.
+  </div>
+</div>
+
+<div class="modal fade" id="modalEnviarInforme" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-send me-2"></i>Enviar informe de tribunales</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Al confirmar se registrará el informe de tribunales del Departamento de <strong>{{ departamento }}</strong> y se notificará a la Secretaría Académica.</p>
+        <p class="mb-0 text-muted small">Una vez enviado, podrás descargar el PDF con el botón <strong>Informe anual</strong> que aparecerá en la parte superior.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <form id="formEnviarInforme" method="post" action="{% url 'planes:enviar_informe_tribunales' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-success btn-sm">
+            <i class="bi bi-send me-1"></i>Confirmar y enviar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% elif informe_enviado %}
+<div class="alert alert-success d-flex align-items-center gap-2 mb-3" role="alert">
+  <i class="bi bi-check-circle-fill fs-5"></i>
+  <div>
+    <strong>Informe anual {{ informe_enviado.ano }} enviado.</strong>
+    El informe de tribunales fue enviado a la Secretaría Académica el {{ informe_enviado.fecha_envio|date:"d/m/Y" }}.
+    Podés descargarlo usando el botón superior.
+  </div>
+</div>
+{% endif %}
 
 {% if page_obj.object_list %}
 
@@ -233,4 +334,41 @@
   <i class="bi bi-info-circle me-2"></i>No hay materias en planes del departamento <strong>{{ departamento }}</strong>.
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const form = document.getElementById('formEnviarInforme');
+  if (!form) return;
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const btn = form.querySelector('[type=submit]');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando…';
+    try {
+      const resp = await fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        const modalEl = document.getElementById('modalEnviarInforme');
+        modalEl.addEventListener('hidden.bs.modal', () => location.reload(), { once: true });
+        bootstrap.Modal.getInstance(modalEl).hide();
+      } else {
+        alert(data.error || 'Error al enviar el informe.');
+        btn.disabled = false;
+        btn.innerHTML = original;
+      }
+    } catch {
+      alert('Error de conexión. Intentá de nuevo.');
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+  });
+})();
+</script>
 {% endblock %}

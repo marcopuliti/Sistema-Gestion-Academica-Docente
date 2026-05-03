@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.html import format_html
-from .models import Carrera, PlanEstudio, Materia, MateriaEnPlan, AnioDictado, Docente, TribunalExaminador, TribunalAdmin, SolicitudInformeTribunal, InformeTribunalesEnviado
+from .models import Carrera, PlanEstudio, Materia, MateriaEnPlan, AnioDictado, Docente, TribunalExaminador, SolicitudInformeTribunal, InformeTribunalesEnviado, SolicitudCambioTribunal, SolicitudCambioItem
 from .management.commands.importar_materias import PlanParser, fetch_html
 
 
@@ -239,16 +239,22 @@ class InformeTribunalesEnviadoAdmin(admin.ModelAdmin):
     ordering = ('-fecha_envio',)
 
 
-@admin.register(TribunalAdmin)
-class TribunalAdminAdmin(admin.ModelAdmin):
-    list_display = ('materia_en_plan', 'presidente_nombre', 'vocal_1_nombre', 'vocal_2_nombre', 'dia_semana', 'hora', 'ultima_sincronizacion')
-    list_filter = ('permite_libres', 'materia_en_plan__plan__carrera', 'materia_en_plan__ano')
-    search_fields = ('materia_en_plan__materia__nombre', 'presidente_nombre', 'vocal_1_nombre', 'vocal_2_nombre')
-    ordering = ('materia_en_plan__plan__carrera__nombre', 'materia_en_plan__plan__codigo', 'materia_en_plan__ano')
-    readonly_fields = ('ultima_sincronizacion',)
+class SolicitudCambioItemInline(admin.TabularInline):
+    model = SolicitudCambioItem
+    extra = 0
+    can_delete = False
+    fields = ('tribunal', 'presidente_nombre', 'vocal_1_nombre', 'vocal_2_nombre', 'dia_semana', 'hora', 'permite_libres')
+    readonly_fields = ('tribunal',)
 
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related(
-            'materia_en_plan__materia',
-            'materia_en_plan__plan__carrera',
-        )
+
+@admin.register(SolicitudCambioTribunal)
+class SolicitudCambioTribunalAdmin(admin.ModelAdmin):
+    list_display = ('fecha_creacion', 'departamento', 'director', 'estado', 'cantidad_items')
+    list_filter = ('departamento', 'estado')
+    readonly_fields = ('fecha_creacion', 'fecha_envio', 'director', 'departamento', 'estado')
+    ordering = ('-fecha_creacion',)
+    inlines = [SolicitudCambioItemInline]
+
+    @admin.display(description='Items')
+    def cantidad_items(self, obj):
+        return obj.items.count()

@@ -21,6 +21,7 @@
   .docente-label { font-size: .75rem; color: #999; text-transform: uppercase; letter-spacing: .04em; }
   .docente-val { font-size: .88rem; font-weight: 500; }
   .sin-tribunal-row { border-left: 3px solid #dc3545; }
+  .con-propuesta-row { border-left: 3px solid #0dcaf0; }
 </style>
 {% endblock %}
 
@@ -31,12 +32,6 @@
     <span class="text-muted small">{{ page_obj.paginator.count }} materia{{ page_obj.paginator.count|pluralize:"s" }}</span>
   </div>
   <div class="d-flex gap-2 flex-wrap">
-    {% if pendientes_count %}
-    <a href="{% url 'planes:generar_pdf_modificaciones' %}" class="btn btn-outline-warning">
-      <i class="bi bi-file-earmark-diff me-1"></i>PDF modificaciones
-      <span class="badge bg-warning text-dark ms-1">{{ pendientes_count }}</span>
-    </a>
-    {% endif %}
     {% if informe_enviado %}
     <a href="{% url 'planes:descargar_informe_tribunales' %}" class="btn btn-outline-primary">
       <i class="bi bi-file-earmark-pdf me-1"></i>Informe anual {{ informe_enviado.ano }}
@@ -50,6 +45,22 @@
     {% endif %}
   </div>
 </div>
+
+{# ── Banner de borrador ───────────────────────────────────────────────────── #}
+{% if borrador_count %}
+<div class="alert alert-info d-flex align-items-center justify-content-between gap-3 mb-3" role="alert">
+  <div class="d-flex align-items-center gap-2">
+    <i class="bi bi-pencil-square fs-5 flex-shrink-0"></i>
+    <div>
+      <strong>{{ borrador_count }} cambio{{ borrador_count|pluralize:"s" }} en borrador.</strong>
+      <span class="ms-1 small">Cuando estés listo, enviá la solicitud para que administración la revise.</span>
+    </div>
+  </div>
+  <button type="button" id="btnEnviarSolicitud" class="btn btn-info btn-sm text-dark text-nowrap flex-shrink-0">
+    <i class="bi bi-send me-1"></i>Enviar solicitud
+  </button>
+</div>
+{% endif %}
 
 {# ── Barra de búsqueda y filtros ──────────────────────────────────────────── #}
 <div class="card mb-3">
@@ -72,19 +83,19 @@
 
 <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
   <span class="text-muted small me-1">Filtrar:</span>
-  <a href="?{% if q %}q={{ q }}&{% endif %}"
+  <a href="?{% if q %}q={{ q }}{% endif %}"
      class="btn btn-sm {% if not filtro %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
     Todos
+  </a>
+  <a href="?{% if q %}q={{ q }}&{% endif %}filtro=sin_registro"
+     class="btn btn-sm {% if filtro == 'sin_registro' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+    Sin registro
+    {% if sin_registro_count %}<span class="badge bg-white text-dark ms-1">{{ sin_registro_count }}</span>{% endif %}
   </a>
   <a href="?{% if q %}q={{ q }}&{% endif %}filtro=incompletos"
      class="btn btn-sm {% if filtro == 'incompletos' %}btn-warning text-dark{% else %}btn-outline-warning{% endif %}">
     Incompletos
     {% if incompletos_count %}<span class="badge {% if filtro == 'incompletos' %}bg-dark{% else %}bg-warning text-dark{% endif %} ms-1">{{ incompletos_count }}</span>{% endif %}
-  </a>
-  <a href="?{% if q %}q={{ q }}&{% endif %}filtro=pendientes"
-     class="btn btn-sm {% if filtro == 'pendientes' %}btn-info text-dark{% else %}btn-outline-info{% endif %}">
-    Pendientes sinc.
-    {% if pendientes_count %}<span class="badge bg-white text-dark ms-1">{{ pendientes_count }}</span>{% endif %}
   </a>
 </div>
 
@@ -93,31 +104,9 @@
   <i class="bi bi-megaphone-fill fs-5"></i>
   <div>
     <strong>Solicitud de informe anual activa.</strong>
-    Revisá los tribunales de tu departamento, realizá los cambios necesarios y luego enviá el informe usando el botón superior. Se generará un PDF con el listado completo para elevar a la Secretaría Académica.
-  </div>
-</div>
-
-<div class="modal fade" id="modalEnviarInforme" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
-        <h5 class="modal-title"><i class="bi bi-send me-2"></i>Enviar informe de tribunales</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <p>Al confirmar se registrará el informe de tribunales del Departamento de <strong>{{ departamento }}</strong> y se notificará a la Secretaría Académica.</p>
-        <p class="mb-0 text-muted small">Una vez enviado, podrás descargar el PDF con el botón <strong>Informe anual</strong> que aparecerá en la parte superior.</p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-        <form id="formEnviarInforme" method="post" action="{% url 'planes:enviar_informe_tribunales' %}">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-success btn-sm">
-            <i class="bi bi-send me-1"></i>Confirmar y enviar
-          </button>
-        </form>
-      </div>
-    </div>
+    Revisá los tribunales de tu departamento. Si hay cambios, proponelos usando el botón
+    <strong>Proponer cambio</strong> en cada tribunal; luego enviá la solicitud de cambio.
+    Cuando estés listo, enviá el informe usando el botón superior.
   </div>
 </div>
 {% elif informe_enviado %}
@@ -125,8 +114,7 @@
   <i class="bi bi-check-circle-fill fs-5"></i>
   <div>
     <strong>Informe anual {{ informe_enviado.ano }} enviado.</strong>
-    El informe de tribunales fue enviado a la Secretaría Académica el {{ informe_enviado.fecha_envio|date:"d/m/Y" }}.
-    Podés descargarlo usando el botón superior.
+    Enviado el {{ informe_enviado.fecha_envio|date:"d/m/Y" }}. Podés descargarlo usando el botón superior.
   </div>
 </div>
 {% endif %}
@@ -136,7 +124,6 @@
 {% regroup page_obj by materia.codigo as grupos %}
 
 {% for grupo in grupos %}
-{% with group_size=grupo.list|length %}
 <div class="materia-group">
   <div class="materia-group-header">
     <strong>{{ grupo.list.0.materia.nombre }}</strong>
@@ -145,7 +132,7 @@
 
   {% for mep in grupo.list %}
   {% with t=mep.tribunal_obj %}
-  <div class="tribunal-row px-3 py-3 {% if not t %}sin-tribunal-row{% endif %}">
+  <div class="tribunal-row px-3 py-3 {% if not t %}sin-tribunal-row{% elif mep.tribunal_tiene_propuesta %}con-propuesta-row{% endif %}">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
       <div class="plan-info">
         {{ mep.plan.carrera.nombre }} &middot; Plan {{ mep.plan.codigo }}
@@ -158,22 +145,26 @@
         {% if not t %}
           <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Sin tribunal</span>
         {% else %}
-          {% if t.pendiente_sincronizacion %}
-          <span class="badge bg-warning text-dark">
-            <i class="bi bi-clock me-1"></i>Pendiente de sincronización
+          {% if mep.tribunal_tiene_propuesta %}
+          <span class="badge bg-info text-dark">
+            <i class="bi bi-pencil me-1"></i>Cambio propuesto
           </span>
           {% endif %}
-          {% if group_size > 1 and t.presidente_nombre %}
-          <form method="post" action="{% url 'planes:copiar_tribunal' t.pk %}" class="d-inline"
-            onsubmit="return confirm('¿Copiar este tribunal a los otros {{ group_size|add:'-1' }} plan{{ group_size|add:'-1'|pluralize:'es' }} de {{ mep.materia.nombre }}?')">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-sm btn-outline-secondary">
-              <i class="bi bi-copy me-1"></i>Copiar a todos
-            </button>
-          </form>
-          {% endif %}
-          <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modal-{{ t.pk }}">
-            <i class="bi bi-pencil me-1"></i>Modificar
+          <button class="btn btn-sm btn-outline-primary"
+                  data-bs-toggle="modal" data-bs-target="#modalProponerCambio"
+                  data-pk="{{ t.pk }}"
+                  data-materia="{{ mep.materia.nombre }}"
+                  data-plan="{{ mep.plan.carrera.nombre }} · Plan {{ mep.plan.codigo }} · {{ mep.ano }}° año · {{ mep.get_cuatrimestre_display }}"
+                  data-presidente-nombre="{{ t.presidente_nombre }}"
+                  data-presidente-dni="{{ t.presidente_dni }}"
+                  data-vocal1-nombre="{{ t.vocal_1_nombre }}"
+                  data-vocal1-dni="{{ t.vocal_1_dni }}"
+                  data-vocal2-nombre="{{ t.vocal_2_nombre }}"
+                  data-vocal2-dni="{{ t.vocal_2_dni }}"
+                  data-dia-semana="{{ t.dia_semana|default:'' }}"
+                  data-hora="{% if t.hora %}{{ t.hora|time:'H:i' }}{% endif %}"
+                  data-permite-libres="{{ t.permite_libres|yesno:'true,false' }}">
+            <i class="bi bi-pencil me-1"></i>Proponer cambio
           </button>
         {% endif %}
       </div>
@@ -221,109 +212,32 @@
     </p>
     {% endif %}
   </div>
-
-  {% if t %}
-  <div class="modal fade" id="modal-{{ t.pk }}" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <form method="post" action="{% url 'planes:modificar_tribunal' t.pk %}">
-          {% csrf_token %}
-          <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
-            <h5 class="modal-title">Modificar tribunal — {{ mep.materia.nombre }}</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            <p class="text-muted small mb-3">
-              <strong>{{ mep.plan.carrera.nombre }}</strong> &middot; Plan {{ mep.plan.codigo }}
-              &middot; {{ mep.ano }}° año &middot; {{ mep.get_cuatrimestre_display }}
-            </p>
-            <div class="row g-3">
-              <div class="col-md-8">
-                <label class="form-label fw-semibold small">Presidente — Nombre completo</label>
-                <input type="text" name="presidente_nombre" class="form-control form-control-sm"
-                  value="{{ t.presidente_nombre }}">
-              </div>
-              <div class="col-md-4">
-                <label class="form-label fw-semibold small">Presidente — DNI</label>
-                <input type="text" name="presidente_dni" class="form-control form-control-sm"
-                  value="{{ t.presidente_dni }}">
-              </div>
-              <div class="col-md-8">
-                <label class="form-label fw-semibold small">1er. Vocal — Nombre completo</label>
-                <input type="text" name="vocal_1_nombre" class="form-control form-control-sm"
-                  value="{{ t.vocal_1_nombre }}">
-              </div>
-              <div class="col-md-4">
-                <label class="form-label fw-semibold small">1er. Vocal — DNI</label>
-                <input type="text" name="vocal_1_dni" class="form-control form-control-sm"
-                  value="{{ t.vocal_1_dni }}">
-              </div>
-              <div class="col-md-8">
-                <label class="form-label fw-semibold small">2do. Vocal — Nombre completo</label>
-                <input type="text" name="vocal_2_nombre" class="form-control form-control-sm"
-                  value="{{ t.vocal_2_nombre }}">
-              </div>
-              <div class="col-md-4">
-                <label class="form-label fw-semibold small">2do. Vocal — DNI</label>
-                <input type="text" name="vocal_2_dni" class="form-control form-control-sm"
-                  value="{{ t.vocal_2_dni }}">
-              </div>
-              <div class="col-md-4">
-                <label class="form-label fw-semibold small">Día de la semana</label>
-                <select name="dia_semana" class="form-select form-select-sm">
-                  <option value="">— Seleccionar —</option>
-                  <option value="1" {% if t.dia_semana == 1 %}selected{% endif %}>Lunes</option>
-                  <option value="2" {% if t.dia_semana == 2 %}selected{% endif %}>Martes</option>
-                  <option value="3" {% if t.dia_semana == 3 %}selected{% endif %}>Miércoles</option>
-                  <option value="4" {% if t.dia_semana == 4 %}selected{% endif %}>Jueves</option>
-                  <option value="5" {% if t.dia_semana == 5 %}selected{% endif %}>Viernes</option>
-                </select>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label fw-semibold small">Hora del examen</label>
-                <input type="time" name="hora" class="form-control form-control-sm"
-                  value="{% if t.hora %}{{ t.hora|time:'H:i' }}{% endif %}">
-              </div>
-              <div class="col-md-4 d-flex align-items-end pb-1">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" name="permite_libres" id="pl_{{ t.pk }}"
-                    {% if t.permite_libres %}checked{% endif %}>
-                  <label class="form-check-label" for="pl_{{ t.pk }}">Pueden rendir libres</label>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-            <button type="submit" class="btn btn-primary btn-sm">
-              <i class="bi bi-check-lg me-1"></i>Guardar cambio
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-  {% endif %}
-
   {% endwith %}
   {% endfor %}
 </div>
-{% endwith %}
 {% endfor %}
 
 {% if page_obj.has_other_pages %}
 <nav class="mt-3">
   <ul class="pagination justify-content-center">
     {% if page_obj.has_previous %}
-    <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}"><i class="bi bi-chevron-left"></i></a></li>
+    <li class="page-item">
+      <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if filtro %}&filtro={{ filtro }}{% endif %}">
+        <i class="bi bi-chevron-left"></i>
+      </a>
+    </li>
     {% endif %}
     {% for num in page_obj.paginator.page_range %}
     <li class="page-item {% if page_obj.number == num %}active{% endif %}">
-      <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+      <a class="page-link" href="?page={{ num }}{% if q %}&q={{ q }}{% endif %}{% if filtro %}&filtro={{ filtro }}{% endif %}">{{ num }}</a>
     </li>
     {% endfor %}
     {% if page_obj.has_next %}
-    <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}"><i class="bi bi-chevron-right"></i></a></li>
+    <li class="page-item">
+      <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if filtro %}&filtro={{ filtro }}{% endif %}">
+        <i class="bi bi-chevron-right"></i>
+      </a>
+    </li>
     {% endif %}
   </ul>
 </nav>
@@ -334,41 +248,239 @@
   <i class="bi bi-info-circle me-2"></i>No hay materias en planes del departamento <strong>{{ departamento }}</strong>.
 </div>
 {% endif %}
+
+{# ── Historial de solicitudes de cambio ───────────────────────────────────── #}
+{% if solicitudes_cambio %}
+<div class="card mt-4">
+  <div class="card-header d-flex align-items-center gap-2">
+    <i class="bi bi-clock-history"></i>
+    <span>Solicitudes de cambio anteriores</span>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for s in solicitudes_cambio %}
+    <div class="list-group-item d-flex justify-content-between align-items-center">
+      <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <div class="fw-semibold small">Solicitud del {{ s.fecha_creacion|date:"d/m/Y H:i" }}</div>
+          {% if s.estado == 'enviada' %}
+          <span class="badge bg-info text-dark" style="font-size:.7rem">Enviada</span>
+          {% elif s.estado == 'aplicada' %}
+          <span class="badge bg-success" style="font-size:.7rem">Aplicada</span>
+          {% endif %}
+        </div>
+        <div class="text-muted" style="font-size:.8rem">{{ s.items.count }} tribunal{{ s.items.count|pluralize:"es" }} incluido{{ s.items.count|pluralize:"s" }}</div>
+      </div>
+      <a href="{% url 'planes:descargar_solicitud_cambio' s.pk %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-file-earmark-pdf me-1"></i>Descargar PDF
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Modal proponer cambio (compartido) ───────────────────────────────────── #}
+<div class="modal fade" id="modalProponerCambio" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form id="formProponerCambio" method="post">
+        {% csrf_token %}
+        <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
+          <h5 class="modal-title" id="modalProponerCambioTitulo">Proponer cambio de tribunal</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3" id="modalProponerCambioPlan"></p>
+          <div class="alert alert-info py-2 small mb-3">
+            <i class="bi bi-info-circle me-1"></i>
+            Los cambios quedan en <strong>borrador</strong> hasta que envíes la solicitud. Podés acumular cambios de varios tribunales antes de enviar.
+          </div>
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label fw-semibold small">Presidente — Nombre completo</label>
+              <input type="text" name="presidente_nombre" id="mpPresidenteNombre" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">Presidente — DNI</label>
+              <input type="text" name="presidente_dni" id="mpPresidenteDni" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold small">1er. Vocal — Nombre completo</label>
+              <input type="text" name="vocal_1_nombre" id="mpVocal1Nombre" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">1er. Vocal — DNI</label>
+              <input type="text" name="vocal_1_dni" id="mpVocal1Dni" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold small">2do. Vocal — Nombre completo</label>
+              <input type="text" name="vocal_2_nombre" id="mpVocal2Nombre" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">2do. Vocal — DNI</label>
+              <input type="text" name="vocal_2_dni" id="mpVocal2Dni" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">Día de la semana</label>
+              <select name="dia_semana" id="mpDiaSemana" class="form-select form-select-sm">
+                <option value="">— Seleccionar —</option>
+                <option value="1">Lunes</option>
+                <option value="2">Martes</option>
+                <option value="3">Miércoles</option>
+                <option value="4">Jueves</option>
+                <option value="5">Viernes</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">Hora del examen</label>
+              <input type="time" name="hora" id="mpHora" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-4 d-flex align-items-end pb-1">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="permite_libres" id="mpPermiteLibres">
+                <label class="form-check-label" for="mpPermiteLibres">Pueden rendir libres</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg me-1"></i>Guardar propuesta
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# ── Modal enviar informe anual ───────────────────────────────────────────── #}
+{% if solicitud_activa %}
+<div class="modal fade" id="modalEnviarInforme" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-send me-2"></i>Enviar informe de tribunales</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Al confirmar se registrará el informe de tribunales del Departamento de <strong>{{ departamento }}</strong> y se notificará a la Secretaría Académica.</p>
+        <p class="mb-0 text-muted small">Una vez enviado, podrás descargar el PDF con el botón <strong>Informe anual</strong> que aparecerá en la parte superior.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <form id="formEnviarInforme" method="post" action="{% url 'planes:enviar_informe_tribunales' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-success btn-sm">
+            <i class="bi bi-send me-1"></i>Confirmar y enviar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (function () {
-  const form = document.getElementById('formEnviarInforme');
-  if (!form) return;
-  form.addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const btn = form.querySelector('[type=submit]');
-    const original = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando…';
-    try {
-      const resp = await fetch(form.action, {
-        method: 'POST',
-        body: new FormData(form),
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-      });
-      const data = await resp.json();
-      if (data.ok) {
-        const modalEl = document.getElementById('modalEnviarInforme');
-        modalEl.addEventListener('hidden.bs.modal', () => location.reload(), { once: true });
-        bootstrap.Modal.getInstance(modalEl).hide();
-      } else {
-        alert(data.error || 'Error al enviar el informe.');
+  const URL_TEMPLATE = '{% url "planes:proponer_cambio_tribunal" 0 %}';
+
+  // ── Shared proponer-cambio modal ──────────────────────────────────────────
+  const modalEl = document.getElementById('modalProponerCambio');
+  if (modalEl) {
+    modalEl.addEventListener('show.bs.modal', function (event) {
+      const btn = event.relatedTarget;
+      const pk   = btn.dataset.pk;
+      const form = document.getElementById('formProponerCambio');
+      form.action = URL_TEMPLATE.replace('/0/', '/' + pk + '/');
+
+      document.getElementById('modalProponerCambioTitulo').textContent =
+        'Proponer cambio — ' + btn.dataset.materia;
+      document.getElementById('modalProponerCambioPlan').textContent =
+        btn.dataset.plan;
+
+      document.getElementById('mpPresidenteNombre').value  = btn.dataset.presidenteNombre || '';
+      document.getElementById('mpPresidenteDni').value     = btn.dataset.presidenteDni    || '';
+      document.getElementById('mpVocal1Nombre').value      = btn.dataset.vocal1Nombre     || '';
+      document.getElementById('mpVocal1Dni').value         = btn.dataset.vocal1Dni        || '';
+      document.getElementById('mpVocal2Nombre').value      = btn.dataset.vocal2Nombre     || '';
+      document.getElementById('mpVocal2Dni').value         = btn.dataset.vocal2Dni        || '';
+      document.getElementById('mpDiaSemana').value         = btn.dataset.diaSemana        || '';
+      document.getElementById('mpHora').value              = btn.dataset.hora             || '';
+      document.getElementById('mpPermiteLibres').checked   = btn.dataset.permiteLibres === 'true';
+    });
+  }
+
+  // ── Enviar solicitud de cambio (AJAX) ─────────────────────────────────────
+  const btnEnviar = document.getElementById('btnEnviarSolicitud');
+  if (btnEnviar) {
+    btnEnviar.addEventListener('click', async function () {
+      if (!confirm('¿Enviar la solicitud de cambio a administración?')) return;
+      const original = btnEnviar.innerHTML;
+      btnEnviar.disabled = true;
+      btnEnviar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando…';
+      try {
+        const resp = await fetch('{% url "planes:enviar_solicitud_cambio" %}', {
+          method: 'POST',
+          body: new FormData(document.querySelector('[name=csrfmiddlewaretoken]').closest('form') ||
+                             (() => { const f = document.createElement('form'); return f; })()),
+          headers: {
+            'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          window.location.href = data.download_url;
+          setTimeout(() => location.reload(), 500);
+        } else {
+          alert(data.error || 'Error al enviar la solicitud.');
+          btnEnviar.disabled = false;
+          btnEnviar.innerHTML = original;
+        }
+      } catch {
+        alert('Error de conexión. Intentá de nuevo.');
+        btnEnviar.disabled = false;
+        btnEnviar.innerHTML = original;
+      }
+    });
+  }
+
+  // ── Enviar informe anual (AJAX) ───────────────────────────────────────────
+  const formInforme = document.getElementById('formEnviarInforme');
+  if (formInforme) {
+    formInforme.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const btn = formInforme.querySelector('[type=submit]');
+      const original = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando…';
+      try {
+        const resp = await fetch(formInforme.action, {
+          method: 'POST',
+          body: new FormData(formInforme),
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          const modalInfEl = document.getElementById('modalEnviarInforme');
+          modalInfEl.addEventListener('hidden.bs.modal', () => location.reload(), { once: true });
+          bootstrap.Modal.getInstance(modalInfEl).hide();
+        } else {
+          alert(data.error || 'Error al enviar el informe.');
+          btn.disabled = false;
+          btn.innerHTML = original;
+        }
+      } catch {
+        alert('Error de conexión. Intentá de nuevo.');
         btn.disabled = false;
         btn.innerHTML = original;
       }
-    } catch {
-      alert('Error de conexión. Intentá de nuevo.');
-      btn.disabled = false;
-      btn.innerHTML = original;
-    }
-  });
+    });
+  }
 })();
 </script>
 {% endblock %}

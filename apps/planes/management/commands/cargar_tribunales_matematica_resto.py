@@ -1,15 +1,12 @@
 """
 Carga los tribunales examinadores del Departamento de Matemática
 correspondientes a los días Martes, Miércoles, Jueves y Viernes.
-
-pendiente_sincronizacion queda en False (ya sincronizado).
 """
 import datetime
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
-from apps.planes.models import MateriaEnPlan, TribunalExaminador, TribunalAdmin
+from apps.planes.models import MateriaEnPlan, TribunalExaminador
 
 LUNES     = 1
 MARTES    = 2
@@ -125,21 +122,17 @@ MAT_APLICADA_POR_PLAN = {
 }
 
 
-def _aplicar_tribunal(t_dir, t_adm, pn, pd, v1n, v1d, v2n, v2d, dia, hora, libres):
-    for obj in (t_dir, t_adm):
-        obj.presidente_nombre = pn
-        obj.presidente_dni = pd
-        obj.vocal_1_nombre = v1n
-        obj.vocal_1_dni = v1d
-        obj.vocal_2_nombre = v2n
-        obj.vocal_2_dni = v2d
-        obj.dia_semana = dia
-        obj.hora = hora
-        obj.permite_libres = libres
-    t_dir.pendiente_sincronizacion = False
-    t_adm.ultima_sincronizacion = timezone.now()
-    t_dir.save()
-    t_adm.save()
+def _aplicar_tribunal(t, pn, pd, v1n, v1d, v2n, v2d, dia, hora, libres):
+    t.presidente_nombre = pn
+    t.presidente_dni = pd
+    t.vocal_1_nombre = v1n
+    t.vocal_1_dni = v1d
+    t.vocal_2_nombre = v2n
+    t.vocal_2_dni = v2d
+    t.dia_semana = dia
+    t.hora = hora
+    t.permite_libres = libres
+    t.save()
 
 
 class Command(BaseCommand):
@@ -175,9 +168,8 @@ class Command(BaseCommand):
                 if dry:
                     self.stdout.write(f'  [dry] {label}')
                     continue
-                t_dir, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
-                t_adm, _ = TribunalAdmin.objects.get_or_create(materia_en_plan=mep)
-                _aplicar_tribunal(t_dir, t_adm, pn, pd, v1n, v1d, v2n, v2d, dia, hora, libres)
+                t, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
+                _aplicar_tribunal(t, pn, pd, v1n, v1d, v2n, v2d, dia, hora, libres)
                 actualizados += 1
                 self.stdout.write(f'  OK  {label}')
 
@@ -197,9 +189,8 @@ class Command(BaseCommand):
             if dry:
                 self.stdout.write(f'  [dry] {label}')
                 continue
-            t_dir, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
-            t_adm, _ = TribunalAdmin.objects.get_or_create(materia_en_plan=mep)
-            _aplicar_tribunal(t_dir, t_adm, pn, pd, v1n, v1d, v2n, v2d, MARTES, H8, True)
+            t, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
+            _aplicar_tribunal(t, pn, pd, v1n, v1d, v2n, v2d, MARTES, H8, True)
             actualizados += 1
             self.stdout.write(f'  OK  {label}')
 
@@ -219,9 +210,8 @@ class Command(BaseCommand):
             if dry:
                 self.stdout.write(f'  [dry] {label}')
                 continue
-            t_dir, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
-            t_adm, _ = TribunalAdmin.objects.get_or_create(materia_en_plan=mep)
-            _aplicar_tribunal(t_dir, t_adm, pn, pd, v1n, v1d, v2n, v2d, MARTES, H8, True)
+            t, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
+            _aplicar_tribunal(t, pn, pd, v1n, v1d, v2n, v2d, MARTES, H8, True)
             actualizados += 1
             self.stdout.write(f'  OK  {label}')
 
@@ -241,9 +231,8 @@ class Command(BaseCommand):
             if dry:
                 self.stdout.write(f'  [dry] {label}')
                 continue
-            t_dir, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
-            t_adm, _ = TribunalAdmin.objects.get_or_create(materia_en_plan=mep)
-            _aplicar_tribunal(t_dir, t_adm, pn, pd, v1n, v1d, v2n, v2d, MIERCOLES, H8, True)
+            t, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
+            _aplicar_tribunal(t, pn, pd, v1n, v1d, v2n, v2d, MIERCOLES, H8, True)
             actualizados += 1
             self.stdout.write(f'  OK  {label}')
 
@@ -263,9 +252,8 @@ class Command(BaseCommand):
             if dry:
                 self.stdout.write(f'  [dry] {label}')
                 continue
-            t_dir, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
-            t_adm, _ = TribunalAdmin.objects.get_or_create(materia_en_plan=mep)
-            _aplicar_tribunal(t_dir, t_adm, pn, pd, v1n, v1d, v2n, v2d, MIERCOLES, H8, True)
+            t, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
+            _aplicar_tribunal(t, pn, pd, v1n, v1d, v2n, v2d, MIERCOLES, H8, True)
             actualizados += 1
             self.stdout.write(f'  OK  {label}')
 
@@ -285,9 +273,8 @@ class Command(BaseCommand):
             if dry:
                 self.stdout.write(f'  [dry] {label}')
                 continue
-            t_dir, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
-            t_adm, _ = TribunalAdmin.objects.get_or_create(materia_en_plan=mep)
-            _aplicar_tribunal(t_dir, t_adm, pn, pd, v1n, v1d, v2n, v2d, MIERCOLES, H8, True)
+            t, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
+            _aplicar_tribunal(t, pn, pd, v1n, v1d, v2n, v2d, MIERCOLES, H8, True)
             actualizados += 1
             self.stdout.write(f'  OK  {label}')
 
@@ -307,9 +294,8 @@ class Command(BaseCommand):
             if dry:
                 self.stdout.write(f'  [dry] {label}')
                 continue
-            t_dir, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
-            t_adm, _ = TribunalAdmin.objects.get_or_create(materia_en_plan=mep)
-            _aplicar_tribunal(t_dir, t_adm, pn, pd, v1n, v1d, v2n, v2d, dia, H8, True)
+            t, _ = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
+            _aplicar_tribunal(t, pn, pd, v1n, v1d, v2n, v2d, dia, H8, True)
             actualizados += 1
             self.stdout.write(f'  OK  {label}')
 

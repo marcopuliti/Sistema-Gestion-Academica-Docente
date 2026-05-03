@@ -228,16 +228,18 @@ def generar_pdf_informe_tribunales(director, admin, meps, dir_map, adm_map):
     return _build_pdf(director, admin, meps, dir_map, adm_map, cuerpo, titulo)
 
 
-def generar_pdf_modificaciones_tribunales(director, admin, meps, dir_map, adm_map):
+def generar_pdf_solicitud_cambio(director, admin, meps, item_map, current_map):
+    """PDF de solicitud de cambio: item_map contiene los valores propuestos,
+    current_map contiene el TribunalExaminador actual (baseline para diffs)."""
     hoy = datetime.date.today()
-    n = len([m for m in meps if dir_map.get(m.id)])
+    n = len([m for m in meps if item_map.get(m.id)])
     cuerpo = (
-        f"Me dirijo a Ud., y por su intermedio a quien corresponda, para informar "
-        f"las modificaciones realizadas a {n} Tribunal{'es' if n != 1 else ''} "
+        f"Me dirijo a Ud., y por su intermedio a quien corresponda, para solicitar "
+        f"la modificación de {n} Tribunal{'es' if n != 1 else ''} "
         f"Examinador{'es' if n != 1 else ''} para mesas de examen del Ciclo Lectivo "
         f"{hoy.year} de las materias del Departamento de {director.departamento}. "
-        f"Las celdas resaltadas en amarillo indican los campos modificados respecto "
-        f"a los datos registrados en el sistema externo."
+        f"Las celdas resaltadas en amarillo indican los campos propuestos a modificar "
+        f"respecto a los valores actuales."
     )
-    titulo = f"Modificaciones a Tribunales Examinadores — Dpto. {director.departamento} — {hoy.year}"
-    return _build_pdf(director, admin, meps, dir_map, adm_map, cuerpo, titulo)
+    titulo = f"Solicitud de Cambio de Tribunales — Dpto. {director.departamento} — {hoy.year}"
+    return _build_pdf(director, admin, meps, item_map, current_map, cuerpo, titulo)

@@ -152,7 +152,6 @@ class Docente(models.Model):
 
 
 class TribunalExaminador(models.Model):
-    """Versión del director: la que se muestra a ambos usuarios."""
     materia_en_plan = models.OneToOneField(
         MateriaEnPlan, on_delete=models.CASCADE,
         related_name='tribunal', verbose_name='Materia en plan',
@@ -171,43 +170,13 @@ class TribunalExaminador(models.Model):
         default=True, verbose_name='Pueden rendir libres',
         help_text='Si está desmarcado, solo pueden rendir alumnos regulares.',
     )
-    pendiente_sincronizacion = models.BooleanField(
-        default=False, verbose_name='Pendiente de sincronización',
-    )
 
     class Meta:
-        verbose_name = 'Tribunal Examinador (Director)'
-        verbose_name_plural = 'Tribunales Examinadores (Director)'
+        verbose_name = 'Tribunal Examinador'
+        verbose_name_plural = 'Tribunales Examinadores'
 
     def __str__(self):
         return f'Tribunal — {self.materia_en_plan}'
-
-
-class TribunalAdmin(models.Model):
-    """Versión de administración: lo que está cargado en el sistema externo."""
-    materia_en_plan = models.OneToOneField(
-        MateriaEnPlan, on_delete=models.CASCADE,
-        related_name='tribunal_admin_obj', verbose_name='Materia en plan',
-    )
-    presidente_nombre = models.CharField(max_length=250, blank=True, verbose_name='Presidente (nombre)')
-    presidente_dni = models.CharField(max_length=15, blank=True, verbose_name='Presidente (DNI)')
-    vocal_1_nombre = models.CharField(max_length=250, blank=True, verbose_name='1er. Vocal (nombre)')
-    vocal_1_dni = models.CharField(max_length=15, blank=True, verbose_name='1er. Vocal (DNI)')
-    vocal_2_nombre = models.CharField(max_length=250, blank=True, verbose_name='2do. Vocal (nombre)')
-    vocal_2_dni = models.CharField(max_length=15, blank=True, verbose_name='2do. Vocal (DNI)')
-    dia_semana = models.PositiveSmallIntegerField(
-        null=True, blank=True, choices=DIA_SEMANA_CHOICES, verbose_name='Día de la semana',
-    )
-    hora = models.TimeField(null=True, blank=True, verbose_name='Hora del examen')
-    permite_libres = models.BooleanField(default=True, verbose_name='Pueden rendir libres')
-    ultima_sincronizacion = models.DateTimeField(null=True, blank=True, verbose_name='Última sincronización')
-
-    class Meta:
-        verbose_name = 'Tribunal (Administración)'
-        verbose_name_plural = 'Tribunales (Administración)'
-
-    def __str__(self):
-        return f'Tribunal Admin — {self.materia_en_plan}'
 
 
 class SolicitudInformeTribunal(models.Model):
@@ -263,3 +232,63 @@ class InformeTribunalesEnviado(models.Model):
     @property
     def ano(self):
         return self.solicitud.fecha.year
+
+
+class SolicitudCambioTribunal(models.Model):
+    ESTADO_CHOICES = [
+        ('borrador', 'Borrador'),
+        ('enviada', 'Enviada'),
+        ('aplicada', 'Aplicada'),
+    ]
+    director = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='solicitudes_cambio_tribunal',
+        verbose_name='Director',
+    )
+    departamento = models.CharField(
+        max_length=50, choices=DEPARTAMENTO_CHOICES, verbose_name='Departamento',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de creación')
+    fecha_envio = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de envío')
+    estado = models.CharField(
+        max_length=20, choices=ESTADO_CHOICES, default='borrador', verbose_name='Estado',
+    )
+
+    class Meta:
+        ordering = ['-fecha_creacion']
+        verbose_name = 'Solicitud de cambio de tribunal'
+        verbose_name_plural = 'Solicitudes de cambio de tribunal'
+
+    def __str__(self):
+        return f'Solicitud cambio — Dpto. {self.departamento} — {self.fecha_creacion:%d/%m/%Y}'
+
+
+class SolicitudCambioItem(models.Model):
+    solicitud = models.ForeignKey(
+        SolicitudCambioTribunal, on_delete=models.CASCADE,
+        related_name='items', verbose_name='Solicitud',
+    )
+    tribunal = models.ForeignKey(
+        TribunalExaminador, on_delete=models.CASCADE,
+        related_name='solicitud_items', verbose_name='Tribunal',
+    )
+    presidente_nombre = models.CharField(max_length=250, blank=True, verbose_name='Presidente (nombre)')
+    presidente_dni = models.CharField(max_length=15, blank=True, verbose_name='Presidente (DNI)')
+    vocal_1_nombre = models.CharField(max_length=250, blank=True, verbose_name='1er. Vocal (nombre)')
+    vocal_1_dni = models.CharField(max_length=15, blank=True, verbose_name='1er. Vocal (DNI)')
+    vocal_2_nombre = models.CharField(max_length=250, blank=True, verbose_name='2do. Vocal (nombre)')
+    vocal_2_dni = models.CharField(max_length=15, blank=True, verbose_name='2do. Vocal (DNI)')
+    dia_semana = models.PositiveSmallIntegerField(
+        null=True, blank=True, choices=DIA_SEMANA_CHOICES, verbose_name='Día de la semana',
+    )
+    hora = models.TimeField(null=True, blank=True, verbose_name='Hora del examen')
+    permite_libres = models.BooleanField(default=True, verbose_name='Pueden rendir libres')
+
+    class Meta:
+        unique_together = [('solicitud', 'tribunal')]
+        verbose_name = 'Item de solicitud de cambio'
+        verbose_name_plural = 'Items de solicitud de cambio'
+
+    def __str__(self):
+        return f'Item — {self.tribunal} en {self.solicitud}'

@@ -114,11 +114,21 @@
             <i class="bi bi-people me-2"></i>Tribunales Examinadores
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link {% block nav_mis_solicitudes_cambio %}{% endblock %}" href="{% url 'planes:mis_solicitudes_cambio' %}">
+            <i class="bi bi-file-earmark-diff me-2"></i>Cambios de tribunal
+          </a>
+        </li>
         {% endif %}
         {% if user.es_administrador %}
         <li class="nav-item">
-          <a class="nav-link {% block nav_comparacion_tribunales %}{% endblock %}" href="{% url 'planes:lista_comparacion_tribunales' %}">
-            <i class="bi bi-person-check me-2"></i>Tribunales
+          <a class="nav-link {% block nav_admin_materias_en_plan %}{% endblock %}" href="{% url 'planes:admin_lista_materias_en_plan' %}">
+            <i class="bi bi-journal-text me-2"></i>Materias en Plan
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% block nav_solicitudes_cambio %}{% endblock %}" href="{% url 'planes:lista_solicitudes_cambio' %}">
+            <i class="bi bi-file-earmark-diff me-2"></i>Cambios de tribunal
           </a>
         </li>
         {% endif %}

@@ -1,0 +1,285 @@
+{% extends 'base.html' %}
+{% block title %}Materias en Plan{% endblock %}
+{% block nav_admin_materias_en_plan %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .estado-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+  <h2><i class="bi bi-journal-text me-2"></i>Materias en Plan</h2>
+  <p class="text-muted mb-0 small">{{ total_count }} materia{{ total_count|pluralize:"s" }} en total (con los filtros aplicados).</p>
+</div>
+
+{# ── Buscador ─────────────────────────────────────────────────────────────── #}
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-3">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" name="q" class="form-control"
+                 placeholder="Buscar por nombre de materia…" value="{{ q }}">
+          {% if q %}<button type="button" class="btn btn-outline-secondary"
+            onclick="this.form.q.value='';this.form.submit()"><i class="bi bi-x"></i></button>{% endif %}
+        </div>
+      </div>
+      <div class="col-md-3">
+        <select name="carrera" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">Todas las carreras</option>
+          {% for pk, nombre in carrera_opciones %}
+          <option value="{{ pk }}" {% if carrera_pk == pk|stringformat:"s" %}selected{% endif %}>{{ nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select name="departamento" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">Todos los departamentos</option>
+          {% for val, label in departamento_opciones %}
+          <option value="{{ val }}" {% if dept == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Buscar</button>
+      </div>
+      {% if q or dept or carrera_pk %}
+      <div class="col-auto">
+        <a href="?{% if filtro %}filtro={{ filtro }}{% endif %}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-x me-1"></i>Limpiar búsqueda
+        </a>
+      </div>
+      {% endif %}
+      <input type="hidden" name="filtro" value="{{ filtro }}">
+    </form>
+  </div>
+</div>
+
+{# ── Filtros ──────────────────────────────────────────────────────────────── #}
+<div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+  <span class="text-muted small me-1">Filtrar:</span>
+  <a href="?{% if q %}q={{ q }}&{% endif %}{% if carrera_pk %}carrera={{ carrera_pk }}&{% endif %}{% if dept %}departamento={{ dept }}&{% endif %}"
+     class="btn btn-sm {% if not filtro %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+    Todos
+    <span class="badge {% if not filtro %}bg-white text-dark{% else %}bg-secondary{% endif %} ms-1">{{ total_count }}</span>
+  </a>
+  <a href="?{% if q %}q={{ q }}&{% endif %}{% if carrera_pk %}carrera={{ carrera_pk }}&{% endif %}{% if dept %}departamento={{ dept }}&{% endif %}filtro=sin_tribunal"
+     class="btn btn-sm {% if filtro == 'sin_tribunal' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+    Sin tribunal
+    {% if sin_tribunal_count %}<span class="badge bg-white text-dark ms-1">{{ sin_tribunal_count }}</span>{% endif %}
+  </a>
+  <a href="?{% if q %}q={{ q }}&{% endif %}{% if carrera_pk %}carrera={{ carrera_pk }}&{% endif %}{% if dept %}departamento={{ dept }}&{% endif %}filtro=incompleto"
+     class="btn btn-sm {% if filtro == 'incompleto' %}btn-warning text-dark{% else %}btn-outline-warning{% endif %}">
+    Tribunal incompleto
+    {% if incompleto_count %}<span class="badge {% if filtro == 'incompleto' %}bg-dark{% else %}bg-warning text-dark{% endif %} ms-1">{{ incompleto_count }}</span>{% endif %}
+  </a>
+  <a href="?{% if q %}q={{ q }}&{% endif %}{% if carrera_pk %}carrera={{ carrera_pk }}&{% endif %}{% if dept %}departamento={{ dept }}&{% endif %}filtro=completo"
+     class="btn btn-sm {% if filtro == 'completo' %}btn-success{% else %}btn-outline-success{% endif %}">
+    Tribunal completo
+    {% if completo_count %}<span class="badge bg-white text-dark ms-1">{{ completo_count }}</span>{% endif %}
+  </a>
+  <a href="?{% if q %}q={{ q }}&{% endif %}{% if carrera_pk %}carrera={{ carrera_pk }}&{% endif %}{% if dept %}departamento={{ dept }}&{% endif %}filtro=optativas"
+     class="btn btn-sm {% if filtro == 'optativas' %}btn-info text-dark{% else %}btn-outline-info{% endif %}">
+    Optativas / Electivas
+    {% if optativa_count %}<span class="badge bg-white text-dark ms-1">{{ optativa_count }}</span>{% endif %}
+  </a>
+</div>
+
+{% if page_obj.object_list %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover table-sm mb-0">
+      <thead>
+        <tr>
+          <th>Materia</th>
+          <th>Carrera / Plan</th>
+          <th class="text-center">Año</th>
+          <th>Cuatrimestre</th>
+          <th>Departamento</th>
+          <th class="text-center">Tipo</th>
+          <th class="text-center">Tribunal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for mep in page_obj %}
+        <tr>
+          <td>
+            <div class="fw-semibold" style="font-size:.9rem">{{ mep.materia.nombre }}</div>
+            <div class="text-muted" style="font-size:.78rem">{{ mep.materia.codigo }}</div>
+          </td>
+          <td>
+            <div style="font-size:.88rem">{{ mep.plan.carrera.nombre }}</div>
+            <div class="text-muted" style="font-size:.78rem">Plan {{ mep.plan.codigo }}</div>
+          </td>
+          <td class="text-center">{{ mep.ano }}°</td>
+          <td style="font-size:.88rem">{{ mep.get_cuatrimestre_display }}</td>
+          <td style="font-size:.85rem">
+            {% if mep.es_servicio %}
+              <span class="text-muted">{{ mep.departamento_dictante|default:"—" }}</span>
+            {% else %}
+              {{ mep.plan.carrera.departamento|default:"—" }}
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if mep.es_optativa %}
+              <span class="badge bg-info text-dark" style="font-size:.7rem">Optativa</span>
+            {% elif mep.es_servicio %}
+              <span class="badge bg-secondary" style="font-size:.7rem">Servicio</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if mep.es_optativa %}
+              <span class="text-muted small fst-italic">N/A</span>
+            {% elif not mep.tribunal_obj %}
+              <form method="post" action="{% url 'planes:admin_crear_tribunal' mep.pk %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="Crear tribunal vacío">
+                  <i class="bi bi-plus-circle me-1"></i>Crear tribunal
+                </button>
+              </form>
+            {% elif not mep.tribunal_obj.presidente_nombre %}
+              <button type="button" class="btn btn-sm btn-warning text-dark btn-ver-tribunal"
+                data-materia="{{ mep.materia.nombre }}"
+                data-plan="Plan {{ mep.plan.codigo }} — {{ mep.plan.carrera.nombre }}"
+                data-presidente=""
+                data-presidente-dni=""
+                data-vocal1="{{ mep.tribunal_obj.vocal_1_nombre }}"
+                data-vocal1-dni="{{ mep.tribunal_obj.vocal_1_dni }}"
+                data-vocal2="{{ mep.tribunal_obj.vocal_2_nombre }}"
+                data-vocal2-dni="{{ mep.tribunal_obj.vocal_2_dni }}"
+                data-dia="{{ mep.tribunal_obj.get_dia_semana_display|default:'' }}"
+                data-hora="{{ mep.tribunal_obj.hora|time:'H:i'|default:'' }}"
+                data-libres="{% if mep.tribunal_obj.permite_libres %}Sí{% else %}No{% endif %}"
+                data-bs-toggle="modal" data-bs-target="#modalTribunal">
+                <i class="bi bi-eye me-1"></i>Incompleto
+              </button>
+            {% else %}
+              <button type="button" class="btn btn-sm btn-success btn-ver-tribunal"
+                data-materia="{{ mep.materia.nombre }}"
+                data-plan="Plan {{ mep.plan.codigo }} — {{ mep.plan.carrera.nombre }}"
+                data-presidente="{{ mep.tribunal_obj.presidente_nombre }}"
+                data-presidente-dni="{{ mep.tribunal_obj.presidente_dni }}"
+                data-vocal1="{{ mep.tribunal_obj.vocal_1_nombre }}"
+                data-vocal1-dni="{{ mep.tribunal_obj.vocal_1_dni }}"
+                data-vocal2="{{ mep.tribunal_obj.vocal_2_nombre }}"
+                data-vocal2-dni="{{ mep.tribunal_obj.vocal_2_dni }}"
+                data-dia="{{ mep.tribunal_obj.get_dia_semana_display|default:'' }}"
+                data-hora="{{ mep.tribunal_obj.hora|time:'H:i'|default:'' }}"
+                data-libres="{% if mep.tribunal_obj.permite_libres %}Sí{% else %}No{% endif %}"
+                data-bs-toggle="modal" data-bs-target="#modalTribunal">
+                <i class="bi bi-eye me-1"></i>Completo
+              </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if page_obj.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination justify-content-center">
+    {% if page_obj.has_previous %}
+    <li class="page-item">
+      <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if carrera_pk %}&carrera={{ carrera_pk }}{% endif %}{% if dept %}&departamento={{ dept }}{% endif %}{% if filtro %}&filtro={{ filtro }}{% endif %}">
+        <i class="bi bi-chevron-left"></i>
+      </a>
+    </li>
+    {% endif %}
+    {% for num in page_obj.paginator.page_range %}
+    <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+      <a class="page-link" href="?page={{ num }}{% if q %}&q={{ q }}{% endif %}{% if carrera_pk %}&carrera={{ carrera_pk }}{% endif %}{% if dept %}&departamento={{ dept }}{% endif %}{% if filtro %}&filtro={{ filtro }}{% endif %}">{{ num }}</a>
+    </li>
+    {% endfor %}
+    {% if page_obj.has_next %}
+    <li class="page-item">
+      <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if carrera_pk %}&carrera={{ carrera_pk }}{% endif %}{% if dept %}&departamento={{ dept }}{% endif %}{% if filtro %}&filtro={{ filtro }}{% endif %}">
+        <i class="bi bi-chevron-right"></i>
+      </a>
+    </li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-journal-text fs-1 d-block mb-2"></i>
+  No se encontraron materias con los filtros aplicados.
+</div>
+{% endif %}
+
+{# ── Modal tribunal ───────────────────────────────────────────────────────── #}
+<div class="modal fade" id="modalTribunal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-people me-2"></i>Conformación del tribunal</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="fw-semibold mb-0" id="mt-materia"></p>
+        <p class="text-muted small mb-3" id="mt-plan"></p>
+        <table class="table table-sm mb-3">
+          <thead>
+            <tr><th>Rol</th><th>Nombre</th><th>DNI</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-muted small">Presidente</td>
+              <td id="mt-presidente"></td>
+              <td id="mt-presidente-dni" class="text-muted small"></td>
+            </tr>
+            <tr>
+              <td class="text-muted small">1er. Vocal</td>
+              <td id="mt-vocal1"></td>
+              <td id="mt-vocal1-dni" class="text-muted small"></td>
+            </tr>
+            <tr>
+              <td class="text-muted small">2do. Vocal</td>
+              <td id="mt-vocal2"></td>
+              <td id="mt-vocal2-dni" class="text-muted small"></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="d-flex gap-3 text-muted small">
+          <span><i class="bi bi-calendar-week me-1"></i><span id="mt-dia">—</span></span>
+          <span><i class="bi bi-clock me-1"></i><span id="mt-hora">—</span></span>
+          <span><i class="bi bi-person-check me-1"></i>Libres: <span id="mt-libres"></span></span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.btn-ver-tribunal').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const d = btn.dataset;
+    document.getElementById('mt-materia').textContent = d.materia;
+    document.getElementById('mt-plan').textContent = d.plan;
+    document.getElementById('mt-presidente').textContent = d.presidente || '—';
+    document.getElementById('mt-presidente-dni').textContent = d.presidenteDni || '';
+    document.getElementById('mt-vocal1').textContent = d.vocal1 || '—';
+    document.getElementById('mt-vocal1-dni').textContent = d.vocal1Dni || '';
+    document.getElementById('mt-vocal2').textContent = d.vocal2 || '—';
+    document.getElementById('mt-vocal2-dni').textContent = d.vocal2Dni || '';
+    document.getElementById('mt-dia').textContent = d.dia || '—';
+    document.getElementById('mt-hora').textContent = d.hora || '—';
+    document.getElementById('mt-libres').textContent = d.libres;
+  });
+});
+</script>
+{% endblock %}

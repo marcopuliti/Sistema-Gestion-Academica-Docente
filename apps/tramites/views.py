@@ -4,7 +4,7 @@ from django.shortcuts import render, redirect
 from apps.notifications.models import Notificacion
 from apps.planes.models import (
     AnioDictado, InformeTribunalesEnviado, MateriaEnPlan,
-    SolicitudInformeTribunal, TribunalExaminador,
+    SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeTribunal, TribunalExaminador,
 )
 from apps.solicitudes.models import SolicitudProtocolizacion, SolicitudTaller
 from apps.tramites.models import EstadoTramite
@@ -12,24 +12,58 @@ from apps.tramites.models import EstadoTramite
 
 def dashboard(request):
     if not request.user.is_authenticated:
-        return render(request, 'tramites/landing.html')
+        from django.urls import reverse
+        return redirect(reverse('accounts:login'))
 
     user = request.user
 
     if user.es_director_departamento:
         return _dashboard_director(request, user)
 
-    if user.puede_revisar:
-        solicitudes = SolicitudProtocolizacion.objects.all()
-    else:
-        solicitudes = SolicitudProtocolizacion.objects.filter(usuario=user)
+    if user.es_administrador:
+        return _dashboard_admin(request, user)
 
+    solicitudes = SolicitudProtocolizacion.objects.filter(usuario=user)
     context = {
         'total_solicitudes': solicitudes.count(),
         'pendientes_solicitudes': solicitudes.filter(estado=EstadoTramite.PENDIENTE).count(),
         'ultimas_solicitudes': solicitudes[:5],
     }
     return render(request, 'tramites/dashboard.html', context)
+
+
+def _dashboard_admin(request, user):
+    todas_meps = MateriaEnPlan.objects.filter(es_optativa=False)
+    total_meps = todas_meps.count()
+    sin_tribunal = todas_meps.filter(tribunal__isnull=True).count()
+    incompleto = TribunalExaminador.objects.filter(presidente_nombre='').count()
+    completo = total_meps - sin_tribunal - incompleto
+
+    solicitudes_prot = SolicitudProtocolizacion.objects.all()
+    pendientes_prot = solicitudes_prot.filter(estado=EstadoTramite.PENDIENTE).count()
+
+    cambios_enviados = SolicitudCambioTribunal.objects.filter(estado='enviada').count()
+    ultimos_cambios = (
+        SolicitudCambioTribunal.objects
+        .filter(estado='enviada')
+        .select_related('director')
+        .order_by('-fecha_creacion')[:5]
+    )
+
+    solicitud_informe = SolicitudInformeTribunal.objects.filter(activa=True).first()
+
+    return render(request, 'tramites/dashboard_admin.html', {
+        'total_meps': total_meps,
+        'sin_tribunal': sin_tribunal,
+        'incompleto': incompleto,
+        'completo': completo,
+        'total_solicitudes': solicitudes_prot.count(),
+        'pendientes_prot': pendientes_prot,
+        'cambios_enviados': cambios_enviados,
+        'ultimos_cambios': ultimos_cambios,
+        'solicitud_informe_activa': solicitud_informe is not None,
+        'ultimas_notificaciones': Notificacion.objects.filter(destinatario=user).order_by('-fecha')[:5],
+    })
 
 
 def _dashboard_director(request, user):
@@ -51,6 +85,7 @@ def _dashboard_director(request, user):
             Q(departamento_dictante=departamento)
         )
         .filter(Exists(ano_qs))
+        .filter(es_optativa=False)
     )
     total_tribunales = meps_activos.count()
     sin_tribunal = meps_activos.filter(tribunal__isnull=True).count()
@@ -59,9 +94,13 @@ def _dashboard_director(request, user):
         materia_en_plan_id__in=mep_ids,
         presidente_nombre='',
     ).count()
-    pendientes_sinc = TribunalExaminador.objects.filter(
-        materia_en_plan_id__in=mep_ids,
-        pendiente_sincronizacion=True,
+    borrador_count = SolicitudCambioItem.objects.filter(
+        solicitud__director=user,
+        solicitud__departamento=departamento,
+        solicitud__estado='borrador',
+    ).count()
+    solicitudes_enviadas = SolicitudCambioTribunal.objects.filter(
+        departamento=departamento, estado='enviada',
     ).count()
 
     solicitud = SolicitudInformeTribunal.objects.filter(activa=True).first()
@@ -84,7 +123,8 @@ def _dashboard_director(request, user):
         'total_tribunales': total_tribunales,
         'sin_tribunal': sin_tribunal,
         'con_datos_faltantes': con_datos_faltantes,
-        'pendientes_sinc': pendientes_sinc,
+        'borrador_count': borrador_count,
+        'solicitudes_enviadas': solicitudes_enviadas,
         'solicitud_informe_activa': solicitud is not None and not ya_enviado,
         'informe_enviado': informe_enviado,
         'ultimas_notificaciones': Notificacion.objects.filter(destinatario=user).order_by('-fecha')[:5],

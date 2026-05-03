@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block title %}Solicitudes de cambio de tribunales{% endblock %}
+{% block nav_solicitudes_cambio %}active{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <h2><i class="bi bi-file-earmark-diff me-2"></i>Solicitudes de cambio de tribunales</h2>
+</div>
+
+{# ── Filtros ───────────────────────────────────────────────────────────────── #}
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-4">
+        <select name="departamento" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">Todos los departamentos</option>
+          {% for val, label in departamento_opciones %}
+          <option value="{{ val }}" {% if dept_filtro == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+      </div>
+      {% if dept_filtro %}
+      <div class="col-auto">
+        <a href="?" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x me-1"></i>Limpiar</a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+{% if page_obj.object_list %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Departamento</th>
+          <th>Director</th>
+          <th class="text-center">Estado</th>
+          <th class="text-center">Tribunales</th>
+          <th class="text-center">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in page_obj %}
+        <tr>
+          <td>
+            <div class="fw-semibold">{{ s.fecha_creacion|date:"d/m/Y" }}</div>
+            <div class="text-muted small">{{ s.fecha_creacion|date:"H:i" }}</div>
+          </td>
+          <td>{{ s.departamento }}</td>
+          <td>{{ s.director.get_full_name|default:"—" }}</td>
+          <td class="text-center">
+            {% if s.estado == 'borrador' %}
+            <span class="badge bg-secondary">Borrador</span>
+            {% elif s.estado == 'enviada' %}
+            <span class="badge bg-info text-dark">Enviada</span>
+            {% elif s.estado == 'aplicada' %}
+            <span class="badge bg-success">Aplicada</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <span class="badge bg-secondary">{{ s.items.count }}</span>
+          </td>
+          <td class="text-center">
+            <div class="d-flex gap-1 justify-content-center">
+              <a href="{% url 'planes:detalle_solicitud_cambio' s.pk %}"
+                 class="btn btn-sm btn-outline-primary" title="Ver detalle">
+                <i class="bi bi-eye me-1"></i>Ver
+              </a>
+              <a href="{% url 'planes:admin_descargar_solicitud_cambio' s.pk %}"
+                 class="btn btn-sm btn-outline-secondary" title="Descargar PDF">
+                <i class="bi bi-file-earmark-pdf"></i>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if page_obj.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination justify-content-center">
+    {% if page_obj.has_previous %}
+    <li class="page-item">
+      <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if dept_filtro %}&departamento={{ dept_filtro }}{% endif %}">
+        <i class="bi bi-chevron-left"></i>
+      </a>
+    </li>
+    {% endif %}
+    {% for num in page_obj.paginator.page_range %}
+    <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+      <a class="page-link" href="?page={{ num }}{% if dept_filtro %}&departamento={{ dept_filtro }}{% endif %}">{{ num }}</a>
+    </li>
+    {% endfor %}
+    {% if page_obj.has_next %}
+    <li class="page-item">
+      <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if dept_filtro %}&departamento={{ dept_filtro }}{% endif %}">
+        <i class="bi bi-chevron-right"></i>
+      </a>
+    </li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-file-earmark-diff fs-1 d-block mb-2"></i>
+  No hay solicitudes de cambio{% if dept_filtro %} para <strong>{{ dept_filtro }}</strong>{% endif %}.
+</div>
+{% endif %}
+{% endblock %}

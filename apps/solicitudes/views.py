@@ -70,49 +70,35 @@ def lista_solicitudes(request):
     })
 
 
+@login_required
 def seleccionar_tipificacion(request):
     """Paso 1: el docente elige la tipificación antes de abrir el formulario."""
     return render(request, 'solicitudes/seleccionar_tipificacion.html')
 
 
+@login_required
 def crear_solicitud(request, tipificacion):
     """Paso 2: formulario según tipificación."""
     if tipificacion not in TIPIFICACIONES_VALIDAS:
         messages.error(request, 'Tipo de solicitud inválido.')
         return redirect('solicitudes:crear')
 
-    anonimo = not request.user.is_authenticated
     es_curricular = tipificacion in TIPIFICACIONES_CURRICULARES
 
     if request.method == 'POST':
-        form = SolicitudProtocolizacionForm(request.POST, tipificacion=tipificacion, anonimo=anonimo)
+        form = SolicitudProtocolizacionForm(request.POST, tipificacion=tipificacion, anonimo=False)
         formset = EquipoDocenteFormSet(request.POST)
         plan_id = request.POST.get('plan_estudio') or None
         correlativas_formset = CorrelativaFormSet(request.POST, prefix='correlativas')
         _set_correlativas_materia_qs(correlativas_formset, plan_id)
         if form.is_valid() and formset.is_valid() and correlativas_formset.is_valid():
             solicitud = form.save(commit=False)
-            if anonimo:
-                solicitud.usuario = None
-                solicitud.nombre_docente = form.cleaned_data['nombre_docente']
-                solicitud.departamento_docente = form.cleaned_data.get('departamento_docente', '')
-                solicitud.email_docente = form.cleaned_data.get('email_docente', '')
-            else:
-                solicitud.usuario = request.user
+            solicitud.usuario = request.user
             solicitud.save()
             formset.instance = solicitud
             formset.save()
             correlativas_formset.instance = solicitud
             correlativas_formset.save()
-            if anonimo:
-                from .pdf import generar_pdf_solicitud
-                buffer = generar_pdf_solicitud(solicitud)
-                apellido = solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente'
-                nombre = f"solicitud_{solicitud.pk}_{apellido}.pdf"
-                from django.http import HttpResponse
-                response = HttpResponse(buffer, content_type='application/pdf')
-                response['Content-Disposition'] = f'attachment; filename="{nombre}"'
-                return response
             from apps.notifications.utils import notificar_nuevo_tramite
             from django.urls import reverse
             notificar_nuevo_tramite(solicitud, 'Solicitud de Protocolización',
@@ -120,7 +106,7 @@ def crear_solicitud(request, tipificacion):
             messages.success(request, 'Solicitud enviada. Quedó pendiente de revisión.')
             return redirect('solicitudes:detalle', pk=solicitud.pk)
     else:
-        form = SolicitudProtocolizacionForm(tipificacion=tipificacion, anonimo=anonimo)
+        form = SolicitudProtocolizacionForm(tipificacion=tipificacion, anonimo=False)
         formset = EquipoDocenteFormSet()
         correlativas_formset = CorrelativaFormSet(prefix='correlativas')
         _set_correlativas_materia_qs(correlativas_formset, None)
@@ -133,7 +119,7 @@ def crear_solicitud(request, tipificacion):
         'es_curricular': es_curricular,
         'titulo': f'Nueva Solicitud — {dict(TIPIFICACION_CHOICES)[tipificacion]}',
         'calendario_json': _calendario_json(),
-        'anonimo': anonimo,
+        'anonimo': False,
         'hs_totales_plan': None,
     })
 

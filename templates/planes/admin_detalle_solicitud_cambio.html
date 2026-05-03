@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+{% block title %}Solicitud de cambio — {{ solicitud.departamento }}{% endblock %}
+{% block nav_solicitudes_cambio %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .tribunal-card { margin-bottom: 1rem; }
+  .tribunal-header {
+    background-color: var(--color-primario);
+    color: #fff;
+    padding: .5rem 1rem;
+    border-radius: 6px 6px 0 0;
+    font-size: .9rem;
+  }
+  .campo-row { font-size: .88rem; vertical-align: middle; }
+  .campo-label { font-weight: 600; color: #555; width: 130px; }
+  .diff-row { background-color: #fff3cd; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <nav aria-label="breadcrumb" class="mb-1">
+      <ol class="breadcrumb mb-0" style="font-size:.85rem">
+        <li class="breadcrumb-item">
+          <a href="{% url 'planes:lista_solicitudes_cambio' %}">Solicitudes de cambio</a>
+        </li>
+        <li class="breadcrumb-item active">Detalle</li>
+      </ol>
+    </nav>
+    <h2><i class="bi bi-file-earmark-diff me-2"></i>Solicitud — Dpto. {{ solicitud.departamento }}</h2>
+    <p class="text-muted mb-0 small">
+      {{ solicitud.fecha_creacion|date:"d/m/Y H:i" }}
+      &middot; Director: <strong>{{ solicitud.director.get_full_name|default:"—" }}</strong>
+      &middot; {{ items|length }} tribunal{{ items|length|pluralize:"es" }}
+      &middot;
+      {% if solicitud.estado == 'enviada' %}
+      <span class="badge bg-info text-dark">Enviada</span>
+      {% elif solicitud.estado == 'aplicada' %}
+      <span class="badge bg-success">Aplicada</span>
+      {% else %}
+      <span class="badge bg-secondary">Borrador</span>
+      {% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'planes:admin_descargar_solicitud_cambio' solicitud.pk %}"
+       class="btn btn-outline-secondary">
+      <i class="bi bi-file-earmark-pdf me-1"></i>Descargar PDF
+    </a>
+    {% if solicitud.estado == 'enviada' %}
+    <button type="button" class="btn btn-success"
+            data-bs-toggle="modal" data-bs-target="#modalAplicar">
+      <i class="bi bi-check-circle me-1"></i>Aplicar solicitud
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+{% if items %}
+<div class="alert alert-info py-2 small mb-3">
+  <i class="bi bi-info-circle me-1"></i>
+  Las filas resaltadas en <strong>amarillo</strong> indican campos que difieren respecto al tribunal actual.
+  La columna <strong>Propuesto</strong> muestra los valores que el director solicita aplicar.
+</div>
+
+{% for item in items %}
+{% with mep=item.tribunal.materia_en_plan diff=item.diff t_actual=item.t_actual %}
+<div class="tribunal-card">
+  <div class="tribunal-header d-flex justify-content-between align-items-center">
+    <span>
+      <strong>{{ mep.materia.nombre }}</strong>
+      <span class="ms-2 opacity-75 small">{{ mep.materia.codigo }}</span>
+    </span>
+    <span class="small opacity-75">
+      Plan {{ mep.plan.codigo }} &middot; {{ mep.plan.carrera.nombre }} &middot; {{ mep.ano }}° año
+    </span>
+  </div>
+  <div class="table-responsive border border-top-0 rounded-bottom">
+    <table class="table table-sm mb-0">
+      <thead>
+        <tr>
+          <th class="campo-label" style="width:130px">Campo</th>
+          <th>Actual</th>
+          <th>Propuesto</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="campo-row {% if diff.presidente %}diff-row{% endif %}">
+          <td class="campo-label">Presidente</td>
+          <td>
+            {% if t_actual.presidente_nombre %}
+              {{ t_actual.presidente_nombre }}
+              {% if t_actual.presidente_dni %}<span class="text-muted small ms-1">DNI {{ t_actual.presidente_dni }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Sin asignar</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.presidente_nombre %}
+              {{ item.presidente_nombre }}
+              {% if item.presidente_dni %}<span class="text-muted small ms-1">DNI {{ item.presidente_dni }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Sin asignar</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr class="campo-row {% if diff.vocal_1 %}diff-row{% endif %}">
+          <td class="campo-label">1er. Vocal</td>
+          <td>
+            {% if t_actual.vocal_1_nombre %}
+              {{ t_actual.vocal_1_nombre }}
+              {% if t_actual.vocal_1_dni %}<span class="text-muted small ms-1">DNI {{ t_actual.vocal_1_dni }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Sin asignar</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.vocal_1_nombre %}
+              {{ item.vocal_1_nombre }}
+              {% if item.vocal_1_dni %}<span class="text-muted small ms-1">DNI {{ item.vocal_1_dni }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Sin asignar</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr class="campo-row {% if diff.vocal_2 %}diff-row{% endif %}">
+          <td class="campo-label">2do. Vocal</td>
+          <td>
+            {% if t_actual.vocal_2_nombre %}
+              {{ t_actual.vocal_2_nombre }}
+              {% if t_actual.vocal_2_dni %}<span class="text-muted small ms-1">DNI {{ t_actual.vocal_2_dni }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Sin asignar</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.vocal_2_nombre %}
+              {{ item.vocal_2_nombre }}
+              {% if item.vocal_2_dni %}<span class="text-muted small ms-1">DNI {{ item.vocal_2_dni }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Sin asignar</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr class="campo-row {% if diff.dia_hora %}diff-row{% endif %}">
+          <td class="campo-label">Día y hora</td>
+          <td>
+            {% if t_actual.dia_semana %}{{ t_actual.get_dia_semana_display }}{% if t_actual.hora %} {{ t_actual.hora|time:"H:i" }}{% endif %}
+            {% else %}<span class="text-muted fst-italic">Sin asignar</span>{% endif %}
+          </td>
+          <td>
+            {% if item.dia_semana %}{{ item.get_dia_semana_display }}{% if item.hora %} {{ item.hora|time:"H:i" }}{% endif %}
+            {% else %}<span class="text-muted fst-italic">Sin asignar</span>{% endif %}
+          </td>
+        </tr>
+        <tr class="campo-row {% if diff.modalidad %}diff-row{% endif %}">
+          <td class="campo-label">Modalidad</td>
+          <td>
+            {% if t_actual.permite_libres %}
+              <span class="badge bg-success">Libres y regulares</span>
+            {% else %}
+              <span class="badge bg-secondary">Solo regulares</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.permite_libres %}
+              <span class="badge bg-success">Libres y regulares</span>
+            {% else %}
+              <span class="badge bg-secondary">Solo regulares</span>
+            {% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endwith %}
+{% endfor %}
+
+{% else %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle me-2"></i>Esta solicitud no tiene tribunales asociados.
+</div>
+{% endif %}
+
+{# ── Modal aplicar ────────────────────────────────────────────────────────── #}
+{% if solicitud.estado == 'enviada' %}
+<div class="modal fade" id="modalAplicar" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-check-circle me-2"></i>Aplicar solicitud</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Se aplicarán los <strong>{{ items|length }} cambio{{ items|length|pluralize:"s" }}</strong> propuestos a los tribunales del Departamento de <strong>{{ solicitud.departamento }}</strong>.</p>
+        <p class="mb-0 text-muted small">Esta acción sobreescribirá los datos actuales de cada tribunal con los valores propuestos. El director será notificado.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <form method="post" action="{% url 'planes:aplicar_solicitud' solicitud.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-success btn-sm">
+            <i class="bi bi-check-circle me-1"></i>Confirmar y aplicar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

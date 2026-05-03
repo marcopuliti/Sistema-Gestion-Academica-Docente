@@ -117,6 +117,7 @@
           <tr>
             <th class="materia-codigo">Código</th>
             <th>Materia</th>
+            <th class="text-center" style="width:120px">Optativa/Electiva</th>
             <th class="text-center" style="width:110px">Servicio</th>
           </tr>
         </thead>
@@ -125,6 +126,16 @@
           <tr>
             <td class="materia-codigo">{{ mep.materia.codigo }}</td>
             <td>{{ mep.materia.nombre }}</td>
+            <td class="text-center">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                name="es_optativa"
+                value="{{ mep.id }}"
+                id="opt_{{ mep.id }}"
+                {% if mep.es_optativa %}checked{% endif %}
+              >
+            </td>
             <td class="text-center">
               <div class="d-flex align-items-center gap-2 justify-content-center flex-wrap">
                 <input

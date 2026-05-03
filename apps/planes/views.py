@@ -13,10 +13,17 @@ from apps.tramites.decorators import solo_administrador, solo_director_departame
 from apps.tramites.models import DEPARTAMENTO_CHOICES
 from apps.notifications.utils import _crear_notificacion
 from .forms import TribunalForm
-from .models import AnioDictado, InformeTribunalesEnviado, MateriaEnPlan, SolicitudInformeTribunal, TribunalAdmin, TribunalExaminador
-from .pdf import generar_pdf_informe_tribunales, generar_pdf_modificaciones_tribunales
+from .models import AnioDictado, Carrera, InformeTribunalesEnviado, MateriaEnPlan, SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeTribunal, TribunalExaminador
+from .pdf import generar_pdf_informe_tribunales, generar_pdf_solicitud_cambio
 
 DEPARTAMENTO_OPCIONES = [(v, l) for v, l in DEPARTAMENTO_CHOICES if v]
+
+_CAMPOS_TRIBUNAL = [
+    'presidente_nombre', 'presidente_dni',
+    'vocal_1_nombre', 'vocal_1_dni',
+    'vocal_2_nombre', 'vocal_2_dni',
+    'dia_semana', 'hora', 'permite_libres',
+]
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -32,6 +39,7 @@ def _pdf_buffer_departamento(departamento, director_user):
             models.Q(plan__carrera__departamento=departamento, es_servicio=False) |
             models.Q(departamento_dictante=departamento)
         )
+        .filter(es_optativa=False)
         .select_related('materia', 'plan__carrera')
         .order_by('materia__codigo', 'plan__carrera__nombre', 'plan__codigo', 'ano', 'cuatrimestre')
     )
@@ -40,15 +48,11 @@ def _pdf_buffer_departamento(departamento, director_user):
         t.materia_en_plan_id: t
         for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=mep_ids)
     }
-    adm_map = {
-        t.materia_en_plan_id: t
-        for t in TribunalAdmin.objects.filter(materia_en_plan_id__in=mep_ids)
-    }
-    return generar_pdf_informe_tribunales(director_user, admin, meps, dir_map, adm_map)
+    return generar_pdf_informe_tribunales(director_user, admin, meps, dir_map, dir_map)
 
 
 def _meps_del_departamento(departamento):
-    """MateriaEnPlan de años activos dictados por este departamento."""
+    """MateriaEnPlan de años activos dictados por este departamento, sin optativas."""
     ano_qs = AnioDictado.objects.filter(plan=OuterRef('plan'), ano=OuterRef('ano'))
     plan_activo = models.Q(plan__vigente=True) | models.Q(plan__activo=True)
     propios = models.Q(plan__carrera__departamento=departamento, es_servicio=False)
@@ -58,6 +62,7 @@ def _meps_del_departamento(departamento):
         .filter(plan_activo)
         .filter(propios | servicio)
         .filter(Exists(ano_qs))
+        .filter(es_optativa=False)
     )
 
 
@@ -82,8 +87,8 @@ def materias_servicio(request):
     all_ids = set(meps.values_list('id', flat=True))
 
     if request.method == 'POST':
-        servicio_ids = set(int(x) for x in request.POST.getlist('es_servicio') if x.isdigit())
-        servicio_ids &= all_ids
+        servicio_ids = set(int(x) for x in request.POST.getlist('es_servicio') if x.isdigit()) & all_ids
+        optativa_ids = set(int(x) for x in request.POST.getlist('es_optativa') if x.isdigit()) & all_ids
 
         departamentos_por_mep = {}
         valid_depts = {v for v, _ in DEPARTAMENTO_OPCIONES}
@@ -99,8 +104,17 @@ def materias_servicio(request):
             messages.error(request, 'Todas las materias marcadas como servicio deben tener un departamento seleccionado.')
         else:
             for mep_id, dep in departamentos_por_mep.items():
-                MateriaEnPlan.objects.filter(id=mep_id).update(es_servicio=True, departamento_dictante=dep)
-            MateriaEnPlan.objects.filter(id__in=all_ids - servicio_ids).update(es_servicio=False, departamento_dictante='')
+                MateriaEnPlan.objects.filter(id=mep_id).update(
+                    es_servicio=True, departamento_dictante=dep,
+                    es_optativa=mep_id in optativa_ids,
+                )
+            non_servicio = all_ids - servicio_ids
+            MateriaEnPlan.objects.filter(id__in=non_servicio & optativa_ids).update(
+                es_servicio=False, departamento_dictante='', es_optativa=True,
+            )
+            MateriaEnPlan.objects.filter(id__in=non_servicio - optativa_ids).update(
+                es_servicio=False, departamento_dictante='', es_optativa=False,
+            )
             messages.success(request, 'Cambios guardados correctamente.')
             return redirect('planes:materias_servicio')
 
@@ -168,6 +182,7 @@ def lista_tribunales(request):
             models.Q(plan__carrera__departamento=departamento, es_servicio=False) |
             models.Q(departamento_dictante=departamento)
         )
+        .filter(es_optativa=False)
         .select_related('materia', 'plan__carrera')
         .order_by('materia__codigo', 'plan__carrera__nombre', 'plan__codigo', 'ano', 'cuatrimestre')
     )
@@ -182,8 +197,6 @@ def lista_tribunales(request):
         meps_qs = meps_qs.filter(tribunal__isnull=True)
     elif filtro == 'incompletos':
         meps_qs = meps_qs.filter(tribunal__presidente_nombre='')
-    elif filtro == 'pendientes':
-        meps_qs = meps_qs.filter(tribunal__pendiente_sincronizacion=True)
 
     paginator = Paginator(meps_qs, 20)
     page_obj = paginator.get_page(request.GET.get('page'))
@@ -193,14 +206,26 @@ def lista_tribunales(request):
         t.materia_en_plan_id: t
         for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=page_mep_ids)
     }
+
+    # Pre-build borrador proposal set to avoid N+1 queries
+    borrador = (
+        SolicitudCambioTribunal.objects
+        .filter(director=request.user, departamento=departamento, estado='borrador')
+        .prefetch_related('items')
+        .first()
+    )
+    borrador_count = borrador.items.count() if borrador else 0
+    borrador_tribunal_ids = (
+        set(borrador.items.values_list('tribunal_id', flat=True)) if borrador else set()
+    )
+
     for mep in page_obj:
         mep.tribunal_obj = tribunales_map.get(mep.id)
+        mep.tribunal_tiene_propuesta = (
+            mep.tribunal_obj is not None and mep.tribunal_obj.pk in borrador_tribunal_ids
+        )
 
     all_ids = base_qs.values_list('id', flat=True)
-    pendientes_count = TribunalExaminador.objects.filter(
-        materia_en_plan_id__in=all_ids,
-        pendiente_sincronizacion=True,
-    ).count()
     sin_registro_count = base_qs.filter(tribunal__isnull=True).count()
     incompletos_count = TribunalExaminador.objects.filter(
         materia_en_plan_id__in=all_ids,
@@ -221,6 +246,18 @@ def lista_tribunales(request):
         informe_enviado.solicitud_id == solicitud.pk
     )
 
+    solicitudes_enviadas = SolicitudCambioTribunal.objects.filter(
+        departamento=departamento, estado='enviada'
+    ).count()
+
+    solicitudes_cambio = (
+        SolicitudCambioTribunal.objects
+        .filter(departamento=departamento)
+        .exclude(estado='borrador')
+        .prefetch_related('items')
+        .order_by('-fecha_creacion')[:10]
+    )
+
     return render(request, 'planes/tribunales.html', {
         'page_obj': page_obj,
         'departamento': departamento,
@@ -228,15 +265,20 @@ def lista_tribunales(request):
         'filtro': filtro,
         'solicitud_activa': solicitud is not None and not ya_enviado_esta_solicitud,
         'informe_enviado': informe_enviado,
-        'pendientes_count': pendientes_count,
         'sin_registro_count': sin_registro_count,
         'incompletos_count': incompletos_count,
+        'borrador': borrador,
+        'borrador_count': borrador_count,
+        'solicitudes_enviadas': solicitudes_enviadas,
+        'solicitudes_cambio': solicitudes_cambio,
     })
 
 
+# ── director: proponer y enviar cambios de tribunal ──────────────────────────
+
 @login_required
 @solo_director_departamento
-def modificar_tribunal(request, pk):
+def proponer_cambio_tribunal(request, pk):
     if request.method != 'POST':
         return redirect('planes:lista_tribunales')
 
@@ -244,282 +286,124 @@ def modificar_tribunal(request, pk):
     mep_ids = MateriaEnPlan.objects.filter(
         models.Q(plan__carrera__departamento=departamento, es_servicio=False) |
         models.Q(departamento_dictante=departamento)
-    ).values_list('id', flat=True)
+    ).filter(es_optativa=False).values_list('id', flat=True)
+
     tribunal = get_object_or_404(TribunalExaminador, pk=pk, materia_en_plan_id__in=mep_ids)
 
     form = TribunalForm(request.POST)
     if form.is_valid():
-        tribunal.presidente_nombre = form.cleaned_data['presidente_nombre']
-        tribunal.presidente_dni = form.cleaned_data['presidente_dni']
-        tribunal.vocal_1_nombre = form.cleaned_data['vocal_1_nombre']
-        tribunal.vocal_1_dni = form.cleaned_data['vocal_1_dni']
-        tribunal.vocal_2_nombre = form.cleaned_data['vocal_2_nombre']
-        tribunal.vocal_2_dni = form.cleaned_data['vocal_2_dni']
-        dia = form.cleaned_data['dia_semana']
-        tribunal.dia_semana = int(dia) if dia else None
-        tribunal.hora = form.cleaned_data['hora']
-        tribunal.permite_libres = form.cleaned_data['permite_libres']
-        tribunal.pendiente_sincronizacion = True
-        tribunal.save()
+        # Get or create the current draft solicitud for this director/dept
+        draft, _ = SolicitudCambioTribunal.objects.get_or_create(
+            director=request.user,
+            departamento=departamento,
+            estado='borrador',
+        )
 
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        materia = tribunal.materia_en_plan.materia.nombre
-        for admin_user in User.objects.filter(rol='administrador', is_active=True):
-            _crear_notificacion(
-                admin_user, 'nuevo_tramite',
-                f'Cambio en tribunal — {materia}',
-                f'{request.user.get_full_name()} modificó el tribunal de {materia} '
-                f'(Dpto. {departamento}). Pendiente de sincronización en sistema externo.',
-                url=reverse('planes:lista_comparacion_tribunales') + '?pendientes=1',
-            )
-        messages.success(request, 'Tribunal actualizado. Administración será notificada para sincronizarlo.')
+        dia = form.cleaned_data['dia_semana']
+        # Create or update the item for this tribunal in the draft
+        SolicitudCambioItem.objects.update_or_create(
+            solicitud=draft,
+            tribunal=tribunal,
+            defaults={
+                'presidente_nombre': form.cleaned_data['presidente_nombre'],
+                'presidente_dni': form.cleaned_data['presidente_dni'],
+                'vocal_1_nombre': form.cleaned_data['vocal_1_nombre'],
+                'vocal_1_dni': form.cleaned_data['vocal_1_dni'],
+                'vocal_2_nombre': form.cleaned_data['vocal_2_nombre'],
+                'vocal_2_dni': form.cleaned_data['vocal_2_dni'],
+                'dia_semana': int(dia) if dia else None,
+                'hora': form.cleaned_data['hora'],
+                'permite_libres': form.cleaned_data['permite_libres'],
+            },
+        )
+        messages.success(request, 'Cambio propuesto guardado.')
     else:
         messages.error(request, 'Corregí los errores del formulario.')
 
     return redirect('planes:lista_tribunales')
 
 
-_CAMPOS_TRIBUNAL = [
-    'presidente_nombre', 'presidente_dni',
-    'vocal_1_nombre', 'vocal_1_dni',
-    'vocal_2_nombre', 'vocal_2_dni',
-    'dia_semana', 'hora', 'permite_libres',
-]
-
-
 @login_required
 @solo_director_departamento
-def copiar_tribunal(request, pk):
+def enviar_solicitud_cambio(request):
+    from django.http import JsonResponse
+
     if request.method != 'POST':
         return redirect('planes:lista_tribunales')
 
     departamento = request.user.departamento
-    mep_ids_qs = MateriaEnPlan.objects.filter(
-        models.Q(plan__carrera__departamento=departamento, es_servicio=False) |
-        models.Q(departamento_dictante=departamento)
-    ).values_list('id', flat=True)
 
-    fuente = get_object_or_404(
-        TribunalExaminador.objects.select_related('materia_en_plan__materia'),
-        pk=pk,
-        materia_en_plan_id__in=mep_ids_qs,
-    )
+    try:
+        borrador = SolicitudCambioTribunal.objects.get(
+            director=request.user,
+            departamento=departamento,
+            estado='borrador',
+        )
+    except SolicitudCambioTribunal.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'No hay cambios propuestos.'}, status=400)
 
-    codigo_materia = fuente.materia_en_plan.materia.codigo
-    otros_ids = list(
-        MateriaEnPlan.objects
-        .filter(id__in=mep_ids_qs, materia__codigo=codigo_materia)
-        .exclude(id=fuente.materia_en_plan_id)
-        .values_list('id', flat=True)
-    )
+    if not borrador.items.exists():
+        return JsonResponse({'ok': False, 'error': 'No hay cambios propuestos.'}, status=400)
 
-    destinos = list(TribunalExaminador.objects.filter(materia_en_plan_id__in=otros_ids))
-    if not destinos:
-        messages.info(request, 'No hay otros planes con esta materia en el departamento.')
-        return redirect('planes:lista_tribunales')
+    borrador.estado = 'enviada'
+    borrador.fecha_envio = timezone.now()
+    borrador.save()
 
-    actualizados = 0
-    for dest in destinos:
-        if not any(getattr(dest, c) != getattr(fuente, c) for c in _CAMPOS_TRIBUNAL):
-            continue
-        for c in _CAMPOS_TRIBUNAL:
-            setattr(dest, c, getattr(fuente, c))
-        dest.pendiente_sincronizacion = True
-        dest.save()
-        actualizados += 1
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    url_lista = reverse('planes:lista_solicitudes_cambio')
+    for admin_user in User.objects.filter(rol='administrador', is_active=True):
+        _crear_notificacion(
+            admin_user, 'nuevo_tramite',
+            f'Solicitud de cambio de tribunales — Dpto. {departamento}',
+            f'{request.user.get_full_name()} envió una solicitud de cambio de tribunales '
+            f'del Departamento de {departamento}.',
+            url=url_lista,
+        )
 
-    if actualizados:
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        materia = fuente.materia_en_plan.materia.nombre
-        n = actualizados
-        for admin_user in User.objects.filter(rol='administrador', is_active=True):
-            _crear_notificacion(
-                admin_user, 'nuevo_tramite',
-                f'Copia de tribunal — {materia}',
-                f'{request.user.get_full_name()} copió el tribunal de {materia} '
-                f'a {n} plan{"es" if n != 1 else ""} adicional{"es" if n != 1 else ""} '
-                f'(Dpto. {departamento}).',
-                url=reverse('planes:lista_comparacion_tribunales') + '?pendientes=1',
-            )
-        messages.success(request, f'Tribunal copiado a {n} plan{"es" if n != 1 else ""} adicional{"es" if n != 1 else ""}.')
-    else:
-        messages.info(request, 'Los demás planes ya tienen los mismos datos.')
+    download_url = reverse('planes:descargar_solicitud_cambio', args=[borrador.pk])
+    return JsonResponse({'ok': True, 'pk': borrador.pk, 'download_url': download_url})
 
-    return redirect('planes:lista_tribunales')
-
-
-# ── admin: comparación de tribunales ─────────────────────────────────────────
 
 @login_required
-@solo_administrador
-def lista_comparacion_tribunales(request):
-    solo_pendientes = request.GET.get('pendientes') == '1'
-    dept_filtro = request.GET.get('departamento', '')
-    q = request.GET.get('q', '').strip()
+@solo_director_departamento
+def descargar_solicitud_cambio(request, pk):
+    from django.http import HttpResponse
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
 
-    meps_qs = (
-        MateriaEnPlan.objects
-        .filter(models.Q(plan__vigente=True) | models.Q(plan__activo=True))
-        .select_related('materia', 'plan__carrera')
-        .order_by('materia__codigo', 'plan__carrera__nombre', 'plan__codigo', 'ano', 'cuatrimestre')
+    departamento = request.user.departamento
+    solicitud = get_object_or_404(SolicitudCambioTribunal, pk=pk, departamento=departamento)
+
+    items = list(
+        solicitud.items
+        .select_related('tribunal__materia_en_plan__materia', 'tribunal__materia_en_plan__plan__carrera')
+        .all()
     )
-
-    if dept_filtro:
-        meps_qs = meps_qs.filter(
-            models.Q(plan__carrera__departamento=dept_filtro, es_servicio=False) |
-            models.Q(departamento_dictante=dept_filtro)
-        )
-
-    if solo_pendientes:
-        meps_qs = meps_qs.filter(tribunal__pendiente_sincronizacion=True)
-
-    if q:
-        meps_qs = meps_qs.filter(
-            models.Q(materia__nombre__icontains=q) |
-            models.Q(materia__codigo__icontains=q)
-        )
-
-    meps = list(meps_qs)
+    meps = sorted(
+        [item.tribunal.materia_en_plan for item in items],
+        key=lambda m: (m.materia.codigo, m.plan.carrera.nombre, m.plan.codigo, m.ano, m.cuatrimestre),
+    )
+    item_map = {item.tribunal.materia_en_plan_id: item for item in items}
     mep_ids = [mep.id for mep in meps]
-
-    dir_map = {
+    current_map = {
         t.materia_en_plan_id: t
         for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=mep_ids)
     }
-    adm_map = {
-        t.materia_en_plan_id: t
-        for t in TribunalAdmin.objects.filter(materia_en_plan_id__in=mep_ids)
-    }
-    for mep in meps:
-        mep.t_dir = dir_map.get(mep.id)
-        mep.t_adm = adm_map.get(mep.id)
 
-    # Agrupar por departamento efectivo → materia.codigo
-    dept_labels = {v: l for v, l in DEPARTAMENTO_CHOICES if v}
-    grupos_dict = {}
-    for mep in meps:
-        dept = mep.departamento_dictante if mep.es_servicio else mep.plan.carrera.departamento
-        dept = dept or ''
-        if dept not in grupos_dict:
-            grupos_dict[dept] = {}
-        cod = mep.materia.codigo
-        if cod not in grupos_dict[dept]:
-            grupos_dict[dept][cod] = {'nombre': mep.materia.nombre, 'meps': []}
-        grupos_dict[dept][cod]['meps'].append(mep)
+    admin = User.objects.filter(rol='administrador', is_active=True).first()
+    director_user = solicitud.director or request.user
+    buffer = generar_pdf_solicitud_cambio(director_user, admin, meps, item_map, current_map)
 
-    grupos = [
-        {
-            'departamento': dept,
-            'departamento_label': dept_labels.get(dept, dept or 'Sin departamento'),
-            'materias': [
-                {'codigo': cod, 'nombre': datos['nombre'], 'meps': datos['meps']}
-                for cod, datos in sorted(grupos_dict[dept].items())
-            ],
-        }
-        for dept in sorted(grupos_dict.keys())
-    ]
-
-    return render(request, 'planes/comparacion_tribunales.html', {
-        'grupos': grupos,
-        'solo_pendientes': solo_pendientes,
-        'dept_filtro': dept_filtro,
-        'q': q,
-        'total': len(meps),
-        'departamento_opciones': DEPARTAMENTO_OPCIONES,
-    })
+    safe_dept = departamento.lower().replace(' ', '_')
+    fecha_str = solicitud.fecha_creacion.strftime('%Y%m%d')
+    filename = f'solicitud_cambio_tribunales_{safe_dept}_{fecha_str}.pdf'
+    response = HttpResponse(buffer, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
-@login_required
-@solo_administrador
-def admin_modificar_tribunal(request, pk):
-    if request.method != 'POST':
-        return redirect('planes:lista_comparacion_tribunales')
-
-    tribunal = get_object_or_404(TribunalExaminador, pk=pk)
-    form = TribunalForm(request.POST)
-    if form.is_valid():
-        tribunal.presidente_nombre = form.cleaned_data['presidente_nombre']
-        tribunal.presidente_dni = form.cleaned_data['presidente_dni']
-        tribunal.vocal_1_nombre = form.cleaned_data['vocal_1_nombre']
-        tribunal.vocal_1_dni = form.cleaned_data['vocal_1_dni']
-        tribunal.vocal_2_nombre = form.cleaned_data['vocal_2_nombre']
-        tribunal.vocal_2_dni = form.cleaned_data['vocal_2_dni']
-        dia = form.cleaned_data['dia_semana']
-        tribunal.dia_semana = int(dia) if dia else None
-        tribunal.hora = form.cleaned_data['hora']
-        tribunal.permite_libres = form.cleaned_data['permite_libres']
-        tribunal.pendiente_sincronizacion = False
-        tribunal.save()
-
-        t_adm, _ = TribunalAdmin.objects.get_or_create(materia_en_plan=tribunal.materia_en_plan)
-        for campo in _CAMPOS_TRIBUNAL:
-            setattr(t_adm, campo, getattr(tribunal, campo))
-        t_adm.ultima_sincronizacion = timezone.now()
-        t_adm.save()
-
-        messages.success(request, 'Tribunal actualizado y sincronizado correctamente.')
-    else:
-        messages.error(request, 'Error en el formulario. Verificá los datos ingresados.')
-
-    next_url = request.POST.get('next', '')
-    if next_url and next_url.startswith('/'):
-        return redirect(next_url)
-    return redirect('planes:lista_comparacion_tribunales')
-
-
-@login_required
-@solo_administrador
-def detalle_tribunal_admin(request, pk):
-    mep = get_object_or_404(
-        MateriaEnPlan.objects.select_related('materia', 'plan__carrera'),
-        pk=pk,
-    )
-    t_dir = get_object_or_404(TribunalExaminador, materia_en_plan=mep)
-    t_adm, _ = TribunalAdmin.objects.get_or_create(materia_en_plan=mep)
-
-    diffs = {
-        'presidente': (t_dir.presidente_nombre != t_adm.presidente_nombre
-                       or t_dir.presidente_dni != t_adm.presidente_dni),
-        'vocal_1': (t_dir.vocal_1_nombre != t_adm.vocal_1_nombre
-                    or t_dir.vocal_1_dni != t_adm.vocal_1_dni),
-        'vocal_2': (t_dir.vocal_2_nombre != t_adm.vocal_2_nombre
-                    or t_dir.vocal_2_dni != t_adm.vocal_2_dni),
-        'dia_hora': (t_dir.dia_semana != t_adm.dia_semana
-                     or t_dir.hora != t_adm.hora),
-        'modalidad': t_dir.permite_libres != t_adm.permite_libres,
-    }
-
-    return render(request, 'planes/detalle_tribunal_admin.html', {
-        'mep': mep,
-        't_dir': t_dir,
-        't_adm': t_adm,
-        'diffs': diffs,
-    })
-
-
-@login_required
-@solo_administrador
-def sincronizar_tribunal(request, pk):
-    if request.method != 'POST':
-        return redirect('planes:lista_comparacion_tribunales')
-
-    mep = get_object_or_404(MateriaEnPlan, pk=pk)
-    t_dir = get_object_or_404(TribunalExaminador, materia_en_plan=mep)
-    t_adm, _ = TribunalAdmin.objects.get_or_create(materia_en_plan=mep)
-
-    for campo in _CAMPOS_TRIBUNAL:
-        setattr(t_adm, campo, getattr(t_dir, campo))
-    t_adm.ultima_sincronizacion = timezone.now()
-    t_adm.save()
-
-    t_dir.pendiente_sincronizacion = False
-    t_dir.save(update_fields=['pendiente_sincronizacion'])
-
-    messages.success(request, 'Tribunal sincronizado correctamente.')
-    return redirect('planes:lista_comparacion_tribunales')
-
+# ── admin: informes de tribunales ─────────────────────────────────────────────
 
 @login_required
 @solo_administrador
@@ -534,7 +418,7 @@ def solicitar_informe_tribunales(request):
     SolicitudInformeTribunal.objects.filter(activa=True).update(activa=False)
     SolicitudInformeTribunal.objects.create(solicitante=request.user)
 
-    # Crear TribunalExaminador y TribunalAdmin para MEPs que aún no tienen uno
+    # Crear TribunalExaminador para MEPs que aún no tienen uno
     plan_activo = models.Q(plan__vigente=True) | models.Q(plan__activo=True)
     ano_qs = AnioDictado.objects.filter(plan=OuterRef('plan'), ano=OuterRef('ano'))
     meps_sin_tribunal = (
@@ -542,12 +426,12 @@ def solicitar_informe_tribunales(request):
         .filter(plan_activo)
         .filter(Exists(ano_qs))
         .filter(tribunal__isnull=True)
+        .filter(es_optativa=False)
         .select_related('materia', 'plan')
     )
     creados = 0
     for mep in meps_sin_tribunal:
         TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
-        TribunalAdmin.objects.get_or_create(materia_en_plan=mep)
         creados += 1
 
     # Notificar a todos los directores activos
@@ -561,7 +445,7 @@ def solicitar_informe_tribunales(request):
             'Informe de comisiones anuales — Revisión de tribunales',
             'Se solicita que revises los tribunales examinadores de tu departamento para el presente año.\n\n'
             'Verificá que los datos estén actualizados, realizá los cambios necesarios y confirmá el estado de cada tribunal.\n\n'
-            'Una vez revisados, los cambios quedarán pendientes de sincronización para el administrador.',
+            'Una vez revisados, podés proponer cambios usando el formulario de cada tribunal.',
             url=url_tribunales,
         )
         notificados += 1
@@ -603,57 +487,10 @@ def enviar_informe_tribunales(request):
             f'Informe de tribunales enviado — Dpto. {departamento}',
             f'{director.get_full_name()} envió el informe anual de tribunales '
             f'del Departamento de {departamento}.',
-            url=reverse('planes:lista_comparacion_tribunales') + '?pendientes=1',
+            url=reverse('planes:lista_solicitudes_cambio'),
         )
 
     return JsonResponse({'ok': True})
-
-
-@login_required
-@solo_director_departamento
-def generar_pdf_modificaciones(request):
-    from django.contrib.auth import get_user_model
-    from django.http import HttpResponse
-    User = get_user_model()
-
-    departamento = request.user.departamento
-
-    meps = list(
-        MateriaEnPlan.objects
-        .filter(
-            models.Q(plan__carrera__departamento=departamento, es_servicio=False) |
-            models.Q(departamento_dictante=departamento)
-        )
-        .filter(tribunal__pendiente_sincronizacion=True)
-        .select_related('materia', 'plan__carrera')
-        .order_by('materia__codigo', 'plan__carrera__nombre', 'plan__codigo', 'ano', 'cuatrimestre')
-    )
-
-    if not meps:
-        messages.error(request, 'No hay tribunales con modificaciones pendientes.')
-        return redirect('planes:lista_tribunales')
-
-    mep_ids = [mep.id for mep in meps]
-    dir_map = {
-        t.materia_en_plan_id: t
-        for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=mep_ids)
-    }
-    adm_map = {
-        t.materia_en_plan_id: t
-        for t in TribunalAdmin.objects.filter(materia_en_plan_id__in=mep_ids)
-    }
-
-    admin = User.objects.filter(rol='administrador', is_active=True).first()
-    buffer = generar_pdf_modificaciones_tribunales(request.user, admin, meps, dir_map, adm_map)
-
-    import datetime
-    safe_dept = departamento.lower().replace(' ', '_')
-    fecha_str = datetime.date.today().strftime('%Y%m%d')
-    filename = f'modificaciones_tribunales_{safe_dept}_{fecha_str}.pdf'
-
-    response = HttpResponse(buffer, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    return response
 
 
 @login_required
@@ -676,6 +513,265 @@ def descargar_informe_tribunales(request):
 
     safe_dept = departamento.lower().replace(' ', '_')
     filename = f'tribunales_{safe_dept}_{informe.ano}.pdf'
+    response = HttpResponse(buffer, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+# ── director: mis solicitudes de cambio ──────────────────────────────────────
+
+@login_required
+@solo_director_departamento
+def mis_solicitudes_cambio(request):
+    qs = (
+        SolicitudCambioTribunal.objects
+        .filter(director=request.user)
+        .prefetch_related('items')
+        .order_by('-fecha_creacion')
+    )
+    paginator = Paginator(qs, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'planes/mis_solicitudes_cambio.html', {
+        'page_obj': page_obj,
+    })
+
+
+# ── admin: listado de materias en plan ───────────────────────────────────────
+
+@login_required
+@solo_administrador
+def admin_lista_materias_en_plan(request):
+    q = request.GET.get('q', '').strip()
+    filtro = request.GET.get('filtro', '')
+    dept = request.GET.get('departamento', '')
+    carrera_pk = request.GET.get('carrera', '')
+
+    base_qs = (
+        MateriaEnPlan.objects
+        .select_related('materia', 'plan__carrera')
+        .order_by('plan__carrera__nombre', 'plan__codigo', 'ano', 'cuatrimestre', 'materia__nombre')
+    )
+
+    if q:
+        base_qs = base_qs.filter(
+            models.Q(materia__nombre__icontains=q) |
+            models.Q(materia__codigo__icontains=q)
+        )
+    if dept:
+        base_qs = base_qs.filter(
+            models.Q(plan__carrera__departamento=dept) |
+            models.Q(departamento_dictante=dept)
+        )
+    if carrera_pk:
+        base_qs = base_qs.filter(plan__carrera__pk=carrera_pk)
+
+    sin_tribunal_count = base_qs.filter(es_optativa=False, tribunal__isnull=True).count()
+    incompleto_count = base_qs.filter(es_optativa=False, tribunal__presidente_nombre='').count()
+    completo_count = base_qs.filter(es_optativa=False).exclude(tribunal__isnull=True).exclude(tribunal__presidente_nombre='').count()
+    optativa_count = base_qs.filter(es_optativa=True).count()
+
+    qs = base_qs
+    if filtro == 'sin_tribunal':
+        qs = base_qs.filter(es_optativa=False, tribunal__isnull=True)
+    elif filtro == 'incompleto':
+        qs = base_qs.filter(es_optativa=False, tribunal__presidente_nombre='')
+    elif filtro == 'completo':
+        qs = base_qs.filter(es_optativa=False).exclude(tribunal__isnull=True).exclude(tribunal__presidente_nombre='')
+    elif filtro == 'optativas':
+        qs = base_qs.filter(es_optativa=True)
+
+    paginator = Paginator(qs, 30)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    page_mep_ids = [mep.id for mep in page_obj]
+    tribunales_map = {
+        t.materia_en_plan_id: t
+        for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=page_mep_ids)
+    }
+    for mep in page_obj:
+        mep.tribunal_obj = tribunales_map.get(mep.id)
+
+    carrera_opciones = Carrera.objects.values_list('pk', 'nombre').order_by('nombre')
+
+    return render(request, 'planes/admin_lista_materias_en_plan.html', {
+        'page_obj': page_obj,
+        'q': q,
+        'filtro': filtro,
+        'dept': dept,
+        'carrera_pk': carrera_pk,
+        'departamento_opciones': DEPARTAMENTO_OPCIONES,
+        'carrera_opciones': carrera_opciones,
+        'sin_tribunal_count': sin_tribunal_count,
+        'incompleto_count': incompleto_count,
+        'completo_count': completo_count,
+        'optativa_count': optativa_count,
+        'total_count': base_qs.count(),
+    })
+
+
+# ── admin: crear tribunal vacío ──────────────────────────────────────────────
+
+@login_required
+@solo_administrador
+def admin_crear_tribunal(request, pk):
+    if request.method != 'POST':
+        return redirect('planes:admin_lista_materias_en_plan')
+    mep = get_object_or_404(MateriaEnPlan, pk=pk)
+    _, created = TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
+    if created:
+        messages.success(request, f'Tribunal creado para {mep.materia.nombre}.')
+    else:
+        messages.info(request, f'{mep.materia.nombre} ya tenía tribunal.')
+    next_url = request.POST.get('next') or reverse('planes:admin_lista_materias_en_plan')
+    return redirect(next_url)
+
+
+# ── admin: solicitudes de cambio de tribunal ──────────────────────────────────
+
+@login_required
+@solo_administrador
+def lista_solicitudes_cambio(request):
+    dept_filtro = request.GET.get('departamento', '')
+
+    qs = (
+        SolicitudCambioTribunal.objects
+        .select_related('director')
+        .prefetch_related('items')
+        .order_by('-fecha_creacion')
+    )
+    if dept_filtro:
+        qs = qs.filter(departamento=dept_filtro)
+
+    paginator = Paginator(qs, 25)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'planes/admin_lista_solicitudes_cambio.html', {
+        'page_obj': page_obj,
+        'dept_filtro': dept_filtro,
+        'departamento_opciones': DEPARTAMENTO_OPCIONES,
+    })
+
+
+@login_required
+@solo_administrador
+def detalle_solicitud_cambio(request, pk):
+    solicitud = get_object_or_404(
+        SolicitudCambioTribunal.objects.select_related('director'),
+        pk=pk,
+    )
+
+    items = list(
+        solicitud.items
+        .select_related(
+            'tribunal__materia_en_plan__materia',
+            'tribunal__materia_en_plan__plan__carrera',
+        )
+        .order_by(
+            'tribunal__materia_en_plan__materia__codigo',
+            'tribunal__materia_en_plan__plan__carrera__nombre',
+            'tribunal__materia_en_plan__plan__codigo',
+            'tribunal__materia_en_plan__ano',
+        )
+    )
+
+    for item in items:
+        item.t_actual = item.tribunal
+        t = item.tribunal
+        item.diff = {
+            'presidente': (
+                item.presidente_nombre != t.presidente_nombre or
+                item.presidente_dni != t.presidente_dni
+            ),
+            'vocal_1': (
+                item.vocal_1_nombre != t.vocal_1_nombre or
+                item.vocal_1_dni != t.vocal_1_dni
+            ),
+            'vocal_2': (
+                item.vocal_2_nombre != t.vocal_2_nombre or
+                item.vocal_2_dni != t.vocal_2_dni
+            ),
+            'dia_hora': (
+                item.dia_semana != t.dia_semana or
+                item.hora != t.hora
+            ),
+            'modalidad': item.permite_libres != t.permite_libres,
+        }
+
+    return render(request, 'planes/admin_detalle_solicitud_cambio.html', {
+        'solicitud': solicitud,
+        'items': items,
+    })
+
+
+@login_required
+@solo_administrador
+def aplicar_solicitud(request, pk):
+    if request.method != 'POST':
+        return redirect('planes:lista_solicitudes_cambio')
+
+    solicitud = get_object_or_404(
+        SolicitudCambioTribunal,
+        pk=pk,
+        estado='enviada',
+    )
+
+    for item in solicitud.items.select_related('tribunal'):
+        tribunal = item.tribunal
+        for campo in _CAMPOS_TRIBUNAL:
+            setattr(tribunal, campo, getattr(item, campo))
+        tribunal.save()
+
+    solicitud.estado = 'aplicada'
+    solicitud.save()
+
+    if solicitud.director:
+        _crear_notificacion(
+            solicitud.director, 'nuevo_tramite',
+            'Tu solicitud de cambio fue aplicada',
+            f'La solicitud de cambio de tribunales del Departamento de {solicitud.departamento} '
+            f'fue revisada y aplicada por administración.',
+            url=reverse('planes:lista_tribunales'),
+        )
+
+    messages.success(request, 'Solicitud aplicada correctamente.')
+    return redirect('planes:detalle_solicitud_cambio', pk=pk)
+
+
+@login_required
+@solo_administrador
+def admin_descargar_solicitud_cambio(request, pk):
+    from django.http import HttpResponse
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    solicitud = get_object_or_404(
+        SolicitudCambioTribunal.objects.select_related('director'),
+        pk=pk,
+    )
+
+    items = list(
+        solicitud.items
+        .select_related('tribunal__materia_en_plan__materia', 'tribunal__materia_en_plan__plan__carrera')
+        .all()
+    )
+    meps = sorted(
+        [item.tribunal.materia_en_plan for item in items],
+        key=lambda m: (m.materia.codigo, m.plan.carrera.nombre, m.plan.codigo, m.ano, m.cuatrimestre),
+    )
+    item_map = {item.tribunal.materia_en_plan_id: item for item in items}
+    mep_ids = [mep.id for mep in meps]
+    current_map = {
+        t.materia_en_plan_id: t
+        for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=mep_ids)
+    }
+
+    admin_user = User.objects.filter(rol='administrador', is_active=True).first()
+    director_user = solicitud.director or admin_user
+    buffer = generar_pdf_solicitud_cambio(director_user, admin_user, meps, item_map, current_map)
+
+    safe_dept = solicitud.departamento.lower().replace(' ', '_')
+    fecha_str = solicitud.fecha_creacion.strftime('%Y%m%d')
+    filename = f'solicitud_cambio_tribunales_{safe_dept}_{fecha_str}.pdf'
     response = HttpResponse(buffer, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response

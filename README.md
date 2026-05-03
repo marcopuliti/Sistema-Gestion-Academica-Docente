@@ -1,23 +1,28 @@
 # Sistema de Gestión Académica Docente
 
-Plataforma web para la gestión de solicitudes de protocolización de programas de cursos optativos y curriculares de la Facultad de Ciencias Físico Matemáticas y Naturales — Universidad Nacional de San Luis.
+Plataforma web para la gestión de solicitudes de protocolización de programas y de tribunales examinadores de la Facultad de Ciencias Físico Matemáticas y Naturales — Universidad Nacional de San Luis.
 
 ## Módulos
 
 | Módulo | Descripción |
 |--------|-------------|
-| **Solicitudes** | Solicitud de protocolización de cursos: programa completo, equipo docente, carga horaria y bibliografía |
+| **Solicitudes** | Solicitud de protocolización de cursos (curriculares y optativos) y talleres: programa completo, equipo docente, carga horaria, correlativas y bibliografía |
+| **Planes** | Carreras, planes de estudio, materias, tribunales examinadores y gestión del ciclo anual de confirmación/cambio de tribunales |
 | **Trámites** | Base común: estados (Pendiente → En Revisión → Aprobado/Rechazado), revisión con comentarios, calendario académico |
-| **Notificaciones** | Notificaciones internas para cambios de estado y nuevas solicitudes |
+| **Notificaciones** | Notificaciones internas para cambios de estado, nuevas solicitudes y ciclos de informe de tribunales |
 | **Accounts** | Autenticación, registro con verificación por email, roles y gestión de usuarios |
+
+---
 
 ## Roles
 
 | Rol | Permisos |
 |-----|----------|
-| **Docente** | Carga y consulta sus propias solicitudes. Descarga el documento completo (nota + programa) |
-| **Director de Departamento** | Ve todas las solicitudes de su departamento, asigna código de materia, descarga nota de comisión |
-| **Administrador** | Acceso total: ve todo, revisa, aprueba/rechaza, gestiona usuarios |
+| **Docente** | Crea y consulta sus propias solicitudes de protocolización. Descarga el documento completo (nota + programa) |
+| **Director de Departamento** | Ve solicitudes de su departamento; asigna código de materia; visualiza y propone cambios en los tribunales examinadores de su departamento; genera y envía el informe anual de tribunales |
+| **Administrador** | Acceso total: gestiona usuarios, revisa y aprueba solicitudes, administra todas las materias en plan, crea tribunales vacíos, aplica solicitudes de cambio de tribunal y solicita el informe anual |
+
+---
 
 ## Stack
 
@@ -150,24 +155,82 @@ python manage.py changepassword matematica
 # (repetir para cada director)
 ```
 
-O desde el panel de administración Django en `/admin/`.
-
 El comando es idempotente: si los usuarios ya existen, los omite sin error.
 
 ---
 
-## Documentos generados
+## Tribunales Examinadores
 
-Desde el detalle de cada solicitud se pueden descargar:
+Cada `MateriaEnPlan` no optativa puede tener un `TribunalExaminador` con presidente, dos vocales, día/hora de examen y si admite alumnos libres.
+
+### Ciclo anual
+
+1. El **administrador** accede a *Dashboard → Solicitar informe* para inicializar tribunales vacíos y notificar a todos los directores.
+2. Cada **director** revisa los tribunales de su departamento y propone los cambios que correspondan.
+3. Los cambios propuestos se agrupan en una `SolicitudCambioTribunal` que el director envía al administrador.
+4. El **administrador** revisa cada solicitud y la aplica, actualizando los tribunales en la base de datos.
+5. Una vez conformes, el director descarga el informe PDF y lo envía al administrador para su archivo.
+
+### Comandos de carga inicial
+
+```bash
+# Crear tribunales vacíos para todas las materias activas sin tribunal
+python manage.py crear_tribunales
+
+# Cargar tribunales del Departamento Matemática (lunes)
+python manage.py cargar_tribunales_matematica
+
+# Cargar tribunales del Departamento Matemática (martes–viernes)
+python manage.py cargar_tribunales_matematica_resto
+
+# Corregir acentos y numerales romanos en nombres de materias
+python manage.py corregir_nombres_materias [--dry-run]
+```
+
+### Importar materias desde UNSL
+
+```bash
+# Importar materias de todas las carreras
+python manage.py importar_materias [--limpiar] [--carrera CODIGO]
+
+# Importar materias de un plan específico por URL
+python manage.py importar_desde_url URL [--limpiar]
+```
+
+---
+
+## Solicitudes de Protocolización
+
+Flujo de estados:
+
+```
+Pendiente → En Revisión → Aprobado
+                       ↘ Rechazado
+```
+
+Al cambiar estado el docente recibe una notificación interna. Al crear una solicitud, el director del departamento correspondiente también es notificado.
+
+### Tipos de solicitud
+
+| Tipificación | Descripción |
+|--------------|-------------|
+| Obligatoria curricular | Materia obligatoria del plan de estudios |
+| Optativa curricular | Materia optativa del plan de estudios |
+| Electiva curricular | Materia electiva del plan de estudios |
+| Extracurricular | Curso o actividad fuera del plan |
+
+### Documentos generados
 
 | Documento | Quién puede descargar | Formato |
 |-----------|----------------------|---------|
-| **Solicitud Completa** (nota de elevación + programa) | Todos los usuarios con acceso a la solicitud | PDF / DOCX |
-| **Nota de Comisión** (para el Secretario Académico) | Solo Director de Departamento y Administrador | PDF / DOCX |
+| **Solicitud Completa** (nota de elevación + programa) | Todos los usuarios con acceso | PDF / DOCX |
+| **Nota de Comisión** | Solo Director y Administrador | PDF / DOCX |
 
-La **Solicitud Completa** combina en un único archivo:
-- **Página 1:** Nota de solicitud de protocolización dirigida al Secretario Académico
-- **Páginas siguientes:** Programa completo con todas las secciones (oferta académica, equipo docente, características del curso, fundamentación, objetivos, contenidos, etc.)
+---
+
+## Solicitudes de Taller
+
+Permite registrar talleres y cursos especiales con equipo docente externo, cupo, crédito horario y acta del Consejo Departamental. Flujo de estados idéntico al de protocolización.
 
 ---
 
@@ -193,17 +256,6 @@ python manage.py dumpdata --natural-foreign --natural-primary \
   -e accounts.customuser -e admin.logentry -e sessions.session \
   --indent 2 > datos.json
 ```
-
----
-
-## Flujo de estados de solicitudes
-
-```
-Pendiente → En Revisión → Aprobado
-                       ↘ Rechazado
-```
-
-Al cambiar estado, el docente recibe una notificación interna. Al crear una solicitud, el Director del departamento correspondiente también recibe notificación.
 
 ---
 
@@ -237,37 +289,23 @@ erDiagram
     %% ── SOLICITUDES ──────────────────────────────────────────────────────────
     SolicitudProtocolizacion {
         bigint      id                  PK
-        varchar     nombre_docente      "para envíos anónimos"
-        varchar     departamento_docente
-        varchar     email_docente
         varchar     estado              "pendiente | en_revision | aprobado | rechazado"
         datetime    fecha_creacion
         varchar     nombre_curso
-        varchar     area
-        varchar     anno_carrera
-        varchar     periodo             "1c | 2c | anual"
-        int         hs_teorico_practico
-        int         hs_teoricas
-        int         hs_practicas_aula
-        int         hs_lab_campo
         varchar     tipificacion        "obligatoria | optativa | electiva | extracurricular"
         varchar     modalidad_cursado
         date        fecha_inicio
         date        fecha_hasta
         int         cantidad_semanas
+        int         hs_teorico_practico
+        int         hs_teoricas
+        int         hs_practicas_aula
+        int         hs_lab_campo
         text        fundamentacion
         text        objetivos
         text        contenidos_minimos
         text        unidades
-        text        plan_trabajos_practicos
-        text        regimen_aprobacion
         text        bibliografia_basica
-        text        bibliografia_complementaria
-        text        resumen_objetivos
-        text        resumen_programa
-        text        imprevistos
-        text        contacto_otros
-        varchar     condicion           "regular | promocional"
         varchar     codigo_materia      "asignado por el director"
         text        comentarios_revision
     }
@@ -278,8 +316,30 @@ erDiagram
         varchar     dni
         varchar     funcion     "responsable | titular | adjunto | ..."
         varchar     cargo       "profesor | jtp | ayudante | ..."
-        varchar     dedicacion  "exclusiva | semi | simple"
+        varchar     dedicacion  "10h | 20h | 40h"
         int         orden
+    }
+
+    SolicitudTaller {
+        bigint      id                      PK
+        varchar     estado
+        varchar     denominacion_curso
+        int         credito_horario_total
+        int         cupo
+        text        objetivos
+        text        contenidos_minimos
+        text        programa
+        text        sistema_evaluacion
+        file        acta_consejo_departamental
+    }
+
+    MiembroEquipoTaller {
+        bigint      id          PK
+        varchar     rol         "responsable | coordinador | co-responsable | ..."
+        varchar     nombre
+        varchar     titulo
+        varchar     institucion
+        varchar     email
     }
 
     %% ── PLANES ───────────────────────────────────────────────────────────────
@@ -288,28 +348,78 @@ erDiagram
         varchar     codigo
         varchar     nombre
         int         duracion_anos
+        varchar     departamento
     }
 
     PlanEstudio {
         bigint      id          PK
         varchar     codigo
         boolean     vigente
+        boolean     activo
     }
 
     Materia {
         bigint      id      PK
         varchar     codigo
         varchar     nombre
+        varchar     departamento
     }
 
     MateriaEnPlan {
-        bigint      id              PK
-        varchar     nombre          "puede diferir del nombre en Materia"
+        bigint      id                  PK
         boolean     es_optativa
+        boolean     es_servicio
+        varchar     departamento_dictante
         int         hs_totales
         int         tope_hs
-        int         ano             "año de la carrera en que se cursa"
-        int         cuatrimestre    "1 | 2 | 3 (anual)"
+        int         ano
+        int         cuatrimestre        "1 | 2 | 3 (anual)"
+    }
+
+    TribunalExaminador {
+        bigint      id                  PK
+        varchar     presidente_nombre
+        varchar     presidente_dni
+        varchar     vocal_1_nombre
+        varchar     vocal_1_dni
+        varchar     vocal_2_nombre
+        varchar     vocal_2_dni
+        int         dia_semana          "1 lunes … 5 viernes"
+        time        hora
+        boolean     permite_libres
+    }
+
+    SolicitudCambioTribunal {
+        bigint      id              PK
+        varchar     departamento
+        datetime    fecha_creacion
+        datetime    fecha_envio
+        varchar     estado          "borrador | enviada | aplicada"
+    }
+
+    SolicitudCambioItem {
+        bigint      id              PK
+        varchar     presidente_nombre
+        varchar     presidente_dni
+        varchar     vocal_1_nombre
+        varchar     vocal_1_dni
+        varchar     vocal_2_nombre
+        varchar     vocal_2_dni
+        int         dia_semana
+        time        hora
+        boolean     permite_libres
+    }
+
+    SolicitudInformeTribunal {
+        bigint      id          PK
+        datetime    fecha
+        boolean     activa
+    }
+
+    InformeTribunalesEnviado {
+        bigint      id          PK
+        varchar     departamento
+        datetime    fecha_envio
     }
 
     %% ── TRAMITES ─────────────────────────────────────────────────────────────
@@ -337,21 +447,30 @@ erDiagram
 
     %% ── RELACIONES ───────────────────────────────────────────────────────────
 
-    CustomUser         ||--o|  TokenVerificacionEmail       : "token_verificacion"
+    CustomUser              ||--o|   TokenVerificacionEmail          : "verificacion"
+    CustomUser              ||--o{   SolicitudProtocolizacion        : "docente"
+    CustomUser              ||--o{   SolicitudTaller                 : "docente"
+    CustomUser              ||--o{   Notificacion                    : "destinatario"
+    CustomUser              ||--o{   SolicitudCambioTribunal         : "director"
+    CustomUser              ||--o{   InformeTribunalesEnviado        : "director"
+    CustomUser              ||--o{   SolicitudInformeTribunal        : "solicitante"
 
-    CustomUser         ||--o{  SolicitudProtocolizacion     : "docente (usuario)"
-    CustomUser         ||--o{  SolicitudProtocolizacion     : "revisor"
+    SolicitudProtocolizacion  }o--o|  Carrera                       : "carrera"
+    SolicitudProtocolizacion  }o--o|  PlanEstudio                   : "plan_estudio"
+    SolicitudProtocolizacion  }o--o|  MateriaEnPlan                 : "optativa_vinculada"
+    SolicitudProtocolizacion  ||--|{  MiembroEquipoDocente           : "equipo_docente"
 
-    SolicitudProtocolizacion  }o--o|  Carrera               : "carrera"
-    SolicitudProtocolizacion  }o--o|  PlanEstudio           : "plan_estudio"
-    SolicitudProtocolizacion  }o--o|  MateriaEnPlan         : "optativa_vinculada"
-    SolicitudProtocolizacion  ||--|{  MiembroEquipoDocente  : "equipo_docente"
+    SolicitudTaller           ||--|{  MiembroEquipoTaller            : "equipo"
 
-    PlanEstudio        }o--||  Carrera                      : "carrera"
-    MateriaEnPlan      }o--||  Materia                      : "materia"
-    MateriaEnPlan      }o--||  PlanEstudio                  : "plan"
+    PlanEstudio               }o--||  Carrera                       : "carrera"
+    MateriaEnPlan             }o--||  Materia                       : "materia"
+    MateriaEnPlan             }o--||  PlanEstudio                   : "plan"
+    MateriaEnPlan             ||--o|  TribunalExaminador            : "tribunal"
 
-    CustomUser         ||--o{  Notificacion                 : "destinatario"
+    SolicitudCambioTribunal   ||--|{  SolicitudCambioItem           : "items"
+    SolicitudCambioItem       }o--||  TribunalExaminador            : "tribunal"
+
+    SolicitudInformeTribunal  ||--o{  InformeTribunalesEnviado      : "informes"
 ```
 
 ---
@@ -361,18 +480,26 @@ erDiagram
 ```
 ├── apps/
 │   ├── accounts/            # Usuarios, roles, registro, verificación de email
-│   │   └── management/
-│   │       └── commands/
-│   │           └── crear_directores_departamento.py
+│   │   └── management/commands/
+│   │       └── crear_directores_departamento.py
 │   ├── tramites/            # Base común (estados, calendario, dashboard)
-│   ├── solicitudes/         # Solicitud de protocolización + generación de documentos
-│   │   ├── pdf.py           # Generación PDF (programa, nota comisión, solicitud completa)
-│   │   └── docx_gen.py      # Generación DOCX (ídem)
-│   ├── planes/              # Carreras, planes de estudio, materias
+│   ├── solicitudes/         # Solicitudes de protocolización y talleres
+│   │   ├── pdf.py           # PDF (programa, nota comisión, solicitud completa)
+│   │   └── docx_gen.py      # DOCX (ídem)
+│   ├── planes/              # Carreras, planes, materias, tribunales
+│   │   ├── pdf.py           # PDF (informe tribunales, solicitud de cambio)
+│   │   └── management/commands/
+│   │       ├── actualizar_carreras.py            # Carga las 22 carreras de FCFMyN
+│   │       ├── crear_tribunales.py               # Crea tribunales vacíos para materias activas
+│   │       ├── corregir_nombres_materias.py      # Corrige acentos y numerales romanos
+│   │       ├── importar_materias.py              # Importa materias desde planesestudio.unsl.edu.ar
+│   │       ├── importar_desde_url.py             # Importa materias de un plan por URL
+│   │       ├── cargar_tribunales_matematica.py   # Carga tribunales Matemática (lunes)
+│   │       └── cargar_tribunales_matematica_resto.py  # Carga tribunales Matemática (mar–vie)
 │   └── notifications/       # Notificaciones internas
 ├── config/                  # Settings, URLs, WSGI
 ├── templates/               # Templates HTML
-├── static/                  # Archivos estáticos (incluye escudo.gif para documentos)
+├── static/                  # Archivos estáticos (escudo para documentos)
 ├── datos.json               # Fixture de datos iniciales
 └── .env.example             # Ejemplo de configuración
 ```

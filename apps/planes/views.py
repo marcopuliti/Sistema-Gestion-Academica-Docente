@@ -79,7 +79,7 @@ def materias_servicio(request):
         MateriaEnPlan.objects
         .filter(plan__carrera__departamento=departamento)
         .filter(models.Q(plan__vigente=True) | models.Q(plan__activo=True))
-        .filter(Exists(ano_activo_qs))
+        .annotate(se_dicta=Exists(ano_activo_qs))
         .select_related('materia', 'plan__carrera')
         .order_by('plan__carrera__nombre', 'plan__codigo', 'ano', 'cuatrimestre', 'materia__nombre')
     )
@@ -136,7 +136,7 @@ def materias_servicio(request):
         if mep.ano != prev_ano:
             prev_ano = mep.ano
             prev_cuat = None
-            ano_entry = {'ano': mep.ano, 'cuatrimestres': []}
+            ano_entry = {'ano': mep.ano, 'se_dicta': mep.se_dicta, 'cuatrimestres': []}
             plan_entry['anos'].append(ano_entry)
         if mep.cuatrimestre != prev_cuat:
             prev_cuat = mep.cuatrimestre
@@ -176,6 +176,8 @@ def lista_tribunales(request):
     q = request.GET.get('q', '').strip()
     filtro = request.GET.get('filtro', '')
 
+    _ano_dictado_qs = AnioDictado.objects.filter(plan=OuterRef('plan'), ano=OuterRef('ano'))
+
     base_qs = (
         MateriaEnPlan.objects
         .filter(
@@ -183,6 +185,7 @@ def lista_tribunales(request):
             models.Q(departamento_dictante=departamento)
         )
         .filter(es_optativa=False)
+        .annotate(se_dicta=Exists(_ano_dictado_qs))
         .select_related('materia', 'plan__carrera')
         .order_by('materia__codigo', 'plan__carrera__nombre', 'plan__codigo', 'ano', 'cuatrimestre')
     )
@@ -197,6 +200,8 @@ def lista_tribunales(request):
         meps_qs = meps_qs.filter(tribunal__isnull=True)
     elif filtro == 'incompletos':
         meps_qs = meps_qs.filter(tribunal__presidente_nombre='')
+    elif filtro == 'sin_dictado':
+        meps_qs = meps_qs.filter(se_dicta=False)
 
     paginator = Paginator(meps_qs, 20)
     page_obj = paginator.get_page(request.GET.get('page'))
@@ -231,6 +236,7 @@ def lista_tribunales(request):
         materia_en_plan_id__in=all_ids,
         presidente_nombre='',
     ).count()
+    no_dictados_count = base_qs.filter(se_dicta=False).count()
 
     solicitud = SolicitudInformeTribunal.objects.filter(activa=True).first()
     informe_enviado = (
@@ -245,6 +251,15 @@ def lista_tribunales(request):
         informe_enviado is not None and
         informe_enviado.solicitud_id == solicitud.pk
     )
+
+    # Q1: todos los departamentos; Q2: solo los departamentos con nuevos tribunales
+    if solicitud is not None:
+        if solicitud.cuatrimestre == 1:
+            solicitud_para_dept = True
+        else:
+            solicitud_para_dept = departamento in solicitud.departamentos_notificados
+    else:
+        solicitud_para_dept = False
 
     solicitudes_enviadas = SolicitudCambioTribunal.objects.filter(
         departamento=departamento, estado='enviada'
@@ -263,10 +278,12 @@ def lista_tribunales(request):
         'departamento': departamento,
         'q': q,
         'filtro': filtro,
-        'solicitud_activa': solicitud is not None and not ya_enviado_esta_solicitud,
+        'solicitud': solicitud,
+        'solicitud_activa': solicitud_para_dept and not ya_enviado_esta_solicitud,
         'informe_enviado': informe_enviado,
         'sin_registro_count': sin_registro_count,
         'incompletos_count': incompletos_count,
+        'no_dictados_count': no_dictados_count,
         'borrador': borrador,
         'borrador_count': borrador_count,
         'solicitudes_enviadas': solicitudes_enviadas,
@@ -432,43 +449,88 @@ def solicitar_informe_tribunales(request):
     from django.contrib.auth import get_user_model
     User = get_user_model()
 
-    # Marcar solicitudes anteriores como inactivas y crear la nueva
-    SolicitudInformeTribunal.objects.filter(activa=True).update(activa=False)
-    SolicitudInformeTribunal.objects.create(solicitante=request.user)
+    try:
+        cuatrimestre = int(request.POST.get('cuatrimestre', 1))
+        anio = int(request.POST.get('anio', timezone.now().year))
+        if cuatrimestre not in (1, 2):
+            raise ValueError
+    except (ValueError, TypeError):
+        messages.error(request, 'Cuatrimestre o año inválido.')
+        return redirect('tramites:dashboard')
 
-    # Crear TribunalExaminador para MEPs que aún no tienen uno
+    # Desactivar solicitudes anteriores
+    SolicitudInformeTribunal.objects.filter(activa=True).update(activa=False)
+
+    # Filtro por cuatrimestre: Q1 incluye anuales (3), Q2 solo cuatrimestre 2
     plan_activo = models.Q(plan__vigente=True) | models.Q(plan__activo=True)
     ano_qs = AnioDictado.objects.filter(plan=OuterRef('plan'), ano=OuterRef('ano'))
+    if cuatrimestre == 1:
+        cuatrimestre_filter = models.Q(cuatrimestre__in=[1, 3])
+    else:
+        cuatrimestre_filter = models.Q(cuatrimestre=2)
+
     meps_sin_tribunal = (
         MateriaEnPlan.objects
         .filter(plan_activo)
+        .filter(cuatrimestre_filter)
         .filter(Exists(ano_qs))
         .filter(tribunal__isnull=True)
         .filter(es_optativa=False)
-        .select_related('materia', 'plan')
+        .select_related('materia', 'plan__carrera')
     )
     creados = 0
+    departamentos_nuevos = set()
     for mep in meps_sin_tribunal:
         TribunalExaminador.objects.get_or_create(materia_en_plan=mep)
         creados += 1
+        dept = mep.departamento_dictante if (mep.es_servicio and mep.departamento_dictante) else mep.plan.carrera.departamento
+        if dept:
+            departamentos_nuevos.add(dept)
 
-    # Notificar a todos los directores activos
+    # Q1: departamentos_notificados vacío = todos; Q2: solo los afectados
+    solicitud = SolicitudInformeTribunal.objects.create(
+        solicitante=request.user,
+        cuatrimestre=cuatrimestre,
+        anio=anio,
+        departamentos_notificados=[] if cuatrimestre == 1 else list(departamentos_nuevos),
+    )
+
     url_tribunales = reverse('planes:lista_tribunales')
-    directores = User.objects.filter(rol='director_departamento', is_active=True)
+    cuatrimestre_label = 'primer cuatrimestre' if cuatrimestre == 1 else 'segundo cuatrimestre'
+    if cuatrimestre == 1:
+        directores = User.objects.filter(rol='director_departamento', is_active=True)
+        mensaje_cuerpo = (
+            f'Se solicita que revises los tribunales examinadores de tu departamento '
+            f'para el {cuatrimestre_label} del año {anio}.\n\n'
+            'Verificá que todos los datos estén actualizados y realizá los cambios necesarios. '
+            'Una vez revisados, confirmá enviando el informe.'
+        )
+    else:
+        if departamentos_nuevos:
+            directores = User.objects.filter(
+                rol='director_departamento', is_active=True,
+                departamento__in=departamentos_nuevos,
+            )
+        else:
+            directores = User.objects.none()
+        mensaje_cuerpo = (
+            f'Se crearon nuevos tribunales examinadores para el {cuatrimestre_label} del año {anio} '
+            f'en tu departamento.\n\n'
+            'Completá los datos de los tribunales recién creados y confirmá enviando el informe.'
+        )
+
     notificados = 0
     for director in directores:
         _crear_notificacion(
             director,
             'nuevo_tramite',
-            'Informe de comisiones anuales — Revisión de tribunales',
-            'Se solicita que revises los tribunales examinadores de tu departamento para el presente año.\n\n'
-            'Verificá que los datos estén actualizados, realizá los cambios necesarios y confirmá el estado de cada tribunal.\n\n'
-            'Una vez revisados, podés proponer cambios usando el formulario de cada tribunal.',
+            f'Informe de tribunales — {cuatrimestre_label.capitalize()} {anio}',
+            mensaje_cuerpo,
             url=url_tribunales,
         )
         notificados += 1
 
-    resumen = f'Solicitud enviada a {notificados} director{"es" if notificados != 1 else ""}.'
+    resumen = f'Solicitud de {cuatrimestre_label} {anio} enviada a {notificados} director{"es" if notificados != 1 else ""}.'
     if creados:
         resumen += f' Se inicializaron {creados} tribunal{"es" if creados != 1 else ""} sin datos previos.'
     messages.success(request, resumen)
@@ -491,6 +553,10 @@ def enviar_informe_tribunales(request):
 
     director = request.user
     departamento = director.departamento
+
+    # Para Q2, solo los departamentos con nuevos tribunales pueden enviar informe
+    if solicitud.cuatrimestre == 2 and departamento not in solicitud.departamentos_notificados:
+        return JsonResponse({'ok': False, 'error': 'Tu departamento no tiene tribunales nuevos para informar en este cuatrimestre.'}, status=400)
 
     InformeTribunalesEnviado.objects.update_or_create(
         solicitud=solicitud,

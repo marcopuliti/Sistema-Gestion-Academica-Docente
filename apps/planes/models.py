@@ -180,7 +180,11 @@ class TribunalExaminador(models.Model):
 
 
 class SolicitudInformeTribunal(models.Model):
-    """Registro de cada solicitud anual de informe de tribunales enviada por el admin."""
+    """Registro de cada solicitud de informe de tribunales enviada por el admin."""
+    CUATRIMESTRE_CHOICES = [
+        (1, 'Primer cuatrimestre'),
+        (2, 'Segundo cuatrimestre'),
+    ]
     fecha = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de solicitud')
     solicitante = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -190,6 +194,18 @@ class SolicitudInformeTribunal(models.Model):
         verbose_name='Solicitante',
     )
     activa = models.BooleanField(default=True, verbose_name='Activa')
+    cuatrimestre = models.PositiveSmallIntegerField(
+        choices=CUATRIMESTRE_CHOICES,
+        default=1,
+        verbose_name='Cuatrimestre',
+    )
+    anio = models.PositiveIntegerField(default=2025, verbose_name='Año')
+    departamentos_notificados = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Departamentos notificados',
+        help_text='Q1: vacío (todos). Q2: lista de departamentos con nuevos tribunales.',
+    )
 
     class Meta:
         ordering = ['-fecha']
@@ -197,7 +213,8 @@ class SolicitudInformeTribunal(models.Model):
         verbose_name_plural = 'Solicitudes de informe de tribunal'
 
     def __str__(self):
-        return f'Solicitud informe tribunales — {self.fecha:%d/%m/%Y}'
+        label = 'Q1' if self.cuatrimestre == 1 else 'Q2'
+        return f'Solicitud informe tribunales — {label} {self.anio}'
 
 
 class InformeTribunalesEnviado(models.Model):
@@ -231,7 +248,7 @@ class InformeTribunalesEnviado(models.Model):
 
     @property
     def ano(self):
-        return self.solicitud.fecha.year
+        return self.solicitud.anio
 
 
 class SolicitudCambioTribunal(models.Model):

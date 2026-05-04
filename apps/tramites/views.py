@@ -33,6 +33,7 @@ def dashboard(request):
 
 
 def _dashboard_admin(request, user):
+    from django.utils import timezone as tz
     todas_meps = MateriaEnPlan.objects.filter(es_optativa=False)
     total_meps = todas_meps.count()
     sin_tribunal = todas_meps.filter(tribunal__isnull=True).count()
@@ -62,6 +63,7 @@ def _dashboard_admin(request, user):
         'cambios_enviados': cambios_enviados,
         'ultimos_cambios': ultimos_cambios,
         'solicitud_informe_activa': solicitud_informe is not None,
+        'anio_actual': tz.now().year,
         'ultimas_notificaciones': Notificacion.objects.filter(destinatario=user).order_by('-fecha')[:5],
     })
 
@@ -117,6 +119,14 @@ def _dashboard_director(request, user):
         informe_enviado.solicitud_id == solicitud.pk
     )
 
+    if solicitud is not None:
+        solicitud_para_dept = (
+            solicitud.cuatrimestre == 1 or
+            departamento in solicitud.departamentos_notificados
+        )
+    else:
+        solicitud_para_dept = False
+
     return render(request, 'tramites/dashboard_director.html', {
         'departamento': departamento,
         'por_revisar': por_revisar,
@@ -125,7 +135,7 @@ def _dashboard_director(request, user):
         'con_datos_faltantes': con_datos_faltantes,
         'borrador_count': borrador_count,
         'solicitudes_enviadas': solicitudes_enviadas,
-        'solicitud_informe_activa': solicitud is not None and not ya_enviado,
+        'solicitud_informe_activa': solicitud_para_dept and not ya_enviado,
         'informe_enviado': informe_enviado,
         'ultimas_notificaciones': Notificacion.objects.filter(destinatario=user).order_by('-fecha')[:5],
     })

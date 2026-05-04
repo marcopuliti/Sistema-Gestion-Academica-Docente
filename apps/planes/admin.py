@@ -225,9 +225,9 @@ class TribunalExaminadorAdmin(admin.ModelAdmin):
 
 @admin.register(SolicitudInformeTribunal)
 class SolicitudInformeTribunalAdmin(admin.ModelAdmin):
-    list_display = ('fecha', 'solicitante', 'activa')
-    list_filter = ('activa',)
-    readonly_fields = ('fecha', 'solicitante')
+    list_display = ('__str__', 'anio', 'cuatrimestre', 'fecha', 'solicitante', 'activa')
+    list_filter = ('activa', 'cuatrimestre', 'anio')
+    readonly_fields = ('fecha', 'solicitante', 'departamentos_notificados')
     ordering = ('-fecha',)
 
 

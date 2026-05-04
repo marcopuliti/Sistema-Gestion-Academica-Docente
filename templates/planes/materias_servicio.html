@@ -48,6 +48,13 @@
     font-size: .95rem;
     letter-spacing: .02em;
   }
+  .ano-header.no-dictado {
+    background-color: #f1f3f5;
+    color: #6c757d;
+    border-top-color: #ced4da;
+  }
+  .no-dictado-rows tr { opacity: .65; }
+  .no-dictado-rows .cuat-header { background-color: #f8f9fa; color: #999; }
   .cuat-header {
     background-color: #f8f9fa;
     color: #555;
@@ -106,10 +113,16 @@
       </div>
 
       {% for ano_data in plan_data.anos %}
-      <div class="ano-header">
+      <div class="ano-header{% if not ano_data.se_dicta %} no-dictado{% endif %}">
         <i class="bi bi-calendar3 me-2"></i>{{ ano_data.ano }}° año
+        {% if not ano_data.se_dicta %}
+        <span class="badge bg-secondary ms-2" style="font-size:.7rem">
+          <i class="bi bi-slash-circle me-1"></i>Año no dictado
+        </span>
+        {% endif %}
       </div>
 
+      <div class="{% if not ano_data.se_dicta %}no-dictado-rows{% endif %}">
       {% for cuat_data in ano_data.cuatrimestres %}
       <div class="cuat-header">{{ cuat_data.label }}</div>
       <table class="table table-hover table-sm">
@@ -164,6 +177,7 @@
         </tbody>
       </table>
       {% endfor %}
+      </div>{# /no-dictado-rows wrapper #}
       {% endfor %}
 
     </div>

@@ -22,6 +22,7 @@
   .docente-val { font-size: .88rem; font-weight: 500; }
   .sin-tribunal-row { border-left: 3px solid #dc3545; }
   .con-propuesta-row { border-left: 3px solid #0dcaf0; }
+  .no-dictado-row { border-left: 3px solid #ffc107; background: #fff9e6; }
 </style>
 {% endblock %}
 
@@ -34,7 +35,7 @@
   <div class="d-flex gap-2 flex-wrap">
     {% if informe_enviado %}
     <a href="{% url 'planes:descargar_informe_tribunales' %}" download class="btn btn-outline-primary">
-      <i class="bi bi-file-earmark-pdf me-1"></i>Informe anual {{ informe_enviado.ano }}
+      <i class="bi bi-file-earmark-pdf me-1"></i>Informe {{ informe_enviado.solicitud.get_cuatrimestre_display }} {{ informe_enviado.ano }}
     </a>
     {% endif %}
     {% if solicitud_activa %}
@@ -87,15 +88,15 @@
      class="btn btn-sm {% if not filtro %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
     Todos
   </a>
-  <a href="?{% if q %}q={{ q }}&{% endif %}filtro=sin_registro"
-     class="btn btn-sm {% if filtro == 'sin_registro' %}btn-danger{% else %}btn-outline-danger{% endif %}">
-    Sin registro
-    {% if sin_registro_count %}<span class="badge bg-white text-dark ms-1">{{ sin_registro_count }}</span>{% endif %}
-  </a>
   <a href="?{% if q %}q={{ q }}&{% endif %}filtro=incompletos"
      class="btn btn-sm {% if filtro == 'incompletos' %}btn-warning text-dark{% else %}btn-outline-warning{% endif %}">
     Incompletos
     {% if incompletos_count %}<span class="badge {% if filtro == 'incompletos' %}bg-dark{% else %}bg-warning text-dark{% endif %} ms-1">{{ incompletos_count }}</span>{% endif %}
+  </a>
+  <a href="?{% if q %}q={{ q }}&{% endif %}filtro=sin_dictado"
+     class="btn btn-sm {% if filtro == 'sin_dictado' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+    Años sin dictar
+    {% if no_dictados_count %}<span class="badge {% if filtro == 'sin_dictado' %}bg-light text-dark{% else %}bg-secondary{% endif %} ms-1">{{ no_dictados_count }}</span>{% endif %}
   </a>
 </div>
 
@@ -103,17 +104,23 @@
 <div class="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
   <i class="bi bi-megaphone-fill fs-5"></i>
   <div>
-    <strong>Solicitud de informe anual activa.</strong>
-    Revisá los tribunales de tu departamento. Si hay cambios, proponelos usando el botón
-    <strong>Proponer cambio</strong> en cada tribunal; luego enviá la solicitud de cambio.
-    Cuando estés listo, enviá el informe usando el botón superior.
+    <strong>Solicitud de informe activa —
+      {% if solicitud.cuatrimestre == 1 %}1° cuatrimestre{% else %}2° cuatrimestre{% endif %}
+      {{ solicitud.anio }}.
+    </strong>
+    {% if solicitud.cuatrimestre == 1 %}
+      Revisá todos los tribunales de tu departamento. Si hay cambios, proponelos con
+      <strong>Proponer cambio</strong> y luego enviá el informe con el botón superior.
+    {% else %}
+      Se crearon nuevos tribunales para el 2° cuatrimestre. Completá sus datos y enviá el informe con el botón superior.
+    {% endif %}
   </div>
 </div>
 {% elif informe_enviado %}
 <div class="alert alert-success d-flex align-items-center gap-2 mb-3" role="alert">
   <i class="bi bi-check-circle-fill fs-5"></i>
   <div>
-    <strong>Informe anual {{ informe_enviado.ano }} enviado.</strong>
+    <strong>Informe {{ informe_enviado.solicitud.get_cuatrimestre_display }} {{ informe_enviado.ano }} enviado.</strong>
     Enviado el {{ informe_enviado.fecha_envio|date:"d/m/Y" }}. Podés descargarlo usando el botón superior.
   </div>
 </div>
@@ -132,7 +139,7 @@
 
   {% for mep in grupo.list %}
   {% with t=mep.tribunal_obj %}
-  <div class="tribunal-row px-3 py-3 {% if not t %}sin-tribunal-row{% elif mep.tribunal_tiene_propuesta %}con-propuesta-row{% endif %}">
+  <div class="tribunal-row px-3 py-3 {% if not mep.se_dicta %}no-dictado-row{% elif not t %}sin-tribunal-row{% elif mep.tribunal_tiene_propuesta %}con-propuesta-row{% endif %}">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
       <div class="plan-info">
         {{ mep.plan.carrera.nombre }} &middot; Plan {{ mep.plan.codigo }}
@@ -140,6 +147,11 @@
         {% if mep.plan.vigente %}<span class="badge bg-success ms-1" style="font-size:.7rem">Vigente</span>
         {% elif mep.plan.activo %}<span class="badge bg-warning text-dark ms-1" style="font-size:.7rem">Activo</span>
         {% else %}<span class="badge bg-secondary ms-1" style="font-size:.7rem">No activo</span>{% endif %}
+        {% if not mep.se_dicta %}
+        <span class="badge bg-secondary ms-1" style="font-size:.7rem" title="Este año no figura entre los años dictados del plan">
+          <i class="bi bi-slash-circle me-1"></i>Año no dictado
+        </span>
+        {% endif %}
       </div>
       <div class="d-flex gap-2 align-items-center flex-wrap">
         {% if not t %}

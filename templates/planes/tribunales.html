@@ -33,7 +33,7 @@
   </div>
   <div class="d-flex gap-2 flex-wrap">
     {% if informe_enviado %}
-    <a href="{% url 'planes:descargar_informe_tribunales' %}" class="btn btn-outline-primary">
+    <a href="{% url 'planes:descargar_informe_tribunales' %}" download class="btn btn-outline-primary">
       <i class="bi bi-file-earmark-pdf me-1"></i>Informe anual {{ informe_enviado.ano }}
     </a>
     {% endif %}
@@ -270,7 +270,7 @@
         </div>
         <div class="text-muted" style="font-size:.8rem">{{ s.items.count }} tribunal{{ s.items.count|pluralize:"es" }} incluido{{ s.items.count|pluralize:"s" }}</div>
       </div>
-      <a href="{% url 'planes:descargar_solicitud_cambio' s.pk %}" class="btn btn-sm btn-outline-secondary">
+      <a href="{% url 'planes:descargar_solicitud_cambio' s.pk %}" download class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-file-earmark-pdf me-1"></i>Descargar PDF
       </a>
     </div>

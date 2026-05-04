@@ -6,12 +6,16 @@ from django.utils import timezone
 
 class CustomUser(AbstractUser):
     DOCENTE = 'docente'
-    ADMINISTRADOR = 'administrador'
+    SECRETARIO = 'secretario'
+    DIRECCION_ACADEMICA = 'direccion_academica'
+    DPTO_ESTUDIANTES = 'dpto_estudiantes'
     DIRECTOR_DEPARTAMENTO = 'director_departamento'
 
     ROL_CHOICES = [
         (DOCENTE, 'Docente'),
-        (ADMINISTRADOR, 'Administrador'),
+        (SECRETARIO, 'Secretario'),
+        (DIRECCION_ACADEMICA, 'Dirección Académica'),
+        (DPTO_ESTUDIANTES, 'Departamento de Estudiantes'),
         (DIRECTOR_DEPARTAMENTO, 'Director de Departamento'),
     ]
 
@@ -56,8 +60,31 @@ class CustomUser(AbstractUser):
         return self.rol == self.DOCENTE
 
     @property
+    def es_secretario(self):
+        return self.rol == self.SECRETARIO
+
+    @property
+    def es_direccion_academica(self):
+        return self.rol == self.DIRECCION_ACADEMICA
+
+    @property
+    def es_dpto_estudiantes(self):
+        return self.rol == self.DPTO_ESTUDIANTES
+
+    @property
     def es_administrador(self):
-        return self.rol == self.ADMINISTRADOR
+        """Cualquier rol con acceso administrativo (total o parcial)."""
+        return self.rol in (self.SECRETARIO, self.DIRECCION_ACADEMICA, self.DPTO_ESTUDIANTES)
+
+    @property
+    def puede_admin_general(self):
+        """Secretario y Dirección Académica — acceso administrativo completo excepto usuarios."""
+        return self.rol in (self.SECRETARIO, self.DIRECCION_ACADEMICA)
+
+    @property
+    def puede_gestionar_usuarios(self):
+        """Solo Secretario puede crear/editar/desactivar usuarios."""
+        return self.rol == self.SECRETARIO
 
     @property
     def es_director_departamento(self):
@@ -65,7 +92,7 @@ class CustomUser(AbstractUser):
 
     @property
     def puede_revisar(self):
-        return self.rol == self.ADMINISTRADOR
+        return self.rol in (self.SECRETARIO, self.DIRECCION_ACADEMICA)
 
 
 class TokenVerificacionEmail(models.Model):

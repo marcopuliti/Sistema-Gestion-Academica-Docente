@@ -9,6 +9,7 @@ DEPARTAMENTO_CHOICES = [
     ('Electrónica', 'Electrónica'),
     ('Informática', 'Informática'),
     ('Minería', 'Minería'),
+    ('Externo', 'Externo'),
 ]
 
 

@@ -9,12 +9,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.tramites.decorators import solo_administrador, solo_director_departamento
+from apps.tramites.decorators import solo_administrador, solo_admin_general, solo_director_departamento
 from apps.tramites.models import DEPARTAMENTO_CHOICES
 from apps.notifications.utils import _crear_notificacion
 from .forms import TribunalForm
-from .models import AnioDictado, Carrera, InformeTribunalesEnviado, MateriaEnPlan, SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeTribunal, TribunalExaminador
-from .pdf import generar_pdf_informe_tribunales, generar_pdf_solicitud_cambio
+from .models import AnioDictado, Carrera, ConvocatoriaSolicitudServicio, InformeTribunalesEnviado, MateriaEnPlan, SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeTribunal, SolicitudServicio, SolicitudServicioItem, TribunalExaminador
+from .pdf import generar_pdf_informe_tribunales, generar_pdf_solicitud_cambio, generar_pdf_solicitud_servicio
 
 DEPARTAMENTO_OPCIONES = [(v, l) for v, l in DEPARTAMENTO_CHOICES if v]
 
@@ -32,7 +32,7 @@ def _pdf_buffer_departamento(departamento, director_user):
     """Genera el buffer PDF del informe de tribunales para un departamento."""
     from django.contrib.auth import get_user_model
     User = get_user_model()
-    admin = User.objects.filter(rol='administrador', is_active=True).first()
+    admin = User.objects.filter(rol='secretario', is_active=True).first()
     meps = list(
         MateriaEnPlan.objects
         .filter(
@@ -300,8 +300,21 @@ def proponer_cambio_tribunal(request, pk):
         )
 
         dia = form.cleaned_data['dia_semana']
-        # Create or update the item for this tribunal in the draft
-        SolicitudCambioItem.objects.update_or_create(
+
+        def _snapshot(t):
+            return {
+                'presidente_nombre': t.presidente_nombre,
+                'presidente_dni': t.presidente_dni,
+                'vocal_1_nombre': t.vocal_1_nombre,
+                'vocal_1_dni': t.vocal_1_dni,
+                'vocal_2_nombre': t.vocal_2_nombre,
+                'vocal_2_dni': t.vocal_2_dni,
+                'dia_semana': t.dia_semana,
+                'hora': t.hora.strftime('%H:%M') if t.hora else None,
+                'permite_libres': t.permite_libres,
+            }
+
+        item, created = SolicitudCambioItem.objects.update_or_create(
             solicitud=draft,
             tribunal=tribunal,
             defaults={
@@ -316,6 +329,9 @@ def proponer_cambio_tribunal(request, pk):
                 'permite_libres': form.cleaned_data['permite_libres'],
             },
         )
+        if created:
+            item.snapshot_tribunal = _snapshot(tribunal)
+            item.save(update_fields=['snapshot_tribunal'])
         messages.success(request, 'Cambio propuesto guardado.')
     else:
         messages.error(request, 'Corregí los errores del formulario.')
@@ -352,7 +368,7 @@ def enviar_solicitud_cambio(request):
     from django.contrib.auth import get_user_model
     User = get_user_model()
     url_lista = reverse('planes:lista_solicitudes_cambio')
-    for admin_user in User.objects.filter(rol='administrador', is_active=True):
+    for admin_user in User.objects.filter(rol__in=['secretario', 'direccion_academica', 'dpto_estudiantes'], is_active=True):
         _crear_notificacion(
             admin_user, 'nuevo_tramite',
             f'Solicitud de cambio de tribunales — Dpto. {departamento}',
@@ -391,14 +407,16 @@ def descargar_solicitud_cambio(request, pk):
         for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=mep_ids)
     }
 
-    admin = User.objects.filter(rol='administrador', is_active=True).first()
+    admin = User.objects.filter(rol='secretario', is_active=True).first()
     director_user = solicitud.director or request.user
     buffer = generar_pdf_solicitud_cambio(director_user, admin, meps, item_map, current_map)
 
     safe_dept = departamento.lower().replace(' ', '_')
     fecha_str = solicitud.fecha_creacion.strftime('%Y%m%d')
     filename = f'solicitud_cambio_tribunales_{safe_dept}_{fecha_str}.pdf'
-    response = HttpResponse(buffer, content_type='application/pdf')
+    pdf_bytes = buffer.read()
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Length'] = len(pdf_bytes)
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
@@ -406,7 +424,7 @@ def descargar_solicitud_cambio(request, pk):
 # ── admin: informes de tribunales ─────────────────────────────────────────────
 
 @login_required
-@solo_administrador
+@solo_admin_general
 def solicitar_informe_tribunales(request):
     if request.method != 'POST':
         return redirect('tramites:dashboard')
@@ -480,7 +498,7 @@ def enviar_informe_tribunales(request):
         defaults={'director': director, 'fecha_envio': timezone.now()},
     )
 
-    admin = User.objects.filter(rol='administrador', is_active=True).first()
+    admin = User.objects.filter(rol__in=['secretario', 'direccion_academica'], is_active=True).first()
     if admin:
         _crear_notificacion(
             admin, 'nuevo_tramite',
@@ -513,7 +531,9 @@ def descargar_informe_tribunales(request):
 
     safe_dept = departamento.lower().replace(' ', '_')
     filename = f'tribunales_{safe_dept}_{informe.ano}.pdf'
-    response = HttpResponse(buffer, content_type='application/pdf')
+    pdf_bytes = buffer.read()
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Length'] = len(pdf_bytes)
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
@@ -539,7 +559,7 @@ def mis_solicitudes_cambio(request):
 # ── admin: listado de materias en plan ───────────────────────────────────────
 
 @login_required
-@solo_administrador
+@solo_admin_general
 def admin_lista_materias_en_plan(request):
     q = request.GET.get('q', '').strip()
     filtro = request.GET.get('filtro', '')
@@ -612,7 +632,7 @@ def admin_lista_materias_en_plan(request):
 # ── admin: crear tribunal vacío ──────────────────────────────────────────────
 
 @login_required
-@solo_administrador
+@solo_admin_general
 def admin_crear_tribunal(request, pk):
     if request.method != 'POST':
         return redirect('planes:admin_lista_materias_en_plan')
@@ -674,32 +694,92 @@ def detalle_solicitud_cambio(request, pk):
         )
     )
 
+    import datetime as _dt
+    import types as _types
+    from .models import DIA_SEMANA_CHOICES as _DIAS
+
+    _DIAS_DISPLAY = dict(_DIAS)
+
+    def _snap_to_obj(snap):
+        dia = snap.get('dia_semana')
+        hora_str = snap.get('hora')
+        hora = _dt.time.fromisoformat(hora_str) if hora_str else None
+        obj = _types.SimpleNamespace(
+            presidente_nombre=snap.get('presidente_nombre', ''),
+            presidente_dni=snap.get('presidente_dni', ''),
+            vocal_1_nombre=snap.get('vocal_1_nombre', ''),
+            vocal_1_dni=snap.get('vocal_1_dni', ''),
+            vocal_2_nombre=snap.get('vocal_2_nombre', ''),
+            vocal_2_dni=snap.get('vocal_2_dni', ''),
+            dia_semana=dia,
+            hora=hora,
+            permite_libres=snap.get('permite_libres', True),
+        )
+        obj.get_dia_semana_display = lambda: _DIAS_DISPLAY.get(dia, '')
+        return obj
+
     for item in items:
-        item.t_actual = item.tribunal
-        t = item.tribunal
-        item.diff = {
-            'presidente': (
-                item.presidente_nombre != t.presidente_nombre or
-                item.presidente_dni != t.presidente_dni
-            ),
-            'vocal_1': (
-                item.vocal_1_nombre != t.vocal_1_nombre or
-                item.vocal_1_dni != t.vocal_1_dni
-            ),
-            'vocal_2': (
-                item.vocal_2_nombre != t.vocal_2_nombre or
-                item.vocal_2_dni != t.vocal_2_dni
-            ),
-            'dia_hora': (
-                item.dia_semana != t.dia_semana or
-                item.hora != t.hora
-            ),
-            'modalidad': item.permite_libres != t.permite_libres,
-        }
+        snap = item.snapshot_tribunal or {}
+        if snap:
+            baseline = _snap_to_obj(snap)
+            item.t_actual = baseline
+            item.diff = {
+                'presidente': (
+                    item.presidente_nombre != baseline.presidente_nombre or
+                    item.presidente_dni != baseline.presidente_dni
+                ),
+                'vocal_1': (
+                    item.vocal_1_nombre != baseline.vocal_1_nombre or
+                    item.vocal_1_dni != baseline.vocal_1_dni
+                ),
+                'vocal_2': (
+                    item.vocal_2_nombre != baseline.vocal_2_nombre or
+                    item.vocal_2_dni != baseline.vocal_2_dni
+                ),
+                'dia':      item.dia_semana != baseline.dia_semana,
+                'hora':     item.hora != baseline.hora,
+                'modalidad': item.permite_libres != baseline.permite_libres,
+            }
+        else:
+            # Legacy items without snapshot: compare against live tribunal
+            t = item.tribunal
+            item.t_actual = t
+            item.diff = {
+                'presidente': (
+                    item.presidente_nombre != t.presidente_nombre or
+                    item.presidente_dni != t.presidente_dni
+                ),
+                'vocal_1': (
+                    item.vocal_1_nombre != t.vocal_1_nombre or
+                    item.vocal_1_dni != t.vocal_1_dni
+                ),
+                'vocal_2': (
+                    item.vocal_2_nombre != t.vocal_2_nombre or
+                    item.vocal_2_dni != t.vocal_2_dni
+                ),
+                'dia':      item.dia_semana != t.dia_semana,
+                'hora':     item.hora != t.hora,
+                'modalidad': item.permite_libres != t.permite_libres,
+            }
+
+    # Solicitud más antigua del mismo departamento aún sin aplicar (bloquea esta)
+    bloqueada_por = None
+    if solicitud.estado == 'enviada':
+        bloqueada_por = (
+            SolicitudCambioTribunal.objects
+            .filter(
+                departamento=solicitud.departamento,
+                estado='enviada',
+                fecha_creacion__lt=solicitud.fecha_creacion,
+            )
+            .order_by('fecha_creacion')
+            .first()
+        )
 
     return render(request, 'planes/admin_detalle_solicitud_cambio.html', {
         'solicitud': solicitud,
         'items': items,
+        'bloqueada_por': bloqueada_por,
     })
 
 
@@ -714,6 +794,24 @@ def aplicar_solicitud(request, pk):
         pk=pk,
         estado='enviada',
     )
+
+    pendiente_anterior = (
+        SolicitudCambioTribunal.objects
+        .filter(
+            departamento=solicitud.departamento,
+            estado='enviada',
+            fecha_creacion__lt=solicitud.fecha_creacion,
+        )
+        .exists()
+    )
+    if pendiente_anterior:
+        messages.error(
+            request,
+            'No se puede aplicar esta solicitud porque existe una solicitud anterior '
+            f'del Departamento de {solicitud.departamento} que aún no fue aplicada. '
+            'Aplicá primero esa solicitud.',
+        )
+        return redirect('planes:detalle_solicitud_cambio', pk=pk)
 
     for item in solicitud.items.select_related('tribunal'):
         tribunal = item.tribunal
@@ -765,13 +863,339 @@ def admin_descargar_solicitud_cambio(request, pk):
         for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=mep_ids)
     }
 
-    admin_user = User.objects.filter(rol='administrador', is_active=True).first()
+    admin_user = User.objects.filter(rol='secretario', is_active=True).first()
     director_user = solicitud.director or admin_user
     buffer = generar_pdf_solicitud_cambio(director_user, admin_user, meps, item_map, current_map)
 
     safe_dept = solicitud.departamento.lower().replace(' ', '_')
     fecha_str = solicitud.fecha_creacion.strftime('%Y%m%d')
     filename = f'solicitud_cambio_tribunales_{safe_dept}_{fecha_str}.pdf'
-    response = HttpResponse(buffer, content_type='application/pdf')
+    pdf_bytes = buffer.read()
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Length'] = len(pdf_bytes)
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+# ── solicitudes de servicio ───────────────────────────────────────────────────
+
+def _meps_servicio_para(departamento_solicitante, departamento_dictante):
+    """MateriaEnPlan de servicio de carreras del dept solicitante dictadas por dept dictante."""
+    ano_qs = AnioDictado.objects.filter(plan=OuterRef('plan'), ano=OuterRef('ano'))
+    return (
+        MateriaEnPlan.objects
+        .filter(
+            plan__carrera__departamento=departamento_solicitante,
+            es_servicio=True,
+            departamento_dictante=departamento_dictante,
+        )
+        .filter(models.Q(plan__vigente=True) | models.Q(plan__activo=True))
+        .filter(Exists(ano_qs))
+        .filter(es_optativa=False)
+        .select_related('materia', 'plan__carrera')
+        .order_by('cuatrimestre', 'plan__carrera__nombre', 'plan__codigo', 'materia__nombre')
+    )
+
+
+@login_required
+@solo_director_departamento
+def lista_solicitudes_servicio(request):
+    departamento = request.user.departamento
+    enviadas = SolicitudServicio.objects.filter(
+        departamento_solicitante=departamento,
+    ).order_by('-fecha_creacion')
+    recibidas = SolicitudServicio.objects.filter(
+        departamento_dictante=departamento,
+        estado='enviada',
+    ).order_by('-fecha_envio')
+    return render(request, 'planes/solicitudes_servicio.html', {
+        'enviadas': enviadas,
+        'recibidas': recibidas,
+    })
+
+
+def _cuatrimestres_validos(convocatoria_cuatrimestre):
+    """Cuatrimestres de MateriaEnPlan habilitados por la convocatoria."""
+    # Cuatrimestre 1 incluye anuales (código 3); cuatrimestre 2 solo incluye el 2.
+    return [1, 3] if convocatoria_cuatrimestre == 1 else [2]
+
+
+@login_required
+@solo_director_departamento
+def nueva_solicitud_servicio(request):
+    departamento = request.user.departamento
+
+    # La convocatoria activa es la más reciente emitida por administración.
+    convocatoria = ConvocatoriaSolicitudServicio.objects.order_by('-anio', '-cuatrimestre').first()
+    if not convocatoria:
+        messages.error(request, 'No hay ninguna convocatoria activa. Esperá que administración habilite el período.')
+        return redirect('planes:lista_solicitudes_servicio')
+
+    cuats_validos = _cuatrimestres_validos(convocatoria.cuatrimestre)
+    anio = convocatoria.anio
+    valid_deptos = {v for v, _ in DEPARTAMENTO_OPCIONES if v != departamento}
+
+    dept_destino = request.GET.get('dpto') or request.POST.get('departamento_dictante', '')
+
+    meps = []
+    sin_hs = []
+    if dept_destino and dept_destino in valid_deptos:
+        meps = list(
+            _meps_servicio_para(departamento, dept_destino)
+            .filter(cuatrimestre__in=cuats_validos)
+        )
+        sin_hs = [m for m in meps if m.hs_totales is None]
+
+    if request.method == 'POST':
+        dept_destino = request.POST.get('departamento_dictante', '').strip()
+        dictante_externo_nombre = request.POST.get('dictante_externo_nombre', '').strip()
+
+        if dept_destino not in valid_deptos:
+            messages.error(request, 'Departamento destino no válido.')
+            return redirect('planes:nueva_solicitud_servicio')
+
+        if dept_destino == 'Externo' and not dictante_externo_nombre:
+            messages.error(request, 'Ingresá el nombre del organismo o cátedra externa.')
+            meps = list(
+                _meps_servicio_para(departamento, dept_destino)
+                .filter(cuatrimestre__in=cuats_validos)
+            )
+            sin_hs = [m for m in meps if m.hs_totales is None]
+            return render(request, 'planes/nueva_solicitud_servicio.html', {
+                'departamento_opciones': [(v, l) for v, l in DEPARTAMENTO_OPCIONES if v != departamento],
+                'dept_destino': dept_destino,
+                'dictante_externo_nombre': dictante_externo_nombre,
+                'meps': meps,
+                'sin_hs': sin_hs,
+                'convocatoria': convocatoria,
+            })
+
+        meps = list(
+            _meps_servicio_para(departamento, dept_destino)
+            .filter(cuatrimestre__in=cuats_validos)
+        )
+        if not meps:
+            messages.error(request, 'No hay materias de servicio habilitadas para ese departamento en la convocatoria actual.')
+            return redirect('planes:nueva_solicitud_servicio')
+
+        # Validate and save missing hs_totales
+        errores_hs = []
+        hs_map = {}
+        for mep in meps:
+            raw = request.POST.get(f'hs_{mep.pk}', '').strip()
+            if mep.hs_totales is None:
+                if not raw or not raw.isdigit() or int(raw) <= 0:
+                    errores_hs.append(mep.materia.nombre)
+                else:
+                    hs_map[mep.pk] = int(raw)
+            else:
+                hs_map[mep.pk] = mep.hs_totales
+
+        if errores_hs:
+            messages.error(request, f'Falta la carga horaria de: {", ".join(errores_hs)}.')
+            sin_hs = [m for m in meps if m.hs_totales is None]
+            return render(request, 'planes/nueva_solicitud_servicio.html', {
+                'departamento_opciones': [(v, l) for v, l in DEPARTAMENTO_OPCIONES if v != departamento],
+                'dept_destino': dept_destino,
+                'dictante_externo_nombre': dictante_externo_nombre,
+                'meps': meps,
+                'sin_hs': sin_hs,
+                'convocatoria': convocatoria,
+            })
+
+        # Persist hs_totales permanently
+        for mep_pk, hs in hs_map.items():
+            MateriaEnPlan.objects.filter(pk=mep_pk, hs_totales__isnull=True).update(hs_totales=hs)
+
+        meps = list(
+            _meps_servicio_para(departamento, dept_destino)
+            .filter(cuatrimestre__in=cuats_validos)
+        )
+
+        solicitud = SolicitudServicio.objects.create(
+            director=request.user,
+            departamento_solicitante=departamento,
+            departamento_dictante=dept_destino,
+            dictante_externo_nombre=dictante_externo_nombre if dept_destino == 'Externo' else '',
+            anio_academico=anio,
+            estado='enviada',
+            fecha_envio=timezone.now(),
+        )
+        for mep in meps:
+            SolicitudServicioItem.objects.create(
+                solicitud=solicitud,
+                materia_en_plan=mep,
+                hs_totales=hs_map.get(mep.pk, mep.hs_totales or 0),
+            )
+
+        messages.success(request, 'Solicitud de servicio enviada correctamente.')
+        return redirect('planes:detalle_solicitud_servicio', pk=solicitud.pk)
+
+    return render(request, 'planes/nueva_solicitud_servicio.html', {
+        'departamento_opciones': [(v, l) for v, l in DEPARTAMENTO_OPCIONES if v != departamento],
+        'dept_destino': dept_destino,
+        'dictante_externo_nombre': '',
+        'meps': meps,
+        'sin_hs': sin_hs,
+        'convocatoria': convocatoria,
+    })
+
+
+@login_required
+def detalle_solicitud_servicio(request, pk):
+    user = request.user
+    solicitud = get_object_or_404(
+        SolicitudServicio.objects.select_related('director'),
+        pk=pk,
+    )
+    puede_ver = (
+        user.es_administrador or
+        (user.es_director_departamento and (
+            user.departamento == solicitud.departamento_solicitante or
+            (solicitud.departamento_dictante != 'Externo' and
+             user.departamento == solicitud.departamento_dictante)
+        ))
+    )
+    if not puede_ver:
+        messages.error(request, 'No tenés permiso para ver esta solicitud.')
+        return redirect('tramites:dashboard')
+
+    items = (
+        solicitud.items
+        .select_related('materia_en_plan__materia', 'materia_en_plan__plan__carrera')
+        .order_by(
+            'materia_en_plan__cuatrimestre',
+            'materia_en_plan__plan__carrera__nombre',
+            'materia_en_plan__plan__codigo',
+            'materia_en_plan__materia__nombre',
+        )
+    )
+    return render(request, 'planes/detalle_solicitud_servicio.html', {
+        'solicitud': solicitud,
+        'items': items,
+    })
+
+
+@login_required
+def descargar_solicitud_servicio(request, pk):
+    from django.http import HttpResponse
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    user = request.user
+    solicitud = get_object_or_404(
+        SolicitudServicio.objects.select_related('director'),
+        pk=pk,
+    )
+    puede_ver = (
+        user.es_administrador or
+        (user.es_director_departamento and (
+            user.departamento == solicitud.departamento_solicitante or
+            (solicitud.departamento_dictante != 'Externo' and
+             user.departamento == solicitud.departamento_dictante)
+        ))
+    )
+    if not puede_ver:
+        messages.error(request, 'No tenés permiso.')
+        return redirect('tramites:dashboard')
+
+    items = list(
+        solicitud.items
+        .select_related('materia_en_plan__materia', 'materia_en_plan__plan__carrera')
+        .order_by(
+            'materia_en_plan__cuatrimestre',
+            'materia_en_plan__plan__carrera__nombre',
+            'materia_en_plan__plan__codigo',
+            'materia_en_plan__materia__nombre',
+        )
+    )
+    admin_user = User.objects.filter(rol='secretario', is_active=True).first()
+    buffer = generar_pdf_solicitud_servicio(solicitud, admin_user, items)
+
+    safe_sol = f"{solicitud.departamento_solicitante}_a_{solicitud.departamento_dictante}".lower().replace(' ', '_')
+    filename = f'solicitud_servicio_{safe_sol}_{solicitud.anio_academico}.pdf'
+    pdf_bytes = buffer.read()
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Length'] = len(pdf_bytes)
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+@solo_admin_general
+def admin_lista_solicitudes_servicio(request):
+    import datetime as _dt
+    solicitudes = (
+        SolicitudServicio.objects
+        .select_related('director')
+        .order_by('-fecha_creacion')
+    )
+    convocatorias = ConvocatoriaSolicitudServicio.objects.select_related('enviado_por').all()
+    anio_actual = _dt.date.today().year
+    try:
+        anio_sel = int(request.GET.get('anio', anio_actual))
+    except ValueError:
+        anio_sel = anio_actual
+    enviadas_anio = {c.cuatrimestre for c in convocatorias if c.anio == anio_sel}
+    return render(request, 'planes/admin_solicitudes_servicio.html', {
+        'solicitudes': solicitudes,
+        'convocatorias': convocatorias,
+        'anio_actual': anio_actual,
+        'anio_sel': anio_sel,
+        'enviadas_anio': enviadas_anio,
+    })
+
+
+@login_required
+@solo_admin_general
+def convocar_solicitudes_servicio(request):
+    import datetime as _dt
+    from django.contrib.auth import get_user_model
+    if request.method != 'POST':
+        return redirect('planes:admin_lista_solicitudes_servicio')
+
+    User = get_user_model()
+    try:
+        cuatrimestre = int(request.POST.get('cuatrimestre', 0))
+        anio = int(request.POST.get('anio', 0))
+    except ValueError:
+        messages.error(request, 'Datos inválidos.')
+        return redirect('planes:admin_lista_solicitudes_servicio')
+
+    if cuatrimestre not in (1, 2) or anio < 2020:
+        messages.error(request, 'Cuatrimestre o año inválido.')
+        return redirect('planes:admin_lista_solicitudes_servicio')
+
+    if ConvocatoriaSolicitudServicio.objects.filter(cuatrimestre=cuatrimestre, anio=anio).exists():
+        messages.error(request, f'Ya se envió una convocatoria para ese cuatrimestre y año.')
+        return redirect('planes:admin_lista_solicitudes_servicio')
+
+    cuat_label = '1° cuatrimestre (y anuales)' if cuatrimestre == 1 else '2° cuatrimestre'
+    anual_nota = ' Las materias anuales deben solicitarse en conjunto con las del 1° cuatrimestre.' if cuatrimestre == 1 else ''
+
+    directores = User.objects.filter(rol='director_departamento', is_active=True)
+    url_nueva = reverse('planes:nueva_solicitud_servicio')
+    count = 0
+    for director in directores:
+        _crear_notificacion(
+            director,
+            'nuevo_tramite',
+            f'Convocatoria: Solicitudes de servicio {anio} — {cuat_label}',
+            (
+                f'Se solicita generar las solicitudes de dictado por servicio correspondientes '
+                f'al {cuat_label} del ciclo lectivo {anio}.{anual_nota} '
+                f'Ingresá al sistema para generar las solicitudes a los departamentos correspondientes.'
+            ),
+            url=url_nueva,
+        )
+        count += 1
+
+    ConvocatoriaSolicitudServicio.objects.create(
+        cuatrimestre=cuatrimestre,
+        anio=anio,
+        enviado_por=request.user,
+        directores_notificados=count,
+    )
+
+    messages.success(request, f'Convocatoria enviada a {count} director{"es" if count != 1 else ""}.')
+    return redirect('planes:admin_lista_solicitudes_servicio')

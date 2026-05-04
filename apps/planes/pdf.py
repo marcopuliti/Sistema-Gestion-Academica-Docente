@@ -26,6 +26,8 @@ MESES = [
 
 DIAS = {1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes'}
 
+CUATRIMESTRE_LABEL = {1: 'primer cuatrimestre', 2: 'segundo cuatrimestre', 3: 'anual'}
+
 
 def _styles():
     base = getSampleStyleSheet()
@@ -60,12 +62,12 @@ def _styles():
 
 def _diffs(t_dir, t_adm):
     if t_adm is None:
-        # Sin baseline externo: resaltar todo campo con datos (es todo nuevo)
         return {
             'presidente': bool(t_dir.presidente_nombre or t_dir.presidente_dni),
             'vocal_1':    bool(t_dir.vocal_1_nombre    or t_dir.vocal_1_dni),
             'vocal_2':    bool(t_dir.vocal_2_nombre    or t_dir.vocal_2_dni),
-            'dia_hora':   bool(t_dir.dia_semana        or t_dir.hora),
+            'dia':        bool(t_dir.dia_semana),
+            'hora':       bool(t_dir.hora),
             'modalidad':  True,
         }
     return {
@@ -75,8 +77,8 @@ def _diffs(t_dir, t_adm):
                     or t_dir.vocal_1_dni != t_adm.vocal_1_dni),
         'vocal_2': (t_dir.vocal_2_nombre != t_adm.vocal_2_nombre
                     or t_dir.vocal_2_dni != t_adm.vocal_2_dni),
-        'dia_hora': (t_dir.dia_semana != t_adm.dia_semana
-                     or t_dir.hora != t_adm.hora),
+        'dia':      t_dir.dia_semana != t_adm.dia_semana,
+        'hora':     t_dir.hora != t_adm.hora,
         'modalidad': t_dir.permite_libres != t_adm.permite_libres,
     }
 
@@ -116,8 +118,11 @@ def _tribunal_table(mep, t_dir, t_adm, s):
         [p('2do. Vocal', s['campo']),
          p(t_dir.vocal_2_nombre, s['valor']),
          p(t_dir.vocal_2_dni, s['valor'])],
-        [p('Día y hora', s['campo']),
-         p(f'{dia_str} {hora_str}', s['valor']),
+        [p('Día', s['campo']),
+         p(dia_str, s['valor']),
+         ''],
+        [p('Hora', s['campo']),
+         p(hora_str, s['valor']),
          ''],
         [p('Modalidad', s['campo']),
          p(modalidad_str, s['valor']),
@@ -130,9 +135,10 @@ def _tribunal_table(mep, t_dir, t_adm, s):
         ('BACKGROUND', (0, 0), (2, 0), AZUL),
         # subheader
         ('BACKGROUND', (0, 1), (2, 1), GRIS),
-        # span dia/hora and modalidad value cells
+        # span value cells for día, hora and modalidad
         ('SPAN', (1, 5), (2, 5)),
         ('SPAN', (1, 6), (2, 6)),
+        ('SPAN', (1, 7), (2, 7)),
         # borders
         ('BOX', (0, 0), (-1, -1), 0.5, colors.grey),
         ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#cccccc')),
@@ -144,13 +150,14 @@ def _tribunal_table(mep, t_dir, t_adm, s):
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]
 
-    # Yellow for changed rows (rows 2–6 = data rows)
+    # Yellow for changed rows (rows 2–7 = data rows)
     row_map = [
         ('presidente', 2),
         ('vocal_1', 3),
         ('vocal_2', 4),
-        ('dia_hora', 5),
-        ('modalidad', 6),
+        ('dia', 5),
+        ('hora', 6),
+        ('modalidad', 7),
     ]
     for key, row_idx in row_map:
         if diff[key]:
@@ -243,3 +250,94 @@ def generar_pdf_solicitud_cambio(director, admin, meps, item_map, current_map):
     )
     titulo = f"Solicitud de Cambio de Tribunales — Dpto. {director.departamento} — {hoy.year}"
     return _build_pdf(director, admin, meps, item_map, current_map, cuerpo, titulo)
+
+
+def generar_pdf_solicitud_servicio(solicitud, admin_user, items):
+    """
+    Genera la nota formal de solicitud de dictado por servicio.
+    items: lista de SolicitudServicioItem con select_related cargado.
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        leftMargin=MARGIN_H, rightMargin=MARGIN_H,
+        topMargin=MARGIN_V, bottomMargin=MARGIN_V,
+    )
+    s = _styles()
+    story = []
+
+    hoy = datetime.date.today()
+    fecha_str = f"San Luis, {hoy.day} de {MESES[hoy.month - 1]} de {hoy.year}"
+    story.append(Paragraph(fecha_str, s['fecha']))
+    story.append(Spacer(1, 0.9 * cm))
+
+    es_externo = solicitud.departamento_dictante == 'Externo'
+    receptor_externo = solicitud.dictante_externo_nombre or 'Organismo externo'
+
+    if es_externo:
+        story.append(Paragraph(f"{receptor_externo}<br/>S / D:", s['dest']))
+    else:
+        admin_nombre = admin_user.get_full_name() if admin_user else 'Secretario Académico'
+        story.append(Paragraph(
+            f"Sr. Secretario Académico de la FCFMyN<br/>{admin_nombre}<br/>S / D:",
+            s['dest'],
+        ))
+    story.append(Spacer(1, 0.7 * cm))
+
+    _cuat_item = {1: '1° Cuatrimestre', 2: '2° Cuatrimestre', 3: 'Anual'}
+
+    # Group by (carrera, plan) — cuatrimestre label goes per-item
+    from collections import defaultdict
+    grupos = defaultdict(list)
+    for it in items:
+        mep = it.materia_en_plan
+        key = (mep.plan.carrera.nombre, mep.plan.codigo, mep.plan_id)
+        grupos[key].append(it)
+
+    director = solicitud.director
+
+    for (carrera_nombre, plan_codigo, _), grupo_items in sorted(grupos.items()):
+        if es_externo:
+            intro = (
+                f"Me dirijo a Ud. a fin de solicitar el dictado de las siguientes asignaturas "
+                f"de la carrera {carrera_nombre} plan {plan_codigo}."
+            )
+        else:
+            intro = (
+                f"Me dirijo a Ud., y por su intermedio a quien corresponda, a fin de solicitar se disponga "
+                f"el dictado por servicio de las siguientes asignaturas de la carrera "
+                f"{carrera_nombre} plan {plan_codigo}."
+            )
+        story.append(Paragraph(intro, s['cuerpo']))
+        story.append(Spacer(1, 0.3 * cm))
+
+        for it in sorted(
+            grupo_items,
+            key=lambda x: (x.materia_en_plan.cuatrimestre, x.materia_en_plan.materia.nombre),
+        ):
+            mep = it.materia_en_plan
+            cuat_label = _cuat_item.get(mep.cuatrimestre, '')
+            linea = f"{mep.materia.nombre} ({cuat_label}) – Crédito horario total: {it.hs_totales} hs"
+            story.append(Paragraph(linea, ParagraphStyle(
+                'item_servicio', parent=s['cuerpo'],
+                firstLineIndent=0, leftIndent=2 * cm,
+            )))
+        story.append(Spacer(1, 0.4 * cm))
+
+    story.append(Paragraph("Sin otro particular, saludo a Ud. con atenta consideración.", s['cuerpo']))
+    story.append(Spacer(1, 2 * cm))
+
+    if director:
+        firma = (
+            f"{director.get_full_name()}<br/>"
+            f"Director del Departamento<br/>"
+            f"de {solicitud.departamento_solicitante}<br/>"
+            f"F.C.F.M.yN."
+        )
+    else:
+        firma = f"Director del Departamento de {solicitud.departamento_solicitante}<br/>F.C.F.M.yN."
+    story.append(Paragraph(firma, s['firma']))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer

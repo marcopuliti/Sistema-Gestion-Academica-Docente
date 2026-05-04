@@ -59,7 +59,7 @@
           </a>
           <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item" href="{% url 'accounts:perfil' %}"><i class="bi bi-person me-2"></i>Mi perfil</a></li>
-            {% if user.es_administrador %}
+            {% if user.puede_gestionar_usuarios %}
             <li><a class="dropdown-item" href="{% url 'accounts:lista_usuarios' %}"><i class="bi bi-people me-2"></i>Usuarios</a></li>
             {% endif %}
             <li><hr class="dropdown-divider"></li>
@@ -119,26 +119,41 @@
             <i class="bi bi-file-earmark-diff me-2"></i>Cambios de tribunal
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link {% block nav_solicitudes_servicio %}{% endblock %}" href="{% url 'planes:lista_solicitudes_servicio' %}">
+            <i class="bi bi-envelope-paper me-2"></i>Solicitudes de servicio
+          </a>
+        </li>
         {% endif %}
         {% if user.es_administrador %}
+        <li class="mt-2 mb-1 px-2 text-uppercase text-muted small fw-bold">Planes y Tribunales</li>
+        {% if user.puede_admin_general %}
         <li class="nav-item">
           <a class="nav-link {% block nav_admin_materias_en_plan %}{% endblock %}" href="{% url 'planes:admin_lista_materias_en_plan' %}">
             <i class="bi bi-journal-text me-2"></i>Materias en Plan
           </a>
         </li>
+        {% endif %}
         <li class="nav-item">
           <a class="nav-link {% block nav_solicitudes_cambio %}{% endblock %}" href="{% url 'planes:lista_solicitudes_cambio' %}">
             <i class="bi bi-file-earmark-diff me-2"></i>Cambios de tribunal
           </a>
         </li>
+        {% if user.puede_admin_general %}
+        <li class="nav-item">
+          <a class="nav-link {% block nav_admin_solicitudes_servicio %}{% endblock %}" href="{% url 'planes:admin_lista_solicitudes_servicio' %}">
+            <i class="bi bi-envelope-paper me-2"></i>Solicitudes de servicio
+          </a>
+        </li>
         {% endif %}
-        {% if user.es_administrador %}
+        {% if user.puede_gestionar_usuarios %}
         <li class="mt-2 mb-1 px-2 text-uppercase text-muted small fw-bold">Administración</li>
         <li class="nav-item">
           <a class="nav-link {% block nav_usuarios %}{% endblock %}" href="{% url 'accounts:lista_usuarios' %}">
             <i class="bi bi-people me-2"></i>Gestión de Usuarios
           </a>
         </li>
+        {% endif %}
         {% endif %}
       </ul>
     </nav>

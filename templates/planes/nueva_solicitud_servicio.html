@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% block title %}Nueva solicitud de servicio{% endblock %}
+{% block nav_solicitudes_servicio %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <nav aria-label="breadcrumb" class="mb-1">
+    <ol class="breadcrumb mb-0" style="font-size:.85rem">
+      <li class="breadcrumb-item"><a href="{% url 'planes:lista_solicitudes_servicio' %}">Solicitudes de servicio</a></li>
+      <li class="breadcrumb-item active">Nueva</li>
+    </ol>
+  </nav>
+  <h2><i class="bi bi-envelope-paper me-2"></i>Nueva solicitud de servicio</h2>
+</div>
+
+<div class="alert alert-info py-2 small mb-3">
+  <i class="bi bi-megaphone me-1"></i>
+  Convocatoria activa: <strong>{{ convocatoria.get_cuatrimestre_display }} — {{ convocatoria.anio }}</strong>.
+  Solo se muestran las materias correspondientes a ese período.
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3 align-items-end mb-0">
+      <div class="col-md-5">
+        <label class="form-label fw-semibold">Departamento receptor</label>
+        <select name="dpto" class="form-select" onchange="this.form.submit()">
+          <option value="">— Seleccioná un departamento —</option>
+          {% for v, l in departamento_opciones %}
+          <option value="{{ v }}" {% if v == dept_destino %}selected{% endif %}>{{ l }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if dept_destino %}
+  {% if meps %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="departamento_dictante" value="{{ dept_destino }}">
+
+    {% if dept_destino == 'Externo' %}
+    <div class="card mb-3">
+      <div class="card-body">
+        <label class="form-label fw-semibold">Organismo / cátedra receptor <span class="text-danger">*</span></label>
+        <input type="text" name="dictante_externo_nombre"
+               class="form-control" style="max-width:420px"
+               placeholder="Ej: Departamento de Química, UNSJ"
+               value="{{ dictante_externo_nombre }}" required>
+        <div class="form-text">A quién va dirigida la solicitud (institución o cátedra externa).</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card mb-3">
+      <div class="card-header">
+        <i class="bi bi-list-ul me-2"></i>Materias habilitadas — Año {{ convocatoria.anio }}
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Cuatrimestre</th>
+              <th>Carrera / Plan</th>
+              <th>Año</th>
+              <th>Materia</th>
+              <th style="width:160px">Carga horaria (hs)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for mep in meps %}
+            <tr {% if mep in sin_hs %}class="table-warning"{% endif %}>
+              <td class="small">{{ mep.get_cuatrimestre_display }}</td>
+              <td class="small">
+                {{ mep.plan.carrera.nombre }}
+                <br><span class="text-muted">Plan {{ mep.plan.codigo }}</span>
+              </td>
+              <td class="small">{{ mep.ano }}°</td>
+              <td>{{ mep.materia.nombre }}</td>
+              <td>
+                {% if mep.hs_totales %}
+                  <span class="text-muted small">{{ mep.hs_totales }} hs</span>
+                  <input type="hidden" name="hs_{{ mep.pk }}" value="{{ mep.hs_totales }}">
+                {% else %}
+                  <div class="input-group input-group-sm">
+                    <input type="number" name="hs_{{ mep.pk }}" min="1" max="999"
+                           class="form-control form-control-sm" placeholder="hs" required
+                           title="Ingresá la carga horaria total. Quedará guardada para futuras solicitudes.">
+                    <span class="input-group-text">hs</span>
+                  </div>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if sin_hs %}
+    <div class="alert alert-warning py-2 small mb-3">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      Las filas en amarillo requieren la carga horaria. El valor quedará guardado permanentemente.
+    </div>
+    {% endif %}
+
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-send me-1"></i>Generar y enviar solicitud
+      </button>
+      <a href="{% url 'planes:lista_solicitudes_servicio' %}" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+  </form>
+  {% else %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle me-1"></i>
+    No hay materias de servicio habilitadas para el Departamento de <strong>{{ dept_destino }}</strong>
+    en la convocatoria actual ({{ convocatoria.get_cuatrimestre_display }} {{ convocatoria.anio }}).
+    Verificá la configuración en <a href="{% url 'planes:materias_servicio' %}">Materias del Departamento</a>.
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

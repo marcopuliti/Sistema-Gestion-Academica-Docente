@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+{% block title %}Solicitudes de servicio{% endblock %}
+{% block nav_solicitudes_servicio %}active{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <h2><i class="bi bi-envelope-paper me-2"></i>Solicitudes de servicio</h2>
+  <a href="{% url 'planes:nueva_solicitud_servicio' %}" class="btn btn-primary">
+    <i class="bi bi-plus-circle me-1"></i>Nueva solicitud
+  </a>
+</div>
+
+<ul class="nav nav-tabs mb-3" id="tabServicio" role="tablist">
+  <li class="nav-item">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#enviadas">
+      Enviadas <span class="badge bg-secondary ms-1">{{ enviadas|length }}</span>
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#recibidas">
+      Recibidas <span class="badge bg-secondary ms-1">{{ recibidas|length }}</span>
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content">
+  <div class="tab-pane fade show active" id="enviadas">
+    {% if enviadas %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Año</th>
+            <th>Departamento receptor</th>
+            <th>Estado</th>
+            <th>Fecha</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in enviadas %}
+          <tr>
+            <td>{{ s.anio_academico }}</td>
+            <td>
+              {% if s.departamento_dictante == 'Externo' %}
+                {{ s.dictante_externo_nombre|default:"Externo" }}
+                <span class="badge bg-warning text-dark ms-1">Externo</span>
+              {% else %}
+                {{ s.get_departamento_dictante_display }}
+              {% endif %}
+            </td>
+            <td>
+              {% if s.estado == 'enviada' %}
+              <span class="badge bg-info text-dark">Enviada</span>
+              {% else %}
+              <span class="badge bg-secondary">Borrador</span>
+              {% endif %}
+            </td>
+            <td class="small text-muted">{{ s.fecha_creacion|date:"d/m/Y" }}</td>
+            <td class="text-end">
+              <a href="{% url 'planes:detalle_solicitud_servicio' s.pk %}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-eye me-1"></i>Ver
+              </a>
+              <a href="{% url 'planes:descargar_solicitud_servicio' s.pk %}" download
+                 class="btn btn-sm btn-outline-secondary ms-1">
+                <i class="bi bi-file-earmark-pdf"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted">No enviaste solicitudes de servicio todavía.</p>
+    {% endif %}
+  </div>
+
+  <div class="tab-pane fade" id="recibidas">
+    {% if recibidas %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Año</th>
+            <th>Departamento solicitante</th>
+            <th>Fecha</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in recibidas %}
+          <tr>
+            <td>{{ s.anio_academico }}</td>
+            <td>{{ s.get_departamento_solicitante_display }}</td>
+            <td class="small text-muted">{{ s.fecha_envio|date:"d/m/Y"|default:s.fecha_creacion|date:"d/m/Y" }}</td>
+            <td class="text-end">
+              <a href="{% url 'planes:detalle_solicitud_servicio' s.pk %}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-eye me-1"></i>Ver
+              </a>
+              <a href="{% url 'planes:descargar_solicitud_servicio' s.pk %}" download
+                 class="btn btn-sm btn-outline-secondary ms-1">
+                <i class="bi bi-file-earmark-pdf"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted">No hay solicitudes de servicio recibidas.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

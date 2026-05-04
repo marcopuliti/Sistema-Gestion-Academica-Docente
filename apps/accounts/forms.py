@@ -51,8 +51,24 @@ class UsuarioCreacionForm(UserCreationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Sin validadores de seguridad — el secretario asigna contraseña temporal
+        self.fields['password1'].validators = []
+        self.fields['password1'].help_text = 'Contraseña temporal. El usuario podrá cambiarla al ingresar.'
+        self.fields['password2'].help_text = ''
         for field in self.fields.values():
             field.widget.attrs['class'] = 'form-control'
+
+    def clean_password2(self):
+        pw1 = self.cleaned_data.get('password1', '')
+        pw2 = self.cleaned_data.get('password2', '')
+        if pw1 and pw2 and pw1 != pw2:
+            raise forms.ValidationError('Las contraseñas no coinciden.')
+        return pw2
+
+    def _post_clean(self):
+        # Skip UserCreationForm._post_clean which calls validate_password.
+        # Go straight to ModelForm._post_clean so model-level validation still runs.
+        forms.ModelForm._post_clean(self)
 
 
 class UsuarioEdicionForm(UserChangeForm):

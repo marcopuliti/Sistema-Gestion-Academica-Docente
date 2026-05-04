@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}Solicitud de servicio — {{ solicitud.departamento_solicitante }}{% endblock %}
+{% block nav_solicitudes_servicio %}active{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <nav aria-label="breadcrumb" class="mb-1">
+      <ol class="breadcrumb mb-0" style="font-size:.85rem">
+        {% if user.es_administrador %}
+        <li class="breadcrumb-item"><a href="{% url 'planes:admin_lista_solicitudes_servicio' %}">Solicitudes de servicio</a></li>
+        {% else %}
+        <li class="breadcrumb-item"><a href="{% url 'planes:lista_solicitudes_servicio' %}">Solicitudes de servicio</a></li>
+        {% endif %}
+        <li class="breadcrumb-item active">Detalle</li>
+      </ol>
+    </nav>
+    <h2><i class="bi bi-envelope-paper me-2"></i>Solicitud de servicio</h2>
+    <p class="text-muted mb-0 small">
+      Año académico <strong>{{ solicitud.anio_academico }}</strong>
+      &middot; De: <strong>{{ solicitud.get_departamento_solicitante_display }}</strong>
+      &middot; A: <strong>
+        {% if solicitud.departamento_dictante == 'Externo' %}
+          {{ solicitud.dictante_externo_nombre|default:"Externo" }}
+          <span class="badge bg-warning text-dark">Externo</span>
+        {% else %}
+          {{ solicitud.get_departamento_dictante_display }}
+        {% endif %}
+      </strong>
+      &middot; {{ solicitud.fecha_creacion|date:"d/m/Y" }}
+      &middot;
+      {% if solicitud.estado == 'enviada' %}
+      <span class="badge bg-info text-dark">Enviada</span>
+      {% else %}
+      <span class="badge bg-secondary">Borrador</span>
+      {% endif %}
+    </p>
+  </div>
+  <div>
+    <a href="{% url 'planes:descargar_solicitud_servicio' solicitud.pk %}" download
+       class="btn btn-outline-secondary">
+      <i class="bi bi-file-earmark-pdf me-1"></i>Descargar PDF
+    </a>
+  </div>
+</div>
+
+{% if items %}
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-list-ul me-2"></i>Materias solicitadas
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Cuatrimestre</th>
+          <th>Carrera</th>
+          <th>Plan</th>
+          <th>Año</th>
+          <th>Materia</th>
+          <th class="text-end">Carga horaria</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="small">{{ item.materia_en_plan.get_cuatrimestre_display }}</td>
+          <td class="small">{{ item.materia_en_plan.plan.carrera.nombre }}</td>
+          <td class="small text-muted">{{ item.materia_en_plan.plan.codigo }}</td>
+          <td class="small">{{ item.materia_en_plan.ano }}°</td>
+          <td>{{ item.materia_en_plan.materia.nombre }}</td>
+          <td class="text-end"><span class="badge bg-secondary">{{ item.hs_totales }} hs</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-info">Esta solicitud no tiene materias asociadas.</div>
+{% endif %}
+{% endblock %}

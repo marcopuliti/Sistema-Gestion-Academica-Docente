@@ -284,6 +284,8 @@ class SolicitudCambioItem(models.Model):
     )
     hora = models.TimeField(null=True, blank=True, verbose_name='Hora del examen')
     permite_libres = models.BooleanField(default=True, verbose_name='Pueden rendir libres')
+    # Snapshot of tribunal state at the moment this item was first proposed
+    snapshot_tribunal = models.JSONField(null=True, blank=True)
 
     class Meta:
         unique_together = [('solicitud', 'tribunal')]
@@ -292,3 +294,82 @@ class SolicitudCambioItem(models.Model):
 
     def __str__(self):
         return f'Item — {self.tribunal} en {self.solicitud}'
+
+
+class SolicitudServicio(models.Model):
+    ESTADO_CHOICES = [
+        ('borrador', 'Borrador'),
+        ('enviada', 'Enviada'),
+    ]
+    director = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='solicitudes_servicio', verbose_name='Director',
+    )
+    departamento_solicitante = models.CharField(
+        max_length=50, choices=DEPARTAMENTO_CHOICES, verbose_name='Departamento solicitante',
+    )
+    departamento_dictante = models.CharField(
+        max_length=50, choices=DEPARTAMENTO_CHOICES, verbose_name='Departamento dictante',
+    )
+    dictante_externo_nombre = models.CharField(
+        max_length=250, blank=True, verbose_name='Nombre del receptor externo',
+        help_text='Solo cuando el departamento dictante es "Externo".',
+    )
+    anio_academico = models.PositiveSmallIntegerField(verbose_name='Año académico')
+    estado = models.CharField(
+        max_length=20, choices=ESTADO_CHOICES, default='borrador', verbose_name='Estado',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de creación')
+    fecha_envio = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de envío')
+
+    class Meta:
+        verbose_name = 'Solicitud de servicio'
+        verbose_name_plural = 'Solicitudes de servicio'
+        ordering = ['-fecha_creacion']
+
+    def __str__(self):
+        return f'Solicitud servicio — {self.departamento_solicitante} → {self.departamento_dictante} ({self.anio_academico})'
+
+
+class SolicitudServicioItem(models.Model):
+    solicitud = models.ForeignKey(
+        SolicitudServicio, on_delete=models.CASCADE,
+        related_name='items', verbose_name='Solicitud',
+    )
+    materia_en_plan = models.ForeignKey(
+        MateriaEnPlan, on_delete=models.PROTECT,
+        related_name='solicitud_servicio_items', verbose_name='Materia en plan',
+    )
+    hs_totales = models.PositiveSmallIntegerField(verbose_name='Horas totales')
+
+    class Meta:
+        unique_together = [('solicitud', 'materia_en_plan')]
+        verbose_name = 'Item de solicitud de servicio'
+        verbose_name_plural = 'Items de solicitud de servicio'
+
+    def __str__(self):
+        return f'{self.materia_en_plan} en {self.solicitud}'
+
+
+class ConvocatoriaSolicitudServicio(models.Model):
+    CUATRIMESTRE_CHOICES = [
+        (1, '1° Cuatrimestre + Anuales'),
+        (2, '2° Cuatrimestre'),
+    ]
+    cuatrimestre = models.PositiveSmallIntegerField(choices=CUATRIMESTRE_CHOICES, verbose_name='Cuatrimestre')
+    anio = models.PositiveSmallIntegerField(verbose_name='Año')
+    enviado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='convocatorias_servicio', verbose_name='Enviado por',
+    )
+    fecha_envio = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de envío')
+    directores_notificados = models.PositiveSmallIntegerField(default=0, verbose_name='Directores notificados')
+
+    class Meta:
+        unique_together = [('cuatrimestre', 'anio')]
+        verbose_name = 'Convocatoria de solicitud de servicio'
+        verbose_name_plural = 'Convocatorias de solicitud de servicio'
+        ordering = ['-anio', '-cuatrimestre']
+
+    def __str__(self):
+        return f'Convocatoria {self.get_cuatrimestre_display()} {self.anio}'

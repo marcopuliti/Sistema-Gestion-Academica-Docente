@@ -12,7 +12,7 @@ from django.template.loader import render_to_string
 from .emails import enviar_bienvenida
 from .forms import LoginForm, RegistroForm, UsuarioCreacionForm, UsuarioEdicionForm, PerfilForm
 from .models import CustomUser, TokenVerificacionEmail
-from apps.tramites.decorators import solo_administrador
+from apps.tramites.decorators import solo_secretario
 
 
 class CustomLoginView(LoginView):
@@ -116,14 +116,14 @@ def cambiar_password(request):
 
 
 @login_required
-@solo_administrador
+@solo_secretario
 def lista_usuarios(request):
     usuarios = CustomUser.objects.all().order_by('last_name', 'first_name')
     return render(request, 'accounts/lista_usuarios.html', {'usuarios': usuarios})
 
 
 @login_required
-@solo_administrador
+@solo_secretario
 def crear_usuario(request):
     if request.method == 'POST':
         form = UsuarioCreacionForm(request.POST)
@@ -139,7 +139,7 @@ def crear_usuario(request):
 
 
 @login_required
-@solo_administrador
+@solo_secretario
 def editar_usuario(request, pk):
     usuario = get_object_or_404(CustomUser, pk=pk)
     if request.method == 'POST':
@@ -154,7 +154,7 @@ def editar_usuario(request, pk):
 
 
 @login_required
-@solo_administrador
+@solo_secretario
 def toggle_activo_usuario(request, pk):
     usuario = get_object_or_404(CustomUser, pk=pk)
     if usuario == request.user:

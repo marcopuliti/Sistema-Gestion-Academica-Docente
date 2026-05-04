@@ -47,7 +47,7 @@ def notificar_nuevo_tramite(tramite, tipo_tramite, url=''):
         f"Fecha: {tramite.fecha_creacion.strftime('%d/%m/%Y %H:%M')}\n\n"
         f"Ingresá al sistema para revisarlo."
     )
-    destinatarios = User.objects.filter(rol__in=['administrador'], is_active=True)
+    destinatarios = User.objects.filter(rol__in=['secretario', 'direccion_academica'], is_active=True)
     # Notificar también al director del departamento correspondiente
     departamento = (docente.departamento if docente else None) or getattr(tramite, 'departamento_docente', '')
     if departamento:

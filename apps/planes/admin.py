@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.html import format_html
-from .models import Carrera, PlanEstudio, Materia, MateriaEnPlan, AnioDictado, Docente, TribunalExaminador, SolicitudInformeTribunal, InformeTribunalesEnviado, SolicitudCambioTribunal, SolicitudCambioItem
+from .models import Carrera, PlanEstudio, Materia, MateriaEnPlan, AnioDictado, Docente, TribunalExaminador, SolicitudInformeTribunal, InformeTribunalesEnviado, SolicitudCambioTribunal, SolicitudCambioItem, SolicitudServicio, SolicitudServicioItem, ConvocatoriaSolicitudServicio
 from .management.commands.importar_materias import PlanParser, fetch_html
 
 
@@ -258,3 +258,44 @@ class SolicitudCambioTribunalAdmin(admin.ModelAdmin):
     @admin.display(description='Items')
     def cantidad_items(self, obj):
         return obj.items.count()
+
+
+class SolicitudServicioItemInline(admin.TabularInline):
+    model = SolicitudServicioItem
+    extra = 0
+    can_delete = False
+    readonly_fields = ('materia_en_plan', 'hs_totales')
+    fields = ('materia_en_plan', 'hs_totales')
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'materia_en_plan__materia', 'materia_en_plan__plan__carrera',
+        )
+
+
+@admin.register(SolicitudServicio)
+class SolicitudServicioAdmin(admin.ModelAdmin):
+    list_display = ('anio_academico', 'departamento_solicitante', 'departamento_dictante', 'director', 'estado', 'cantidad_materias', 'fecha_creacion')
+    list_filter = ('estado', 'anio_academico', 'departamento_solicitante', 'departamento_dictante')
+    readonly_fields = ('fecha_creacion', 'fecha_envio', 'director', 'departamento_solicitante', 'departamento_dictante', 'dictante_externo_nombre', 'anio_academico', 'estado')
+    ordering = ('-fecha_creacion',)
+    inlines = [SolicitudServicioItemInline]
+    search_fields = ('departamento_solicitante', 'departamento_dictante', 'director__first_name', 'director__last_name')
+
+    @admin.display(description='Materias')
+    def cantidad_materias(self, obj):
+        return obj.items.count()
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('director')
+
+
+@admin.register(ConvocatoriaSolicitudServicio)
+class ConvocatoriaSolicitudServicioAdmin(admin.ModelAdmin):
+    list_display = ('anio', 'cuatrimestre', 'enviado_por', 'fecha_envio', 'directores_notificados')
+    list_filter = ('anio', 'cuatrimestre')
+    readonly_fields = ('fecha_envio', 'enviado_por', 'directores_notificados')
+    ordering = ('-anio', '-cuatrimestre')
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('enviado_por')

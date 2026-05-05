@@ -4,7 +4,7 @@ from django.shortcuts import render, redirect
 from apps.notifications.models import Notificacion
 from apps.planes.models import (
     AnioDictado, InformeTribunalesEnviado, MateriaEnPlan,
-    SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeTribunal, TribunalExaminador,
+    SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeTribunal, SolicitudServicio, TribunalExaminador,
 )
 from apps.solicitudes.models import SolicitudProtocolizacion, SolicitudTaller
 from apps.tramites.models import EstadoTramite
@@ -19,6 +19,9 @@ def dashboard(request):
 
     if user.es_director_departamento:
         return _dashboard_director(request, user)
+
+    if user.es_director_carrera:
+        return _dashboard_director_carrera(request, user)
 
     if user.es_administrador:
         return _dashboard_admin(request, user)
@@ -137,5 +140,40 @@ def _dashboard_director(request, user):
         'solicitudes_enviadas': solicitudes_enviadas,
         'solicitud_informe_activa': solicitud_para_dept and not ya_enviado,
         'informe_enviado': informe_enviado,
+        'ultimas_notificaciones': Notificacion.objects.filter(destinatario=user).order_by('-fecha')[:5],
+    })
+
+
+def _dashboard_director_carrera(request, user):
+    carrera = user.carrera
+    if not carrera:
+        return render(request, 'tramites/dashboard_director_carrera.html', {
+            'carrera': None,
+            'ultimas_notificaciones': Notificacion.objects.filter(destinatario=user).order_by('-fecha')[:5],
+        })
+
+    total_materias = MateriaEnPlan.objects.filter(
+        plan__carrera=carrera,
+    ).filter(Q(plan__vigente=True) | Q(plan__activo=True)).count()
+
+    materias_servicio_count = MateriaEnPlan.objects.filter(
+        plan__carrera=carrera,
+        es_servicio=True,
+    ).filter(Q(plan__vigente=True) | Q(plan__activo=True)).count()
+
+    solicitudes_enviadas = SolicitudServicio.objects.filter(
+        director=user,
+    ).count()
+
+    notificaciones_no_leidas = Notificacion.objects.filter(
+        destinatario=user, leida=False,
+    ).count()
+
+    return render(request, 'tramites/dashboard_director_carrera.html', {
+        'carrera': carrera,
+        'total_materias': total_materias,
+        'materias_servicio_count': materias_servicio_count,
+        'solicitudes_enviadas': solicitudes_enviadas,
+        'notificaciones_no_leidas': notificaciones_no_leidas,
         'ultimas_notificaciones': Notificacion.objects.filter(destinatario=user).order_by('-fecha')[:5],
     })

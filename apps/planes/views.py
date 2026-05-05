@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.tramites.decorators import solo_administrador, solo_admin_general, solo_director_departamento
+from apps.tramites.decorators import solo_administrador, solo_admin_general, solo_director_carrera, solo_director_departamento
 from apps.tramites.models import DEPARTAMENTO_CHOICES
 from apps.notifications.utils import _crear_notificacion
 from .forms import TribunalForm
@@ -1120,7 +1120,8 @@ def detalle_solicitud_servicio(request, pk):
             user.departamento == solicitud.departamento_solicitante or
             (solicitud.departamento_dictante != 'Externo' and
              user.departamento == solicitud.departamento_dictante)
-        ))
+        )) or
+        (user.es_director_carrera and solicitud.director_id == user.pk)
     )
     if not puede_ver:
         messages.error(request, 'No tenés permiso para ver esta solicitud.')
@@ -1159,7 +1160,8 @@ def descargar_solicitud_servicio(request, pk):
             user.departamento == solicitud.departamento_solicitante or
             (solicitud.departamento_dictante != 'Externo' and
              user.departamento == solicitud.departamento_dictante)
-        ))
+        )) or
+        (user.es_director_carrera and solicitud.director_id == user.pk)
     )
     if not puede_ver:
         messages.error(request, 'No tenés permiso.')
@@ -1212,6 +1214,252 @@ def admin_lista_solicitudes_servicio(request):
     })
 
 
+# ── director de carrera: materias ────────────────────────────────────────────
+
+@login_required
+@solo_director_carrera
+def materias_carrera(request):
+    carrera = request.user.carrera
+    if not carrera:
+        messages.error(request, 'No tenés una carrera asignada. Contactá a administración.')
+        return redirect('tramites:dashboard')
+
+    ano_activo_qs = AnioDictado.objects.filter(plan=OuterRef('plan'), ano=OuterRef('ano'))
+
+    meps = (
+        MateriaEnPlan.objects
+        .filter(plan__carrera=carrera)
+        .filter(models.Q(plan__vigente=True) | models.Q(plan__activo=True))
+        .annotate(se_dicta=Exists(ano_activo_qs))
+        .select_related('materia', 'plan__carrera')
+        .order_by('plan__codigo', 'ano', 'cuatrimestre', 'materia__nombre')
+    )
+
+    all_ids = set(meps.values_list('id', flat=True))
+
+    if request.method == 'POST':
+        servicio_ids = set(int(x) for x in request.POST.getlist('es_servicio') if x.isdigit()) & all_ids
+        optativa_ids = set(int(x) for x in request.POST.getlist('es_optativa') if x.isdigit()) & all_ids
+
+        departamentos_por_mep = {}
+        valid_depts = {v for v, _ in DEPARTAMENTO_OPCIONES}
+        errores = []
+        for mep_id in servicio_ids:
+            dep = request.POST.get(f'departamento_{mep_id}', '').strip()
+            if not dep or dep not in valid_depts:
+                errores.append(mep_id)
+            else:
+                departamentos_por_mep[mep_id] = dep
+
+        if errores:
+            messages.error(request, 'Todas las materias marcadas como servicio deben tener un departamento seleccionado.')
+        else:
+            for mep_id, dep in departamentos_por_mep.items():
+                MateriaEnPlan.objects.filter(id=mep_id).update(
+                    es_servicio=True, departamento_dictante=dep,
+                    es_optativa=mep_id in optativa_ids,
+                )
+            non_servicio = all_ids - servicio_ids
+            MateriaEnPlan.objects.filter(id__in=non_servicio & optativa_ids).update(
+                es_servicio=False, departamento_dictante='', es_optativa=True,
+            )
+            MateriaEnPlan.objects.filter(id__in=non_servicio - optativa_ids).update(
+                es_servicio=False, departamento_dictante='', es_optativa=False,
+            )
+            messages.success(request, 'Cambios guardados correctamente.')
+            return redirect('planes:materias_carrera')
+
+    planes_data = []
+    plan_entry = ano_entry = cuat_entry = None
+    prev_plan = prev_ano = prev_cuat = None
+
+    for mep in meps:
+        if mep.plan_id != prev_plan:
+            prev_plan = mep.plan_id
+            prev_ano = prev_cuat = None
+            plan_entry = {'plan': mep.plan, 'anos': []}
+            planes_data.append(plan_entry)
+        if mep.ano != prev_ano:
+            prev_ano = mep.ano
+            prev_cuat = None
+            ano_entry = {'ano': mep.ano, 'se_dicta': mep.se_dicta, 'cuatrimestres': []}
+            plan_entry['anos'].append(ano_entry)
+        if mep.cuatrimestre != prev_cuat:
+            prev_cuat = mep.cuatrimestre
+            cuat_entry = {'label': mep.get_cuatrimestre_display(), 'materias': []}
+            ano_entry['cuatrimestres'].append(cuat_entry)
+        cuat_entry['materias'].append(mep)
+
+    return render(request, 'planes/materias_carrera.html', {
+        'planes_data': planes_data,
+        'carrera': carrera,
+        'departamento_opciones': DEPARTAMENTO_OPCIONES,
+    })
+
+
+# ── director de carrera: solicitudes de servicio ──────────────────────────────
+
+def _meps_servicio_para_carrera(carrera, departamento_dictante):
+    """MateriaEnPlan de servicio de una carrera específica dictadas por dept dictante."""
+    ano_qs = AnioDictado.objects.filter(plan=OuterRef('plan'), ano=OuterRef('ano'))
+    return (
+        MateriaEnPlan.objects
+        .filter(
+            plan__carrera=carrera,
+            es_servicio=True,
+            departamento_dictante=departamento_dictante,
+        )
+        .filter(models.Q(plan__vigente=True) | models.Q(plan__activo=True))
+        .filter(Exists(ano_qs))
+        .filter(es_optativa=False)
+        .select_related('materia', 'plan__carrera')
+        .order_by('cuatrimestre', 'plan__codigo', 'materia__nombre')
+    )
+
+
+@login_required
+@solo_director_carrera
+def lista_solicitudes_servicio_carrera(request):
+    carrera = request.user.carrera
+    if not carrera:
+        messages.error(request, 'No tenés una carrera asignada. Contactá a administración.')
+        return redirect('tramites:dashboard')
+    enviadas = SolicitudServicio.objects.filter(
+        director=request.user,
+    ).order_by('-fecha_creacion')
+    return render(request, 'planes/solicitudes_servicio_carrera.html', {
+        'enviadas': enviadas,
+        'carrera': carrera,
+    })
+
+
+@login_required
+@solo_director_carrera
+def nueva_solicitud_servicio_carrera(request):
+    user = request.user
+    carrera = user.carrera
+    if not carrera:
+        messages.error(request, 'No tenés una carrera asignada. Contactá a administración.')
+        return redirect('tramites:dashboard')
+
+    departamento_solicitante = carrera.departamento
+    convocatoria = ConvocatoriaSolicitudServicio.objects.order_by('-anio', '-cuatrimestre').first()
+    if not convocatoria:
+        messages.error(request, 'No hay ninguna convocatoria activa. Esperá que administración habilite el período.')
+        return redirect('planes:lista_solicitudes_servicio_carrera')
+
+    cuats_validos = _cuatrimestres_validos(convocatoria.cuatrimestre)
+    anio = convocatoria.anio
+    valid_deptos = {v for v, _ in DEPARTAMENTO_OPCIONES if v != departamento_solicitante}
+
+    dept_destino = request.GET.get('dpto') or request.POST.get('departamento_dictante', '')
+
+    meps = []
+    sin_hs = []
+    if dept_destino and dept_destino in valid_deptos:
+        meps = list(
+            _meps_servicio_para_carrera(carrera, dept_destino)
+            .filter(cuatrimestre__in=cuats_validos)
+        )
+        sin_hs = [m for m in meps if m.hs_totales is None]
+
+    if request.method == 'POST':
+        dept_destino = request.POST.get('departamento_dictante', '').strip()
+        dictante_externo_nombre = request.POST.get('dictante_externo_nombre', '').strip()
+
+        if dept_destino not in valid_deptos:
+            messages.error(request, 'Departamento destino no válido.')
+            return redirect('planes:nueva_solicitud_servicio_carrera')
+
+        if dept_destino == 'Externo' and not dictante_externo_nombre:
+            messages.error(request, 'Ingresá el nombre del organismo o cátedra externa.')
+            meps = list(
+                _meps_servicio_para_carrera(carrera, dept_destino)
+                .filter(cuatrimestre__in=cuats_validos)
+            )
+            sin_hs = [m for m in meps if m.hs_totales is None]
+            return render(request, 'planes/nueva_solicitud_servicio_carrera.html', {
+                'departamento_opciones': [(v, l) for v, l in DEPARTAMENTO_OPCIONES if v != departamento_solicitante],
+                'dept_destino': dept_destino,
+                'dictante_externo_nombre': dictante_externo_nombre,
+                'meps': meps,
+                'sin_hs': sin_hs,
+                'convocatoria': convocatoria,
+                'carrera': carrera,
+            })
+
+        meps = list(
+            _meps_servicio_para_carrera(carrera, dept_destino)
+            .filter(cuatrimestre__in=cuats_validos)
+        )
+        if not meps:
+            messages.error(request, 'No hay materias de servicio habilitadas para ese departamento en la convocatoria actual.')
+            return redirect('planes:nueva_solicitud_servicio_carrera')
+
+        errores_hs = []
+        hs_map = {}
+        for mep in meps:
+            raw = request.POST.get(f'hs_{mep.pk}', '').strip()
+            if mep.hs_totales is None:
+                if not raw or not raw.isdigit() or int(raw) <= 0:
+                    errores_hs.append(mep.materia.nombre)
+                else:
+                    hs_map[mep.pk] = int(raw)
+            else:
+                hs_map[mep.pk] = mep.hs_totales
+
+        if errores_hs:
+            messages.error(request, f'Falta la carga horaria de: {", ".join(errores_hs)}.')
+            sin_hs = [m for m in meps if m.hs_totales is None]
+            return render(request, 'planes/nueva_solicitud_servicio_carrera.html', {
+                'departamento_opciones': [(v, l) for v, l in DEPARTAMENTO_OPCIONES if v != departamento_solicitante],
+                'dept_destino': dept_destino,
+                'dictante_externo_nombre': dictante_externo_nombre,
+                'meps': meps,
+                'sin_hs': sin_hs,
+                'convocatoria': convocatoria,
+                'carrera': carrera,
+            })
+
+        for mep_pk, hs in hs_map.items():
+            MateriaEnPlan.objects.filter(pk=mep_pk, hs_totales__isnull=True).update(hs_totales=hs)
+
+        meps = list(
+            _meps_servicio_para_carrera(carrera, dept_destino)
+            .filter(cuatrimestre__in=cuats_validos)
+        )
+
+        solicitud = SolicitudServicio.objects.create(
+            director=user,
+            carrera=carrera,
+            departamento_solicitante=departamento_solicitante,
+            departamento_dictante=dept_destino,
+            dictante_externo_nombre=dictante_externo_nombre if dept_destino == 'Externo' else '',
+            anio_academico=anio,
+            estado='enviada',
+            fecha_envio=timezone.now(),
+        )
+        for mep in meps:
+            SolicitudServicioItem.objects.create(
+                solicitud=solicitud,
+                materia_en_plan=mep,
+                hs_totales=hs_map.get(mep.pk, mep.hs_totales or 0),
+            )
+
+        messages.success(request, 'Solicitud de servicio enviada correctamente.')
+        return redirect('planes:detalle_solicitud_servicio', pk=solicitud.pk)
+
+    return render(request, 'planes/nueva_solicitud_servicio_carrera.html', {
+        'departamento_opciones': [(v, l) for v, l in DEPARTAMENTO_OPCIONES if v != departamento_solicitante],
+        'dept_destino': dept_destino,
+        'dictante_externo_nombre': '',
+        'meps': meps,
+        'sin_hs': sin_hs,
+        'convocatoria': convocatoria,
+        'carrera': carrera,
+    })
+
+
 @login_required
 @solo_admin_general
 def convocar_solicitudes_servicio(request):
@@ -1239,10 +1487,10 @@ def convocar_solicitudes_servicio(request):
     cuat_label = '1° cuatrimestre (y anuales)' if cuatrimestre == 1 else '2° cuatrimestre'
     anual_nota = ' Las materias anuales deben solicitarse en conjunto con las del 1° cuatrimestre.' if cuatrimestre == 1 else ''
 
-    directores = User.objects.filter(rol='director_departamento', is_active=True)
-    url_nueva = reverse('planes:nueva_solicitud_servicio')
+    url_nueva_dept = reverse('planes:nueva_solicitud_servicio')
+    url_nueva_carrera = reverse('planes:nueva_solicitud_servicio_carrera')
     count = 0
-    for director in directores:
+    for director in User.objects.filter(rol='director_departamento', is_active=True):
         _crear_notificacion(
             director,
             'nuevo_tramite',
@@ -1252,7 +1500,20 @@ def convocar_solicitudes_servicio(request):
                 f'al {cuat_label} del ciclo lectivo {anio}.{anual_nota} '
                 f'Ingresá al sistema para generar las solicitudes a los departamentos correspondientes.'
             ),
-            url=url_nueva,
+            url=url_nueva_dept,
+        )
+        count += 1
+    for director in User.objects.filter(rol='director_carrera', is_active=True):
+        _crear_notificacion(
+            director,
+            'nuevo_tramite',
+            f'Convocatoria: Solicitudes de servicio {anio} — {cuat_label}',
+            (
+                f'Se solicita generar las solicitudes de dictado por servicio correspondientes '
+                f'al {cuat_label} del ciclo lectivo {anio}.{anual_nota} '
+                f'Ingresá al sistema para generar las solicitudes a los departamentos correspondientes.'
+            ),
+            url=url_nueva_carrera,
         )
         count += 1
 

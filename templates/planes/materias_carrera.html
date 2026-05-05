@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+{% block title %}Materias de la Carrera — {{ carrera.nombre }}{% endblock %}
+{% block nav_planes %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .plan-block {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+  .plan-subheader {
+    background-color: var(--color-primario);
+    color: #fff;
+    padding: .45rem 1.25rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: .9rem;
+    font-weight: 600;
+  }
+  .ano-header {
+    background-color: #e8f4fd;
+    color: var(--color-primario);
+    font-weight: 700;
+    padding: .5rem 1.25rem;
+    border-top: 2px solid var(--color-secundario);
+    font-size: .95rem;
+    letter-spacing: .02em;
+  }
+  .ano-header.no-dictado {
+    background-color: #f1f3f5;
+    color: #6c757d;
+    border-top-color: #ced4da;
+  }
+  .no-dictado-rows tr { opacity: .65; }
+  .no-dictado-rows .cuat-header { background-color: #f8f9fa; color: #999; }
+  .cuat-header {
+    background-color: #f8f9fa;
+    color: #555;
+    font-size: .75rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: .3rem 1.25rem;
+    border-top: 1px solid #dee2e6;
+    letter-spacing: .05em;
+  }
+  .table { margin-bottom: 0; }
+  .table td, .table th { vertical-align: middle; padding: .45rem 1.25rem; }
+  .table thead th { background-color: transparent; color: #444; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid #dee2e6; }
+  .materia-codigo { font-size: .78rem; color: #999; width: 110px; }
+  .servicio-check { width: 1.15rem; height: 1.15rem; cursor: pointer; }
+  .dep-select { display: none; min-width: 160px; font-size: .82rem; }
+  .dep-select.visible { display: inline-block; }
+  .dep-select.is-invalid { border-color: #dc3545; }
+  .sticky-save {
+    position: sticky;
+    bottom: 1.25rem;
+    text-align: right;
+    pointer-events: none;
+  }
+  .sticky-save button { pointer-events: all; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <h2><i class="bi bi-mortarboard me-2"></i>Materias — <span class="text-secondary fs-4">{{ carrera.nombre }}</span></h2>
+</div>
+
+{% if planes_data %}
+<form method="post" id="form-servicio">
+  {% csrf_token %}
+
+  {% for plan_data in planes_data %}
+  <div class="plan-block">
+
+    <div class="plan-subheader">
+      <span><i class="bi bi-journal-text me-2"></i>Plan {{ plan_data.plan.codigo }}</span>
+      {% if plan_data.plan.vigente %}
+        <span class="badge bg-success">Vigente</span>
+      {% elif plan_data.plan.activo %}
+        <span class="badge bg-warning text-dark">Activo</span>
+      {% endif %}
+    </div>
+
+    {% for ano_data in plan_data.anos %}
+    <div class="ano-header{% if not ano_data.se_dicta %} no-dictado{% endif %}">
+      <i class="bi bi-calendar3 me-2"></i>{{ ano_data.ano }}° año
+      {% if not ano_data.se_dicta %}
+      <span class="badge bg-secondary ms-2" style="font-size:.7rem">
+        <i class="bi bi-slash-circle me-1"></i>Año no dictado
+      </span>
+      {% endif %}
+    </div>
+
+    <div class="{% if not ano_data.se_dicta %}no-dictado-rows{% endif %}">
+    {% for cuat_data in ano_data.cuatrimestres %}
+    <div class="cuat-header">{{ cuat_data.label }}</div>
+    <table class="table table-hover table-sm">
+      <thead>
+        <tr>
+          <th class="materia-codigo">Código</th>
+          <th>Materia</th>
+          <th class="text-center" style="width:140px">Optativa/Electiva</th>
+          <th class="text-center" style="width:110px">Servicio</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for mep in cuat_data.materias %}
+        <tr>
+          <td class="materia-codigo">{{ mep.materia.codigo }}</td>
+          <td>{{ mep.materia.nombre }}</td>
+          <td class="text-center">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              name="es_optativa"
+              value="{{ mep.id }}"
+              id="opt_{{ mep.id }}"
+              {% if mep.es_optativa %}checked{% endif %}
+            >
+          </td>
+          <td class="text-center">
+            <div class="d-flex align-items-center gap-2 justify-content-center flex-wrap">
+              <input
+                class="servicio-check form-check-input"
+                type="checkbox"
+                name="es_servicio"
+                value="{{ mep.id }}"
+                id="srv_{{ mep.id }}"
+                {% if mep.es_servicio %}checked{% endif %}
+                onchange="toggleDep(this)"
+              >
+              <select
+                class="form-select form-select-sm dep-select{% if mep.es_servicio %} visible{% endif %}"
+                name="departamento_{{ mep.id }}"
+                id="dep_{{ mep.id }}"
+              >
+                <option value="">— Departamento —</option>
+                {% for val, label in departamento_opciones %}
+                <option value="{{ val }}" {% if mep.departamento_dictante == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endfor %}
+    </div>
+    {% endfor %}
+
+  </div>
+  {% endfor %}
+
+  <div class="sticky-save">
+    <button type="submit" class="btn btn-primary btn-lg shadow-sm">
+      <i class="bi bi-floppy me-2"></i>Guardar cambios
+    </button>
+  </div>
+</form>
+
+{% else %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle me-2"></i>No hay planes de estudio vigentes para la carrera <strong>{{ carrera.nombre }}</strong>.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleDep(checkbox) {
+  const sel = document.getElementById('dep_' + checkbox.value);
+  if (checkbox.checked) {
+    sel.classList.add('visible');
+  } else {
+    sel.classList.remove('visible');
+    sel.classList.remove('is-invalid');
+    sel.value = '';
+  }
+}
+
+document.getElementById('form-servicio')?.addEventListener('submit', function(e) {
+  let ok = true;
+  document.querySelectorAll('.servicio-check:checked').forEach(function(chk) {
+    const sel = document.getElementById('dep_' + chk.value);
+    if (!sel || !sel.value) {
+      if (sel) sel.classList.add('is-invalid');
+      ok = false;
+    } else {
+      sel.classList.remove('is-invalid');
+    }
+  });
+  if (!ok) {
+    e.preventDefault();
+    alert('Seleccioná el departamento para todas las materias marcadas como servicio.');
+  }
+});
+</script>
+{% endblock %}

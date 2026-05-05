@@ -54,3 +54,13 @@ def solo_director_departamento(view_func):
             return redirect('tramites:dashboard')
         return view_func(request, *args, **kwargs)
     return wrapper
+
+
+def solo_director_carrera(view_func):
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.es_director_carrera:
+            messages.error(request, 'No tenés permisos para acceder a esta sección.')
+            return redirect('tramites:dashboard')
+        return view_func(request, *args, **kwargs)
+    return wrapper

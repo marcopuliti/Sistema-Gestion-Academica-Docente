@@ -322,6 +322,10 @@ class SolicitudServicio(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='solicitudes_servicio', verbose_name='Director',
     )
+    carrera = models.ForeignKey(
+        'Carrera', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='solicitudes_servicio', verbose_name='Carrera',
+    )
     departamento_solicitante = models.CharField(
         max_length=50, choices=DEPARTAMENTO_CHOICES, verbose_name='Departamento solicitante',
     )

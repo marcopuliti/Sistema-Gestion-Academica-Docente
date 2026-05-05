@@ -33,11 +33,16 @@ urlpatterns = [
     path('planes/admin/solicitudes-cambio/<int:pk>/aplicar/', views.aplicar_solicitud, name='aplicar_solicitud'),
     path('planes/admin/solicitudes-cambio/<int:pk>/descargar/', views.admin_descargar_solicitud_cambio, name='admin_descargar_solicitud_cambio'),
 
-    # Solicitudes de servicio
+    # Solicitudes de servicio (director de departamento)
     path('planes/solicitudes-servicio/', views.lista_solicitudes_servicio, name='lista_solicitudes_servicio'),
     path('planes/solicitudes-servicio/nueva/', views.nueva_solicitud_servicio, name='nueva_solicitud_servicio'),
     path('planes/solicitudes-servicio/<int:pk>/', views.detalle_solicitud_servicio, name='detalle_solicitud_servicio'),
     path('planes/solicitudes-servicio/<int:pk>/descargar/', views.descargar_solicitud_servicio, name='descargar_solicitud_servicio'),
     path('planes/admin/solicitudes-servicio/', views.admin_lista_solicitudes_servicio, name='admin_lista_solicitudes_servicio'),
     path('planes/admin/solicitudes-servicio/convocar/', views.convocar_solicitudes_servicio, name='convocar_solicitudes_servicio'),
+
+    # Director de carrera
+    path('planes/carrera/materias/', views.materias_carrera, name='materias_carrera'),
+    path('planes/carrera/solicitudes-servicio/', views.lista_solicitudes_servicio_carrera, name='lista_solicitudes_servicio_carrera'),
+    path('planes/carrera/solicitudes-servicio/nueva/', views.nueva_solicitud_servicio_carrera, name='nueva_solicitud_servicio_carrera'),
 ]

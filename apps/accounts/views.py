@@ -31,7 +31,7 @@ def _enviar_verificacion(request, usuario, token):
     })
     try:
         send_mail(
-            subject='Verificá tu cuenta — Sistema de Gestión Docente UNSL',
+            subject='Verificá tu cuenta — DELTA UNSL',
             message=cuerpo,
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[usuario.email],

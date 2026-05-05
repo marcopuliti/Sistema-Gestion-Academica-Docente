@@ -10,16 +10,16 @@ def enviar_bienvenida(usuario, password_temporal):
     """Envía credenciales al usuario recién creado."""
     if not _es_email_valido(usuario.email):
         return
-    asunto = 'Bienvenido/a al Sistema de Gestión Docente — UNSL'
+    asunto = 'Bienvenido/a a DELTA — UNSL'
     mensaje = (
         f'Hola {usuario.get_full_name() or usuario.username},\n\n'
-        f'Tu cuenta fue creada en el Sistema de Gestión Docente de la '
+        f'Tu cuenta fue creada en DELTA (Dispositivo de Elevación y Logística de Trámites Académicos) de la '
         f'Facultad de Cs. Físico Matemáticas y Naturales (UNSL).\n\n'
         f'Tus credenciales de acceso son:\n'
         f'  Usuario:    {usuario.username}\n'
         f'  Contraseña: {password_temporal}\n\n'
         f'Por seguridad, cambiá tu contraseña en tu primer ingreso.\n\n'
-        f'Sistema de Gestión Docente — UNSL'
+        f'DELTA — UNSL'
     )
     try:
         send_mail(
@@ -39,14 +39,14 @@ def enviar_reset_password(usuario, nueva_password):
     """Notifica al usuario que su contraseña fue restablecida por un admin."""
     if not _es_email_valido(usuario.email):
         return
-    asunto = 'Contraseña restablecida — Sistema de Gestión Docente UNSL'
+    asunto = 'Contraseña restablecida — DELTA UNSL'
     mensaje = (
         f'Hola {usuario.get_full_name() or usuario.username},\n\n'
         f'Un administrador restableció tu contraseña.\n\n'
         f'Tu nueva contraseña temporal es:\n'
         f'  {nueva_password}\n\n'
         f'Ingresá al sistema y cambiala a la brevedad.\n\n'
-        f'Sistema de Gestión Docente — UNSL'
+        f'DELTA — UNSL'
     )
     try:
         send_mail(

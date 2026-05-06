@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}Materias de la Carrera — {{ carrera.nombre }}{% endblock %}
-{% block nav_planes %}active{% endblock %}
+{% block nav_materias_carrera %}active{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -50,7 +50,14 @@
   .table td, .table th { vertical-align: middle; padding: .45rem 1.25rem; }
   .table thead th { background-color: transparent; color: #444; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid #dee2e6; }
   .materia-codigo { font-size: .78rem; color: #999; width: 110px; }
-  .servicio-check { width: 1.15rem; height: 1.15rem; cursor: pointer; }
+  input[type="checkbox"] {
+    width: 1.1rem;
+    height: 1.1rem;
+    cursor: pointer;
+    accent-color: var(--color-primario, #1a3a5c);
+    border: 1px solid #adb5bd;
+  }
+  .servicio-check { width: 1.1rem; height: 1.1rem; cursor: pointer; }
   .dep-select { display: none; min-width: 160px; font-size: .82rem; }
   .dep-select.visible { display: inline-block; }
   .dep-select.is-invalid { border-color: #dc3545; }
@@ -114,7 +121,6 @@
           <td>{{ mep.materia.nombre }}</td>
           <td class="text-center">
             <input
-              class="form-check-input"
               type="checkbox"
               name="es_optativa"
               value="{{ mep.id }}"
@@ -125,7 +131,7 @@
           <td class="text-center">
             <div class="d-flex align-items-center gap-2 justify-content-center flex-wrap">
               <input
-                class="servicio-check form-check-input"
+                class="servicio-check"
                 type="checkbox"
                 name="es_servicio"
                 value="{{ mep.id }}"

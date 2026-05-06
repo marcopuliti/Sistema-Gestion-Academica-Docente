@@ -33,9 +33,8 @@ urlpatterns = [
     path('planes/admin/solicitudes-cambio/<int:pk>/aplicar/', views.aplicar_solicitud, name='aplicar_solicitud'),
     path('planes/admin/solicitudes-cambio/<int:pk>/descargar/', views.admin_descargar_solicitud_cambio, name='admin_descargar_solicitud_cambio'),
 
-    # Solicitudes de servicio (director de departamento)
+    # Solicitudes de servicio (director de departamento — solo lectura)
     path('planes/solicitudes-servicio/', views.lista_solicitudes_servicio, name='lista_solicitudes_servicio'),
-    path('planes/solicitudes-servicio/nueva/', views.nueva_solicitud_servicio, name='nueva_solicitud_servicio'),
     path('planes/solicitudes-servicio/<int:pk>/', views.detalle_solicitud_servicio, name='detalle_solicitud_servicio'),
     path('planes/solicitudes-servicio/<int:pk>/descargar/', views.descargar_solicitud_servicio, name='descargar_solicitud_servicio'),
     path('planes/admin/solicitudes-servicio/', views.admin_lista_solicitudes_servicio, name='admin_lista_solicitudes_servicio'),

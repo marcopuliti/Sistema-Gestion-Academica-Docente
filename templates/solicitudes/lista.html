@@ -5,7 +5,7 @@
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center">
   <h2><i class="bi bi-journal-plus me-2"></i>Solicitudes de Protocolización</h2>
-  {% if user.es_docente %}
+  {% if user.es_docente or user.es_director_carrera %}
   <a href="{% url 'solicitudes:crear' %}" class="btn btn-primary">
     <i class="bi bi-plus-circle me-2"></i>Nueva Solicitud
   </a>
@@ -43,7 +43,10 @@
               {% if user.puede_revisar %}
               <a href="{% url 'solicitudes:solicitud_completa_pdf' sol.pk %}" class="btn btn-sm btn-outline-danger" title="PDF completo"><i class="bi bi-file-pdf"></i></a>
               {% else %}
-              <a href="{% url 'solicitudes:pdf' sol.pk %}" class="btn btn-sm btn-outline-danger" title="PDF"><i class="bi bi-file-pdf"></i></a>
+              <a href="{% url 'solicitudes:pdf' sol.pk %}" class="btn btn-sm btn-outline-danger me-1" title="PDF"><i class="bi bi-file-pdf"></i></a>
+              {% if sol.usuario == user or user.es_director_carrera %}
+              <a href="{% url 'solicitudes:duplicar' sol.pk %}" class="btn btn-sm btn-outline-secondary" title="Duplicar"><i class="bi bi-copy"></i></a>
+              {% endif %}
               {% endif %}
             </td>
           </tr>

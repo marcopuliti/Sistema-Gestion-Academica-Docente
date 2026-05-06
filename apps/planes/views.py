@@ -1487,22 +1487,8 @@ def convocar_solicitudes_servicio(request):
     cuat_label = '1° cuatrimestre (y anuales)' if cuatrimestre == 1 else '2° cuatrimestre'
     anual_nota = ' Las materias anuales deben solicitarse en conjunto con las del 1° cuatrimestre.' if cuatrimestre == 1 else ''
 
-    url_nueva_dept = reverse('planes:nueva_solicitud_servicio')
     url_nueva_carrera = reverse('planes:nueva_solicitud_servicio_carrera')
     count = 0
-    for director in User.objects.filter(rol='director_departamento', is_active=True):
-        _crear_notificacion(
-            director,
-            'nuevo_tramite',
-            f'Convocatoria: Solicitudes de servicio {anio} — {cuat_label}',
-            (
-                f'Se solicita generar las solicitudes de dictado por servicio correspondientes '
-                f'al {cuat_label} del ciclo lectivo {anio}.{anual_nota} '
-                f'Ingresá al sistema para generar las solicitudes a los departamentos correspondientes.'
-            ),
-            url=url_nueva_dept,
-        )
-        count += 1
     for director in User.objects.filter(rol='director_carrera', is_active=True):
         _crear_notificacion(
             director,

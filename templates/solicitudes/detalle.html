@@ -27,13 +27,16 @@
     {% if not user.puede_revisar and not user.es_director_departamento and solicitud.estado in 'devuelta observada' %}
     <a href="{% url 'solicitudes:editar' solicitud.pk %}" class="btn btn-outline-primary"><i class="bi bi-pencil me-2"></i>Editar</a>
     {% endif %}
+    {% if puede_duplicar %}
+    <a href="{% url 'solicitudes:duplicar' solicitud.pk %}" class="btn btn-outline-secondary"><i class="bi bi-copy me-2"></i>Duplicar</a>
+    {% endif %}
     <div class="dropdown">
       <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
         <i class="bi bi-file-earmark-text me-2"></i>Solicitud Completa
       </button>
       <ul class="dropdown-menu">
-        <li><a class="dropdown-item" href="{% url 'solicitudes:solicitud_completa_pdf' solicitud.pk %}"><i class="bi bi-file-pdf me-2 text-danger"></i>PDF</a></li>
-        <li><a class="dropdown-item" href="{% url 'solicitudes:solicitud_completa_docx' solicitud.pk %}"><i class="bi bi-file-word me-2 text-primary"></i>Word</a></li>
+        <li><a class="dropdown-item" href="{% url 'solicitudes:solicitud_completa_pdf' solicitud.pk %}" download><i class="bi bi-file-pdf me-2 text-danger"></i>PDF</a></li>
+        <li><a class="dropdown-item" href="{% url 'solicitudes:solicitud_completa_docx' solicitud.pk %}" download><i class="bi bi-file-word me-2 text-primary"></i>Word</a></li>
       </ul>
     </div>
     {% if user.puede_revisar or user.es_director_departamento %}
@@ -260,7 +263,7 @@
 </div>
 {% endif %}
 
-{% if user.es_director_departamento or user.puede_revisar %}
+{% if user.es_director_departamento or user.es_director_carrera or user.puede_revisar %}
 <div class="seccion-header"><i class="bi bi-file-earmark-check me-2"></i>Actas de Aval</div>
 <div class="card mb-3">
   <div class="card-body">
@@ -270,7 +273,7 @@
       <div class="col-md-6">
         <p class="small text-muted mb-1 fw-semibold">Acta Comisión de Carrera</p>
         {% if solicitud.acta_comision_carrera %}
-          <a href="{{ solicitud.acta_comision_carrera.url }}" target="_blank" class="btn btn-sm btn-outline-danger">
+          <a href="{{ solicitud.acta_comision_carrera.url }}" target="_blank" class="btn btn-sm btn-outline-danger" download>
             <i class="bi bi-file-pdf me-1"></i>Ver / Descargar
           </a>
         {% else %}
@@ -280,7 +283,7 @@
       <div class="col-md-6">
         <p class="small text-muted mb-1 fw-semibold">Acta Consejo Departamental</p>
         {% if solicitud.acta_consejo_departamental %}
-          <a href="{{ solicitud.acta_consejo_departamental.url }}" target="_blank" class="btn btn-sm btn-outline-danger">
+          <a href="{{ solicitud.acta_consejo_departamental.url }}" target="_blank" class="btn btn-sm btn-outline-danger" download>
             <i class="bi bi-file-pdf me-1"></i>Ver / Descargar
           </a>
         {% else %}
@@ -289,19 +292,33 @@
       </div>
     </div>
 
+    {% if user.es_director_carrera %}
+    <form method="post" action="{% url 'solicitudes:subir_acta_comision_carrera' solicitud.pk %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="row g-3 align-items-end">
+        <div class="col-md-8">
+          <label class="form-label small fw-semibold">Acta Comisión de Carrera (PDF)</label>
+          <input type="file" name="acta_comision_carrera" accept=".pdf" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-4">
+          <button type="submit" class="btn btn-sm btn-primary w-100">
+            <i class="bi bi-upload me-1"></i>Subir
+          </button>
+        </div>
+      </div>
+      <div class="form-text mt-1">Subir un nuevo archivo reemplaza el anterior.</div>
+    </form>
+    {% endif %}
+
     {% if user.es_director_departamento %}
     <form method="post" action="{% url 'solicitudes:subir_actas_aval' solicitud.pk %}" enctype="multipart/form-data">
       {% csrf_token %}
       <div class="row g-3 align-items-end">
-        <div class="col-md-5">
-          <label class="form-label small fw-semibold">Acta Comisión de Carrera (PDF)</label>
-          <input type="file" name="acta_comision_carrera" accept=".pdf" class="form-control form-control-sm">
-        </div>
-        <div class="col-md-5">
+        <div class="col-md-8">
           <label class="form-label small fw-semibold">Acta Consejo Departamental (PDF)</label>
           <input type="file" name="acta_consejo_departamental" accept=".pdf" class="form-control form-control-sm">
         </div>
-        <div class="col-md-2">
+        <div class="col-md-4">
           <button type="submit" class="btn btn-sm btn-primary w-100">
             <i class="bi bi-upload me-1"></i>Subir
           </button>

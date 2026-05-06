@@ -125,6 +125,24 @@
           </a>
         </li>
         {% endif %}
+        {% if user.es_director_carrera %}
+        <li class="mt-2 mb-1 px-2 text-uppercase text-muted small fw-bold">Carrera</li>
+        <li class="nav-item">
+          <a class="nav-link {% block nav_materias_carrera %}{% endblock %}" href="{% url 'planes:materias_carrera' %}">
+            <i class="bi bi-book me-2"></i>Materias de la Carrera
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% block nav_solicitudes_servicio_carrera %}{% endblock %}" href="{% url 'planes:lista_solicitudes_servicio_carrera' %}">
+            <i class="bi bi-envelope-paper me-2"></i>Solicitudes de servicio
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% block nav_solicitudes_protocolizacion_carrera %}{% endblock %}" href="{% url 'solicitudes:lista' %}">
+            <i class="bi bi-journal-plus me-2"></i>Protocolizaciones
+          </a>
+        </li>
+        {% endif %}
         {% if user.es_administrador %}
         <li class="mt-2 mb-1 px-2 text-uppercase text-muted small fw-bold">Planes y Tribunales</li>
         {% if user.puede_admin_general %}

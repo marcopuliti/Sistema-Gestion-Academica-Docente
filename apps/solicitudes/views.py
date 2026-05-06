@@ -8,7 +8,7 @@ from django.http import HttpResponse, JsonResponse
 
 from django.db import models
 from apps.planes.models import PlanEstudio
-from apps.tramites.decorators import puede_revisar, solo_director_departamento
+from apps.tramites.decorators import puede_revisar, solo_director_carrera, solo_director_departamento
 from apps.tramites.models import EstadoTramite, CalendarioAcademico
 from .forms import (
     SolicitudProtocolizacionForm, EquipoDocenteFormSet,
@@ -22,6 +22,15 @@ from .pdf import generar_pdf_solicitud, generar_pdf_nota_elevacion, generar_pdf_
 from .docx_gen import generar_docx_solicitud, generar_docx_nota_elevacion, generar_docx_nota_comision, generar_docx_solicitud_completa
 
 TIPIFICACIONES_VALIDAS = {t[0] for t in TIPIFICACION_CHOICES}
+
+
+def _carrera_qs_para_usuario(user):
+    """Devuelve el queryset de carreras que el usuario puede seleccionar en el form.
+    None = sin restricción (usa el default del modelo)."""
+    if user.es_director_carrera and user.carrera_id:
+        from apps.planes.models import Carrera
+        return Carrera.objects.filter(pk=user.carrera_id)
+    return None
 
 
 def _materia_qs_para_plan(plan_id):
@@ -58,6 +67,13 @@ def _calendario_json():
 def lista_solicitudes(request):
     if request.user.es_director_departamento:
         return redirect('solicitudes:lista_departamento')
+    if request.user.es_director_carrera:
+        carrera = request.user.carrera
+        solicitudes = SolicitudProtocolizacion.objects.filter(carrera=carrera).select_related('usuario')
+        return render(request, 'solicitudes/lista.html', {
+            'solicitudes': solicitudes,
+            'talleres':    SolicitudTaller.objects.none(),
+        })
     if request.user.puede_revisar:
         solicitudes = SolicitudProtocolizacion.objects.select_related('usuario').all()
         talleres    = SolicitudTaller.objects.select_related('usuario').all()
@@ -84,9 +100,10 @@ def crear_solicitud(request, tipificacion):
         return redirect('solicitudes:crear')
 
     es_curricular = tipificacion in TIPIFICACIONES_CURRICULARES
+    carrera_qs = _carrera_qs_para_usuario(request.user)
 
     if request.method == 'POST':
-        form = SolicitudProtocolizacionForm(request.POST, tipificacion=tipificacion, anonimo=False)
+        form = SolicitudProtocolizacionForm(request.POST, tipificacion=tipificacion, anonimo=False, carrera_qs=carrera_qs)
         formset = EquipoDocenteFormSet(request.POST)
         plan_id = request.POST.get('plan_estudio') or None
         correlativas_formset = CorrelativaFormSet(request.POST, prefix='correlativas')
@@ -106,7 +123,7 @@ def crear_solicitud(request, tipificacion):
             messages.success(request, 'Solicitud enviada. Quedó pendiente de revisión.')
             return redirect('solicitudes:detalle', pk=solicitud.pk)
     else:
-        form = SolicitudProtocolizacionForm(tipificacion=tipificacion, anonimo=False)
+        form = SolicitudProtocolizacionForm(tipificacion=tipificacion, anonimo=False, carrera_qs=carrera_qs)
         formset = EquipoDocenteFormSet()
         correlativas_formset = CorrelativaFormSet(prefix='correlativas')
         _set_correlativas_materia_qs(correlativas_formset, None)
@@ -130,7 +147,14 @@ def _puede_ver_solicitud(user, solicitud):
         return True
     if user.es_director_departamento:
         dep = solicitud.usuario.departamento if solicitud.usuario else solicitud.departamento_docente
-        return dep == user.departamento
+        if dep == user.departamento:
+            return True
+        # solicitudes creadas por director_carrera: matchear por carrera.departamento
+        if solicitud.carrera and solicitud.carrera.departamento == user.departamento:
+            return True
+        return False
+    if user.es_director_carrera and user.carrera_id:
+        return solicitud.carrera_id == user.carrera_id
     return solicitud.usuario == user
 
 
@@ -140,7 +164,15 @@ def detalle_solicitud(request, pk):
     if not _puede_ver_solicitud(request.user, solicitud):
         messages.error(request, 'No tenés permisos para ver esta solicitud.')
         return redirect('solicitudes:lista')
-    return render(request, 'solicitudes/detalle.html', {'solicitud': solicitud})
+    u = request.user
+    puede_duplicar = (
+        solicitud.usuario_id == u.pk or
+        (u.es_director_carrera and u.carrera_id and solicitud.carrera_id == u.carrera_id)
+    )
+    return render(request, 'solicitudes/detalle.html', {
+        'solicitud': solicitud,
+        'puede_duplicar': puede_duplicar,
+    })
 
 
 @login_required
@@ -153,9 +185,10 @@ def editar_solicitud(request, pk):
 
     tip = solicitud.tipificacion
     es_curricular = tip in TIPIFICACIONES_CURRICULARES
+    carrera_qs = _carrera_qs_para_usuario(request.user)
 
     if request.method == 'POST':
-        form = SolicitudProtocolizacionForm(request.POST, instance=solicitud, tipificacion=tip)
+        form = SolicitudProtocolizacionForm(request.POST, instance=solicitud, tipificacion=tip, carrera_qs=carrera_qs)
         formset = EquipoDocenteFormSet(request.POST, instance=solicitud)
         plan_id = request.POST.get('plan_estudio') or None
         correlativas_formset = CorrelativaFormSet(request.POST, instance=solicitud, prefix='correlativas')
@@ -171,7 +204,7 @@ def editar_solicitud(request, pk):
             messages.success(request, 'Solicitud actualizada y enviada nuevamente.')
             return redirect('solicitudes:detalle', pk=solicitud.pk)
     else:
-        form = SolicitudProtocolizacionForm(instance=solicitud, tipificacion=tip)
+        form = SolicitudProtocolizacionForm(instance=solicitud, tipificacion=tip, carrera_qs=carrera_qs)
         formset = EquipoDocenteFormSet(instance=solicitud)
         plan_id = solicitud.plan_estudio_id
         correlativas_formset = CorrelativaFormSet(instance=solicitud, prefix='correlativas')
@@ -201,7 +234,8 @@ def revisar_director(request, pk):
     solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
     dep = request.user.departamento
     dep_solicitud = solicitud.usuario.departamento if solicitud.usuario else solicitud.departamento_docente
-    if dep_solicitud != dep:
+    carrera_dep = solicitud.carrera.departamento if solicitud.carrera else None
+    if dep_solicitud != dep and carrera_dep != dep:
         messages.error(request, 'Esta solicitud no pertenece a tu departamento.')
         return redirect('solicitudes:lista_departamento')
     if solicitud.estado not in (EstadoTramite.PENDIENTE, EstadoTramite.OBSERVADA):
@@ -213,8 +247,8 @@ def revisar_director(request, pk):
         if form.is_valid():
             accion = form.cleaned_data['accion']
             if accion == 'elevada':
-                if not solicitud.acta_comision_carrera or not solicitud.acta_consejo_departamental:
-                    messages.error(request, 'Debés subir ambas actas (Comisión de Carrera y Consejo Departamental) antes de elevar.')
+                if not solicitud.acta_consejo_departamental:
+                    messages.error(request, 'Debés subir el Acta del Consejo Departamental antes de elevar.')
                     return render(request, 'solicitudes/revision_director.html', {'solicitud': solicitud, 'form': form})
             solicitud.estado = accion  # 'devuelta' | 'elevada'
             solicitud.comentarios_revision = form.cleaned_data['comentarios']
@@ -401,7 +435,7 @@ def descargar_docx_nota_comision(request, pk):
 def lista_solicitudes_departamento(request):
     from django.db.models import Case, When, IntegerField
     dep = request.user.departamento
-    dep_q = models.Q(usuario__departamento=dep) | models.Q(departamento_docente=dep)
+    dep_q_base = models.Q(usuario__departamento=dep) | models.Q(departamento_docente=dep)
 
     orden = Case(
         When(estado=EstadoTramite.APROBADO, then=1),
@@ -411,15 +445,15 @@ def lista_solicitudes_departamento(request):
 
     solicitudes = (
         SolicitudProtocolizacion.objects
-        .select_related('usuario')
-        .filter(dep_q)
+        .select_related('usuario', 'carrera')
+        .filter(dep_q_base | models.Q(carrera__departamento=dep))
         .annotate(orden_estado=orden)
         .order_by('orden_estado', '-fecha_creacion')
     )
     talleres = (
         SolicitudTaller.objects
         .select_related('usuario')
-        .filter(dep_q)
+        .filter(dep_q_base)
         .annotate(orden_estado=orden)
         .order_by('orden_estado', '-fecha_creacion')
     )
@@ -437,7 +471,8 @@ def agregar_codigo_materia(request, pk):
     solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
     dep = request.user.departamento
     dep_solicitud = solicitud.usuario.departamento if solicitud.usuario else solicitud.departamento_docente
-    if dep_solicitud != dep:
+    carrera_dep = solicitud.carrera.departamento if solicitud.carrera else None
+    if dep_solicitud != dep and carrera_dep != dep:
         messages.error(request, 'Esta solicitud no pertenece a tu departamento.')
         return redirect('solicitudes:lista_departamento')
     if request.method == 'POST':
@@ -454,30 +489,115 @@ def subir_actas_aval(request, pk):
     solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
     dep = request.user.departamento
     dep_solicitud = solicitud.usuario.departamento if solicitud.usuario else solicitud.departamento_docente
-    if dep_solicitud != dep:
+    carrera_dep = solicitud.carrera.departamento if solicitud.carrera else None
+    if dep_solicitud != dep and carrera_dep != dep:
         messages.error(request, 'Esta solicitud no pertenece a tu departamento.')
         return redirect('solicitudes:lista_departamento')
 
     if request.method == 'POST':
-        form = ActasAvalForm(request.POST, request.FILES)
-        if form.is_valid():
-            campos = []
-            if form.cleaned_data.get('acta_comision_carrera'):
-                solicitud.acta_comision_carrera = form.cleaned_data['acta_comision_carrera']
-                campos.append('acta_comision_carrera')
-            if form.cleaned_data.get('acta_consejo_departamental'):
-                solicitud.acta_consejo_departamental = form.cleaned_data['acta_consejo_departamental']
-                campos.append('acta_consejo_departamental')
-            if campos:
-                solicitud.save(update_fields=campos)
-                messages.success(request, 'Acta(s) guardada(s) correctamente.')
-            else:
-                messages.warning(request, 'No se seleccionó ningún archivo.')
+        f = request.FILES.get('acta_consejo_departamental')
+        if f:
+            solicitud.acta_consejo_departamental = f
+            solicitud.save(update_fields=['acta_consejo_departamental'])
+            messages.success(request, 'Acta del Consejo Departamental guardada correctamente.')
         else:
-            for error in form.errors.values():
-                messages.error(request, error[0])
+            messages.warning(request, 'No se seleccionó ningún archivo.')
 
     return redirect('solicitudes:detalle', pk=pk)
+
+
+@login_required
+@solo_director_carrera
+def subir_acta_comision_carrera(request, pk):
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    if solicitud.carrera_id != request.user.carrera_id:
+        messages.error(request, 'Esta solicitud no pertenece a tu carrera.')
+        return redirect('solicitudes:lista')
+
+    if request.method == 'POST':
+        f = request.FILES.get('acta_comision_carrera')
+        if f:
+            solicitud.acta_comision_carrera = f
+            solicitud.save(update_fields=['acta_comision_carrera'])
+            messages.success(request, 'Acta de Comisión de Carrera guardada correctamente.')
+        else:
+            messages.warning(request, 'No se seleccionó ningún archivo.')
+
+    return redirect('solicitudes:detalle', pk=pk)
+
+
+@login_required
+def duplicar_solicitud(request, pk):
+    fuente = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    u = request.user
+    puede = (
+        fuente.usuario_id == u.pk or
+        (u.es_director_carrera and u.carrera_id and fuente.carrera_id == u.carrera_id)
+    )
+    if not puede:
+        messages.error(request, 'No tenés permiso para duplicar esta solicitud.')
+        return redirect('solicitudes:lista')
+
+    tip = fuente.tipificacion
+    es_curricular = tip in TIPIFICACIONES_CURRICULARES
+    carrera_qs = _carrera_qs_para_usuario(u)
+
+    if request.method == 'POST':
+        form = SolicitudProtocolizacionForm(request.POST, tipificacion=tip, anonimo=False, carrera_qs=carrera_qs)
+        formset = EquipoDocenteFormSet(request.POST)
+        plan_id = request.POST.get('plan_estudio') or None
+        correlativas_formset = CorrelativaFormSet(request.POST, prefix='correlativas')
+        _set_correlativas_materia_qs(correlativas_formset, plan_id)
+        if form.is_valid() and formset.is_valid() and correlativas_formset.is_valid():
+            solicitud = form.save(commit=False)
+            solicitud.usuario = u
+            solicitud.save()
+            formset.instance = solicitud
+            formset.save()
+            correlativas_formset.instance = solicitud
+            correlativas_formset.save()
+            from apps.notifications.utils import notificar_nuevo_tramite
+            from django.urls import reverse
+            notificar_nuevo_tramite(solicitud, 'Solicitud de Protocolización',
+                                    url=reverse('solicitudes:detalle', args=[solicitud.pk]))
+            messages.success(request, 'Solicitud enviada. Quedó pendiente de revisión.')
+            return redirect('solicitudes:detalle', pk=solicitud.pk)
+    else:
+        fk_fields = {'carrera', 'plan_estudio', 'optativa_vinculada'}
+        initial = {}
+        for f in SolicitudProtocolizacionForm.Meta.fields:
+            if f in fk_fields:
+                initial[f] = getattr(fuente, f'{f}_id', None)
+            else:
+                initial[f] = getattr(fuente, f, None)
+        form = SolicitudProtocolizacionForm(initial=initial, tipificacion=tip, anonimo=False, carrera_qs=carrera_qs)
+        from apps.planes.models import MateriaEnPlan
+        if fuente.carrera_id:
+            form.fields['plan_estudio'].queryset = PlanEstudio.objects.filter(
+                carrera_id=fuente.carrera_id, vigente=True
+            )
+        if fuente.plan_estudio_id:
+            form.fields['optativa_vinculada'].queryset = (
+                MateriaEnPlan.objects
+                .filter(plan_id=fuente.plan_estudio_id, es_optativa=True)
+                .select_related('materia')
+                .order_by('ano', 'materia__nombre')
+            )
+        formset = EquipoDocenteFormSet()
+        correlativas_formset = CorrelativaFormSet(prefix='correlativas')
+        _set_correlativas_materia_qs(correlativas_formset, fuente.plan_estudio_id)
+
+    return render(request, 'solicitudes/form.html', {
+        'form': form,
+        'formset': formset,
+        'correlativas_formset': correlativas_formset,
+        'tipificacion': tip,
+        'es_curricular': es_curricular,
+        'titulo': f'Nueva Solicitud — basada en "{fuente.nombre_curso}"',
+        'calendario_json': _calendario_json(),
+        'anonimo': False,
+        'hs_totales_plan': fuente.optativa_vinculada.hs_totales if fuente.optativa_vinculada else None,
+    })
 
 
 def materias_por_plan(request):

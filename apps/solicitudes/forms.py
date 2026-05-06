@@ -67,7 +67,7 @@ class SolicitudProtocolizacionForm(forms.ModelForm):
             'condicion': forms.Select(choices=[('', '---------')] + list(CONDICION_CHOICES)),
         }
 
-    def __init__(self, *args, tipificacion=None, anonimo=False, **kwargs):
+    def __init__(self, *args, tipificacion=None, anonimo=False, carrera_qs=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.anonimo = anonimo
         if anonimo:
@@ -82,6 +82,10 @@ class SolicitudProtocolizacionForm(forms.ModelForm):
         if tipificacion not in TIPIFICACIONES_CURRICULARES:
             for f in ('carrera', 'plan_estudio', 'optativa_vinculada', 'anno_carrera', 'periodo'):
                 self.fields[f].required = False
+
+        # Restringir carreras disponibles si se especifica
+        if carrera_qs is not None:
+            self.fields['carrera'].queryset = carrera_qs
 
         # Filtrar planes según carrera seleccionada
         carrera_id = self._resolver_id('carrera')

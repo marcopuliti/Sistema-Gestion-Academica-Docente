@@ -11,3 +11,4 @@ lxml==6.0.4
 pypdf==6.10.2
 django-extensions==3.2.0
 gunicorn==23.0.0
+dj_database_url==0.5.0

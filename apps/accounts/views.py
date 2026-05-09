@@ -155,6 +155,27 @@ def editar_usuario(request, pk):
 
 @login_required
 @solo_secretario
+def blanquear_password_usuario(request, pk):
+    usuario = get_object_or_404(CustomUser, pk=pk)
+    if request.method == 'POST':
+        nueva = request.POST.get('nueva_password', '')
+        confirmar = request.POST.get('confirmar_password', '')
+        if not nueva:
+            messages.error(request, 'La contraseña no puede estar vacía.')
+        elif nueva != confirmar:
+            messages.error(request, 'Las contraseñas no coinciden.')
+        elif len(nueva) < 8:
+            messages.error(request, 'La contraseña debe tener al menos 8 caracteres.')
+        else:
+            usuario.set_password(nueva)
+            usuario.save()
+            messages.success(request, f'Contraseña de {usuario.username} blanqueada correctamente.')
+            return redirect('accounts:lista_usuarios')
+    return redirect('accounts:editar_usuario', pk=pk)
+
+
+@login_required
+@solo_secretario
 def toggle_activo_usuario(request, pk):
     usuario = get_object_or_404(CustomUser, pk=pk)
     if usuario == request.user:

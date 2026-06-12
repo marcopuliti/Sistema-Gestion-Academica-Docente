@@ -14,6 +14,7 @@ DJANGO_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.postgres',
     'django_extensions'
 ]
 
@@ -71,20 +72,20 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 import dj_database_url
 
-DATABASES = {
-    'default': dj_database_url.parse(config('DATABASE_URL'))
-}
-
 #DATABASES = {
-#    'default': {
-#        'ENGINE': 'django.db.backends.postgresql',  # compatible con psycopg2 y psycopg3
-#        'NAME': config('DB_NAME', default='gestion_docente'),
-#        'USER': config('DB_USER', default='postgres'),
-#        'PASSWORD': config('DB_PASSWORD', default=''),
-#        'HOST': config('DB_HOST', default='localhost'),
-#        'PORT': config('DB_PORT', default='5432'),
-#    }
+#    'default': dj_database_url.parse(config('DATABASE_URL'))
 #}
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',  # compatible con psycopg2 y psycopg3
+        'NAME': config('DB_NAME', default='gestion_docente'),
+        'USER': config('DB_USER', default='postgres'),
+        'PASSWORD': config('DB_PASSWORD', default=''),
+        'HOST': config('DB_HOST', default='localhost'),
+        'PORT': config('DB_PORT', default='5432'),
+    }
+}
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
 LOGIN_URL = 'accounts:login'

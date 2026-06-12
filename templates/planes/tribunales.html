@@ -23,15 +23,31 @@
   .sin-tribunal-row { border-left: 3px solid #dc3545; }
   .con-propuesta-row { border-left: 3px solid #0dcaf0; }
   .no-dictado-row { border-left: 3px solid #ffc107; background: #fff9e6; }
+  .tribunal-check {
+    width: 1.15em; height: 1.15em;
+    border: 2px solid var(--color-secundario);
+    background-color: #e8f4fd;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .tribunal-check:checked {
+    background-color: var(--color-secundario);
+    border-color: var(--color-secundario);
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
   <div>
+    {% if es_solo_consulta %}
+    <h2><i class="bi bi-people me-2"></i>Tribunales Examinadores — Todos los Departamentos</h2>
+    {% else %}
     <h2><i class="bi bi-people me-2"></i>Tribunales Examinadores — Dpto. {{ departamento }}</h2>
+    {% endif %}
     <span class="text-muted small">{{ page_obj.paginator.count }} materia{{ page_obj.paginator.count|pluralize:"s" }}</span>
   </div>
+  {% if not es_solo_consulta %}
   <div class="d-flex gap-2 flex-wrap">
     {% if informe_enviado %}
     <a href="{% url 'planes:descargar_informe_tribunales' %}" download class="btn btn-outline-primary">
@@ -45,10 +61,11 @@
     </button>
     {% endif %}
   </div>
+  {% endif %}
 </div>
 
 {# ── Banner de borrador ───────────────────────────────────────────────────── #}
-{% if borrador_count %}
+{% if borrador_count and not es_solo_consulta %}
 <div class="alert alert-info d-flex align-items-center justify-content-between gap-3 mb-3" role="alert">
   <div class="d-flex align-items-center gap-2">
     <i class="bi bi-pencil-square fs-5 flex-shrink-0"></i>
@@ -98,7 +115,54 @@
     Años sin dictar
     {% if no_dictados_count %}<span class="badge {% if filtro == 'sin_dictado' %}bg-light text-dark{% else %}bg-secondary{% endif %} ms-1">{{ no_dictados_count }}</span>{% endif %}
   </a>
+  {% if borrador_count %}
+  <a href="?{% if q %}q={{ q }}&{% endif %}filtro=con_propuesta"
+     class="btn btn-sm {% if filtro == 'con_propuesta' %}btn-info text-dark{% else %}btn-outline-info{% endif %}">
+    Con cambios propuestos
+    <span class="badge {% if filtro == 'con_propuesta' %}bg-dark{% else %}bg-info text-dark{% endif %} ms-1">{{ borrador_count }}</span>
+  </a>
+  {% endif %}
 </div>
+
+{# ── Agrupaciones ─────────────────────────────────────────────────────────── #}
+{% if not es_solo_consulta %}
+{% if agrupaciones %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-collection me-2"></i>Agrupaciones de tribunales</span>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for ag in agrupaciones %}
+    <div class="list-group-item py-2">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+          <strong>{{ ag.nombre }}</strong>
+          <span class="badge bg-secondary ms-2">{{ ag.tribunales.count }} tribunal{{ ag.tribunales.count|pluralize:"es" }}</span>
+          <div class="text-muted small mt-1">
+            {% for t in ag.tribunales.all %}{{ t.materia_en_plan.materia.nombre }}{% if not forloop.last %}, {% endif %}{% endfor %}
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-sm btn-outline-primary"
+                  data-bs-toggle="modal" data-bs-target="#modalCambioGrupo"
+                  data-ag-pk="{{ ag.pk }}"
+                  data-ag-nombre="{{ ag.nombre }}"
+                  data-ag-count="{{ ag.tribunales.count }}">
+            <i class="bi bi-pencil me-1"></i>Proponer cambio grupal
+          </button>
+          <form method="post" action="{% url 'planes:eliminar_agrupacion' ag.pk %}"
+                onsubmit="return confirm('¿Eliminar la agrupación «{{ ag.nombre }}»?')">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endif %}
 
 {% if solicitud_activa %}
 <div class="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
@@ -141,6 +205,11 @@
   {% with t=mep.tribunal_obj %}
   <div class="tribunal-row px-3 py-3 {% if not mep.se_dicta %}no-dictado-row{% elif not t %}sin-tribunal-row{% elif mep.tribunal_tiene_propuesta %}con-propuesta-row{% endif %}">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+      <div class="d-flex align-items-start gap-2">
+      {% if not es_solo_consulta and t %}
+      <input type="checkbox" class="form-check-input mt-1 tribunal-check flex-shrink-0"
+             value="{{ t.pk }}" aria-label="Seleccionar tribunal">
+      {% endif %}
       <div class="plan-info">
         {{ mep.plan.carrera.nombre }} &middot; Plan {{ mep.plan.codigo }}
         &middot; {{ mep.ano }}° año &middot; {{ mep.get_cuatrimestre_display }}
@@ -153,6 +222,7 @@
         </span>
         {% endif %}
       </div>
+      </div>{# cierre d-flex checkbox + plan-info #}
       <div class="d-flex gap-2 align-items-center flex-wrap">
         {% if not t %}
           <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Sin tribunal</span>
@@ -162,22 +232,39 @@
             <i class="bi bi-pencil me-1"></i>Cambio propuesto
           </span>
           {% endif %}
+          {% if not es_solo_consulta %}
           <button class="btn btn-sm btn-outline-primary"
                   data-bs-toggle="modal" data-bs-target="#modalProponerCambio"
                   data-pk="{{ t.pk }}"
                   data-materia="{{ mep.materia.nombre }}"
                   data-plan="{{ mep.plan.carrera.nombre }} · Plan {{ mep.plan.codigo }} · {{ mep.ano }}° año · {{ mep.get_cuatrimestre_display }}"
+                  data-presidente-id="{{ t.presidente_id|default:'' }}"
                   data-presidente-nombre="{{ t.presidente_nombre }}"
                   data-presidente-dni="{{ t.presidente_dni }}"
+                  data-vocal1-id="{{ t.vocal_1_id|default:'' }}"
                   data-vocal1-nombre="{{ t.vocal_1_nombre }}"
                   data-vocal1-dni="{{ t.vocal_1_dni }}"
+                  data-vocal2-id="{{ t.vocal_2_id|default:'' }}"
                   data-vocal2-nombre="{{ t.vocal_2_nombre }}"
                   data-vocal2-dni="{{ t.vocal_2_dni }}"
                   data-dia-semana="{{ t.dia_semana|default:'' }}"
                   data-hora="{% if t.hora %}{{ t.hora|time:'H:i' }}{% endif %}"
-                  data-permite-libres="{{ t.permite_libres|yesno:'true,false' }}">
-            <i class="bi bi-pencil me-1"></i>Proponer cambio
+                  data-permite-libres="{{ t.permite_libres|yesno:'true,false' }}"
+                  {% if mep.propuesta_item %}
+                  data-tiene-propuesta="true"
+                  data-prop-presidente-nombre="{{ mep.propuesta_item.presidente_nombre }}"
+                  data-prop-presidente-dni="{{ mep.propuesta_item.presidente_dni }}"
+                  data-prop-vocal1-nombre="{{ mep.propuesta_item.vocal_1_nombre }}"
+                  data-prop-vocal1-dni="{{ mep.propuesta_item.vocal_1_dni }}"
+                  data-prop-vocal2-nombre="{{ mep.propuesta_item.vocal_2_nombre }}"
+                  data-prop-vocal2-dni="{{ mep.propuesta_item.vocal_2_dni }}"
+                  data-prop-dia-semana="{{ mep.propuesta_item.dia_semana|default:'' }}"
+                  data-prop-hora="{% if mep.propuesta_item.hora %}{{ mep.propuesta_item.hora|time:'H:i' }}{% endif %}"
+                  data-prop-permite-libres="{{ mep.propuesta_item.permite_libres|yesno:'true,false' }}"
+                  {% endif %}>
+            <i class="bi bi-pencil me-1"></i>{% if mep.propuesta_item %}Editar propuesta{% else %}Proponer cambio{% endif %}
           </button>
+          {% endif %}
         {% endif %}
       </div>
     </div>
@@ -257,12 +344,12 @@
 
 {% else %}
 <div class="alert alert-info">
-  <i class="bi bi-info-circle me-2"></i>No hay materias en planes del departamento <strong>{{ departamento }}</strong>.
+  <i class="bi bi-info-circle me-2"></i>No hay materias registradas.
 </div>
 {% endif %}
 
 {# ── Historial de solicitudes de cambio ───────────────────────────────────── #}
-{% if solicitudes_cambio %}
+{% if solicitudes_cambio and not es_solo_consulta %}
 <div class="card mt-4">
   <div class="card-header d-flex align-items-center gap-2">
     <i class="bi bi-clock-history"></i>
@@ -297,6 +384,7 @@
     <div class="modal-content">
       <form id="formProponerCambio" method="post">
         {% csrf_token %}
+        <input type="hidden" name="next" id="mpNext">
         <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
           <h5 class="modal-title" id="modalProponerCambioTitulo">Proponer cambio de tribunal</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -305,33 +393,83 @@
           <p class="text-muted small mb-3" id="modalProponerCambioPlan"></p>
           <div class="alert alert-info py-2 small mb-3">
             <i class="bi bi-info-circle me-1"></i>
-            Los cambios quedan en <strong>borrador</strong> hasta que envíes la solicitud. Podés acumular cambios de varios tribunales antes de enviar.
+            Los cambios quedan en <strong>borrador</strong> hasta que envíes la solicitud.
           </div>
-          <div class="row g-3">
-            <div class="col-md-8">
-              <label class="form-label fw-semibold small">Presidente — Nombre completo</label>
-              <input type="text" name="presidente_nombre" id="mpPresidenteNombre" class="form-control form-control-sm">
+
+          {# Copiar datos de otra mesa #}
+          <div class="mb-3 border rounded p-2 bg-light" style="position:relative">
+            <label class="form-label fw-semibold small mb-1">
+              <i class="bi bi-clipboard-arrow-up me-1"></i>Copiar datos de otra mesa
+            </label>
+            <div class="input-group input-group-sm">
+              <input type="text" id="copiarMesaBuscar" class="form-control form-control-sm"
+                     placeholder="Buscar por nombre de materia…" autocomplete="off">
+              <button type="button" class="btn btn-outline-secondary" id="copiarMesaLimpiar" title="Limpiar">
+                <i class="bi bi-x"></i>
+              </button>
             </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold small">Presidente — DNI</label>
-              <input type="text" name="presidente_dni" id="mpPresidenteDni" class="form-control form-control-sm">
+            <div id="copiarMesaDropdown" class="list-group mt-1 d-none"
+                 style="position:absolute;z-index:1070;width:calc(100% - 1rem);max-height:180px;overflow-y:auto"></div>
+          </div>
+
+          {# Presidente #}
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Presidente</label>
+            <div class="docente-picker" data-field="presidente_id">
+              <input type="hidden" name="presidente_id" class="dp-id">
+              <div class="dp-selected d-none d-flex justify-content-between align-items-center border rounded px-3 py-2 bg-light mb-1">
+                <span><strong class="dp-nombre"></strong> <span class="text-muted small ms-2">DNI <span class="dp-dni"></span></span></span>
+                <button type="button" class="btn btn-sm btn-outline-danger dp-clear"><i class="bi bi-x"></i></button>
+              </div>
+              <div class="dp-search-wrap" style="position:relative">
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control form-control-sm dp-search" placeholder="Buscar por apellido…" autocomplete="off">
+                  <button type="button" class="btn btn-outline-primary dp-new-btn" title="Crear nuevo docente"><i class="bi bi-person-plus"></i></button>
+                </div>
+                <div class="dp-dropdown list-group mt-1 d-none" style="position:absolute;z-index:1060;width:100%;max-height:200px;overflow-y:auto"></div>
+              </div>
             </div>
-            <div class="col-md-8">
-              <label class="form-label fw-semibold small">1er. Vocal — Nombre completo</label>
-              <input type="text" name="vocal_1_nombre" id="mpVocal1Nombre" class="form-control form-control-sm">
+          </div>
+
+          {# 1er. Vocal #}
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">1er. Vocal</label>
+            <div class="docente-picker" data-field="vocal_1_id">
+              <input type="hidden" name="vocal_1_id" class="dp-id">
+              <div class="dp-selected d-none d-flex justify-content-between align-items-center border rounded px-3 py-2 bg-light mb-1">
+                <span><strong class="dp-nombre"></strong> <span class="text-muted small ms-2">DNI <span class="dp-dni"></span></span></span>
+                <button type="button" class="btn btn-sm btn-outline-danger dp-clear"><i class="bi bi-x"></i></button>
+              </div>
+              <div class="dp-search-wrap" style="position:relative">
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control form-control-sm dp-search" placeholder="Buscar por apellido…" autocomplete="off">
+                  <button type="button" class="btn btn-outline-primary dp-new-btn" title="Crear nuevo docente"><i class="bi bi-person-plus"></i></button>
+                </div>
+                <div class="dp-dropdown list-group mt-1 d-none" style="position:absolute;z-index:1060;width:100%;max-height:200px;overflow-y:auto"></div>
+              </div>
             </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold small">1er. Vocal — DNI</label>
-              <input type="text" name="vocal_1_dni" id="mpVocal1Dni" class="form-control form-control-sm">
+          </div>
+
+          {# 2do. Vocal #}
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">2do. Vocal</label>
+            <div class="docente-picker" data-field="vocal_2_id">
+              <input type="hidden" name="vocal_2_id" class="dp-id">
+              <div class="dp-selected d-none d-flex justify-content-between align-items-center border rounded px-3 py-2 bg-light mb-1">
+                <span><strong class="dp-nombre"></strong> <span class="text-muted small ms-2">DNI <span class="dp-dni"></span></span></span>
+                <button type="button" class="btn btn-sm btn-outline-danger dp-clear"><i class="bi bi-x"></i></button>
+              </div>
+              <div class="dp-search-wrap" style="position:relative">
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control form-control-sm dp-search" placeholder="Buscar por apellido…" autocomplete="off">
+                  <button type="button" class="btn btn-outline-primary dp-new-btn" title="Crear nuevo docente"><i class="bi bi-person-plus"></i></button>
+                </div>
+                <div class="dp-dropdown list-group mt-1 d-none" style="position:absolute;z-index:1060;width:100%;max-height:200px;overflow-y:auto"></div>
+              </div>
             </div>
-            <div class="col-md-8">
-              <label class="form-label fw-semibold small">2do. Vocal — Nombre completo</label>
-              <input type="text" name="vocal_2_nombre" id="mpVocal2Nombre" class="form-control form-control-sm">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold small">2do. Vocal — DNI</label>
-              <input type="text" name="vocal_2_dni" id="mpVocal2Dni" class="form-control form-control-sm">
-            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
             <div class="col-md-4">
               <label class="form-label fw-semibold small">Día de la semana</label>
               <select name="dia_semana" id="mpDiaSemana" class="form-select form-select-sm">
@@ -393,36 +531,481 @@
 </div>
 {% endif %}
 
+{# ── Barra flotante de selección ──────────────────────────────────────────── #}
+{% if not es_solo_consulta %}
+<div id="barraSeleccion" class="d-none position-fixed bottom-0 start-50 translate-middle-x mb-4"
+     style="z-index:1050;min-width:320px">
+  <div class="card shadow-lg border-primary">
+    <div class="card-body py-2 px-3 d-flex align-items-center gap-3">
+      <span class="fw-semibold small"><span id="selCount">0</span> tribunal(es) seleccionado(s)</span>
+      <button type="button" class="btn btn-primary btn-sm"
+              data-bs-toggle="modal" data-bs-target="#modalCrearAgrupacion">
+        <i class="bi bi-collection me-1"></i>Crear agrupación
+      </button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="btnLimpiarSel">
+        <i class="bi bi-x"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+{# ── Modal crear agrupación ───────────────────────────────────────────────── #}
+<div class="modal fade" id="modalCrearAgrupacion" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formCrearAgrupacion" method="post" action="{% url 'planes:crear_agrupacion' %}">
+        {% csrf_token %}
+        <div id="agrupacionTribunalesHidden"></div>
+        <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
+          <h5 class="modal-title"><i class="bi bi-collection me-2"></i>Nueva agrupación</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Nombre de la agrupación *</label>
+            <input type="text" name="nombre" class="form-control" required
+                   placeholder="Ej: Análisis Matemático - turno mañana">
+          </div>
+          <div>
+            <label class="form-label fw-semibold small">Tribunales seleccionados</label>
+            <div id="agrupacionResumen" class="text-muted small"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg me-1"></i>Crear agrupación
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Modal cambio grupal ───────────────────────────────────────────────────── #}
+{% if not es_solo_consulta %}
+<div class="modal fade" id="modalCambioGrupo" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form id="formCambioGrupo" method="post">
+        {% csrf_token %}
+        <input type="hidden" name="next" id="cgNext">
+        <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
+          <h5 class="modal-title" id="modalCambioGrupoTitulo">Proponer cambio grupal</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info py-2 small mb-3">
+            <i class="bi bi-info-circle me-1"></i>
+            El mismo cambio se aplicará a <strong id="cgCount"></strong> tribunal(es) de la agrupación.
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Presidente</label>
+            <div class="docente-picker" data-field="presidente_id">
+              <input type="hidden" name="presidente_id" class="dp-id">
+              <div class="dp-selected d-none d-flex justify-content-between align-items-center border rounded px-3 py-2 bg-light mb-1">
+                <span><strong class="dp-nombre"></strong> <span class="text-muted small ms-2">DNI <span class="dp-dni"></span></span></span>
+                <button type="button" class="btn btn-sm btn-outline-danger dp-clear"><i class="bi bi-x"></i></button>
+              </div>
+              <div class="dp-search-wrap" style="position:relative">
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control form-control-sm dp-search" placeholder="Buscar por apellido…" autocomplete="off">
+                  <button type="button" class="btn btn-outline-primary dp-new-btn" title="Crear nuevo docente"><i class="bi bi-person-plus"></i></button>
+                </div>
+                <div class="dp-dropdown list-group mt-1 d-none" style="position:absolute;z-index:1060;width:100%;max-height:200px;overflow-y:auto"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">1er. Vocal</label>
+            <div class="docente-picker" data-field="vocal_1_id">
+              <input type="hidden" name="vocal_1_id" class="dp-id">
+              <div class="dp-selected d-none d-flex justify-content-between align-items-center border rounded px-3 py-2 bg-light mb-1">
+                <span><strong class="dp-nombre"></strong> <span class="text-muted small ms-2">DNI <span class="dp-dni"></span></span></span>
+                <button type="button" class="btn btn-sm btn-outline-danger dp-clear"><i class="bi bi-x"></i></button>
+              </div>
+              <div class="dp-search-wrap" style="position:relative">
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control form-control-sm dp-search" placeholder="Buscar por apellido…" autocomplete="off">
+                  <button type="button" class="btn btn-outline-primary dp-new-btn" title="Crear nuevo docente"><i class="bi bi-person-plus"></i></button>
+                </div>
+                <div class="dp-dropdown list-group mt-1 d-none" style="position:absolute;z-index:1060;width:100%;max-height:200px;overflow-y:auto"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">2do. Vocal</label>
+            <div class="docente-picker" data-field="vocal_2_id">
+              <input type="hidden" name="vocal_2_id" class="dp-id">
+              <div class="dp-selected d-none d-flex justify-content-between align-items-center border rounded px-3 py-2 bg-light mb-1">
+                <span><strong class="dp-nombre"></strong> <span class="text-muted small ms-2">DNI <span class="dp-dni"></span></span></span>
+                <button type="button" class="btn btn-sm btn-outline-danger dp-clear"><i class="bi bi-x"></i></button>
+              </div>
+              <div class="dp-search-wrap" style="position:relative">
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control form-control-sm dp-search" placeholder="Buscar por apellido…" autocomplete="off">
+                  <button type="button" class="btn btn-outline-primary dp-new-btn" title="Crear nuevo docente"><i class="bi bi-person-plus"></i></button>
+                </div>
+                <div class="dp-dropdown list-group mt-1 d-none" style="position:absolute;z-index:1060;width:100%;max-height:200px;overflow-y:auto"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">Día de la semana</label>
+              <select name="dia_semana" class="form-select form-select-sm cg-dia">
+                <option value="">— Seleccionar —</option>
+                <option value="1">Lunes</option>
+                <option value="2">Martes</option>
+                <option value="3">Miércoles</option>
+                <option value="4">Jueves</option>
+                <option value="5">Viernes</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">Hora del examen</label>
+              <input type="time" name="hora" class="form-control form-control-sm cg-hora">
+            </div>
+            <div class="col-md-4 d-flex align-items-end pb-1">
+              <div class="form-check">
+                <input class="form-check-input cg-libres" type="checkbox" name="permite_libres" checked>
+                <label class="form-check-label">Pueden rendir libres</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg me-1"></i>Guardar propuesta grupal
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (function () {
-  const URL_TEMPLATE = '{% url "planes:proponer_cambio_tribunal" 0 %}';
+  const URL_TEMPLATE        = '{% url "planes:proponer_cambio_tribunal" 0 %}';
+  const URL_BUSCAR          = '{% url "planes:buscar_docente" %}';
+  const URL_CREAR           = '{% url "planes:crear_docente_ajax" %}';
+  const URL_BUSCAR_TRIBUNAL = '{% url "planes:buscar_tribunal_ajax" %}';
+  const URL_DATOS_TRIBUNAL  = '{% url "planes:datos_tribunal_ajax" 0 %}';
+  const CSRF                = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
 
-  // ── Shared proponer-cambio modal ──────────────────────────────────────────
+  // ── DocPicker: autocomplete + crear nuevo ─────────────────────────────────
+  window.initPicker = function initPicker(picker) {
+    const idField  = picker.querySelector('.dp-id');
+    const selDiv   = picker.querySelector('.dp-selected');
+    const nomEl    = picker.querySelector('.dp-nombre');
+    const dniEl    = picker.querySelector('.dp-dni');
+    const clearBtn = picker.querySelector('.dp-clear');
+    const searchWrap = picker.querySelector('.dp-search-wrap');
+    const searchInput = picker.querySelector('.dp-search');
+    const newBtn      = picker.querySelector('.dp-new-btn');
+    const dropdown = picker.querySelector('.dp-dropdown');
+    let debounce;
+
+    newBtn.addEventListener('click', (e) => { e.stopPropagation(); showCreateForm(); });
+
+    function selectDocente(id, nombre, dni) {
+      idField.value = id;
+      nomEl.textContent = nombre;
+      dniEl.textContent = dni;
+      selDiv.classList.remove('d-none');
+      searchWrap.classList.add('d-none');
+      dropdown.classList.add('d-none');
+      searchInput.value = '';
+    }
+
+    function reset() {
+      idField.value = '';
+      selDiv.classList.add('d-none');
+      searchWrap.classList.remove('d-none');
+      dropdown.classList.add('d-none');
+      searchInput.value = '';
+    }
+
+    clearBtn.addEventListener('click', reset);
+
+    function showDropdown(results) {
+      dropdown.innerHTML = '';
+      results.forEach(d => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'list-group-item list-group-item-action py-1 px-2 small';
+        btn.innerHTML = `<strong>${d.nombre}</strong> <span class="text-muted ms-1">DNI ${d.dni}</span>`;
+        btn.addEventListener('click', () => selectDocente(d.id, d.nombre, d.dni));
+        dropdown.appendChild(btn);
+      });
+
+      // "Crear nuevo" siempre al final
+      const crearBtn = document.createElement('button');
+      crearBtn.type = 'button';
+      crearBtn.className = 'list-group-item list-group-item-action py-1 px-2 small text-primary fw-semibold';
+      crearBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>Crear nuevo docente…';
+      crearBtn.addEventListener('click', (e) => { e.stopPropagation(); showCreateForm(); });
+      dropdown.appendChild(crearBtn);
+
+      dropdown.classList.remove('d-none');
+    }
+
+    function showCreateForm() {
+      dropdown.innerHTML = `
+        <div class="p-2 border rounded bg-white">
+          <div class="fw-semibold small mb-2"><i class="bi bi-person-plus me-1"></i>Nuevo docente</div>
+          <input type="text" class="form-control form-control-sm mb-1 dp-cn-nombre" placeholder="Nombre completo">
+          <input type="text" class="form-control form-control-sm mb-2 dp-cn-dni" placeholder="DNI">
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-success dp-cn-ok">Crear</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary dp-cn-cancel">Cancelar</button>
+          </div>
+          <div class="dp-cn-error text-danger small mt-1 d-none"></div>
+        </div>`;
+      dropdown.classList.remove('d-none');
+
+      dropdown.querySelector('.dp-cn-cancel').addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.classList.add('d-none');
+        searchInput.focus();
+      });
+      dropdown.querySelector('.dp-cn-ok').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const nombre = dropdown.querySelector('.dp-cn-nombre').value.trim();
+        const dni    = dropdown.querySelector('.dp-cn-dni').value.trim();
+        const errEl  = dropdown.querySelector('.dp-cn-error');
+        if (!nombre || !dni) { errEl.textContent = 'Completá nombre y DNI.'; errEl.classList.remove('d-none'); return; }
+        const fd = new FormData();
+        fd.append('nombre', nombre); fd.append('dni', dni);
+        const r = await fetch(URL_CREAR, { method: 'POST', body: fd, headers: {'X-CSRFToken': CSRF} });
+        const data = await r.json();
+        if (data.ok) {
+          selectDocente(data.id, data.nombre, data.dni);
+        } else {
+          errEl.textContent = data.error || 'Error al crear.';
+          errEl.classList.remove('d-none');
+        }
+      });
+
+      // evitar que clicks dentro del form cierren el dropdown
+      dropdown.querySelector('div').addEventListener('click', e => e.stopPropagation());
+    }
+
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounce);
+      const q = searchInput.value.trim();
+      if (q.length < 2) { dropdown.classList.add('d-none'); return; }
+      debounce = setTimeout(async () => {
+        const r = await fetch(`${URL_BUSCAR}?q=${encodeURIComponent(q)}`);
+        const data = await r.json();
+        showDropdown(data.results);
+      }, 280);
+    });
+
+    document.addEventListener('click', e => {
+      if (!picker.contains(e.target)) dropdown.classList.add('d-none');
+    });
+
+    picker._selectDocente = selectDocente;
+    picker._reset = reset;
+  }
+
+  // ── Modal ─────────────────────────────────────────────────────────────────
   const modalEl = document.getElementById('modalProponerCambio');
   if (modalEl) {
+    modalEl.querySelectorAll('.docente-picker').forEach(initPicker);
+
+    const getPicker = field => modalEl.querySelector(`.docente-picker[data-field="${field}"]`);
+
+    // ── Copiar datos de otra mesa ─────────────────────────────────────────────
+    const copiarInput    = document.getElementById('copiarMesaBuscar');
+    const copiarDropdown = document.getElementById('copiarMesaDropdown');
+    const copiarLimpiar  = document.getElementById('copiarMesaLimpiar');
+    let copiarDebounce;
+
+    async function aplicarDatosTribunal(pk) {
+      const url = URL_DATOS_TRIBUNAL.replace('/0/', '/' + pk + '/');
+      const r = await fetch(url);
+      const data = await r.json();
+      if (!data.ok) return;
+      const campos = [
+        { field: 'presidente_id', doc: data.presidente },
+        { field: 'vocal_1_id',   doc: data.vocal_1    },
+        { field: 'vocal_2_id',   doc: data.vocal_2    },
+      ];
+      campos.forEach(({ field, doc }) => {
+        const picker = getPicker(field);
+        if (!picker) return;
+        if (doc) {
+          picker._selectDocente(doc.id || '', doc.nombre, doc.dni || '');
+        } else {
+          picker._reset();
+        }
+      });
+      document.getElementById('mpDiaSemana').value       = data.dia_semana || '';
+      document.getElementById('mpHora').value            = data.hora        || '';
+      document.getElementById('mpPermiteLibres').checked = data.permite_libres;
+      copiarDropdown.classList.add('d-none');
+      copiarInput.value = '';
+    }
+
+    if (copiarInput) {
+      copiarInput.addEventListener('input', () => {
+        clearTimeout(copiarDebounce);
+        const q = copiarInput.value.trim();
+        if (q.length < 2) { copiarDropdown.classList.add('d-none'); return; }
+        copiarDebounce = setTimeout(async () => {
+          const r = await fetch(`${URL_BUSCAR_TRIBUNAL}?q=${encodeURIComponent(q)}`);
+          const data = await r.json();
+          copiarDropdown.innerHTML = '';
+          if (!data.results.length) {
+            copiarDropdown.innerHTML = '<div class="list-group-item small text-muted">Sin resultados</div>';
+          } else {
+            data.results.forEach(t => {
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'list-group-item list-group-item-action py-1 px-2 small';
+              btn.textContent = t.label;
+              btn.addEventListener('click', (e) => { e.stopPropagation(); aplicarDatosTribunal(t.id); });
+              copiarDropdown.appendChild(btn);
+            });
+          }
+          copiarDropdown.classList.remove('d-none');
+        }, 280);
+      });
+
+      copiarLimpiar.addEventListener('click', () => {
+        copiarInput.value = '';
+        copiarDropdown.classList.add('d-none');
+      });
+
+      document.addEventListener('click', e => {
+        if (!copiarInput.closest('div').contains(e.target)) copiarDropdown.classList.add('d-none');
+      });
+    }
+
+    // ── Fila "actual" sobre cada picker ──────────────────────────────────────
+    function renderActual(picker, label, nombre, dni) {
+      picker.querySelector('.dp-actual-row')?.remove();
+      if (!nombre) return;
+      const row = document.createElement('div');
+      row.className = 'dp-actual-row d-flex align-items-center gap-2 mb-1 px-2 py-1 rounded small';
+      row.style.background = '#f0f0f0';
+      row.innerHTML = `<span class="text-muted" style="min-width:48px">Actual:</span>
+        <span class="fw-semibold">${nombre}</span>
+        ${dni ? `<span class="text-muted ms-1">DNI ${dni}</span>` : ''}`;
+      picker.insertBefore(row, picker.firstChild);
+    }
+
+    function highlightDiff(picker, actualNombre, propNombre) {
+      const wrap = picker.querySelector('.dp-search-wrap') || picker.querySelector('.dp-selected');
+      if (!wrap) return;
+      if (propNombre && actualNombre !== propNombre) {
+        picker.style.outline = '2px solid #ffc107';
+        picker.style.borderRadius = '6px';
+      } else {
+        picker.style.outline = '';
+      }
+    }
+
     modalEl.addEventListener('show.bs.modal', function (event) {
-      const btn = event.relatedTarget;
+      const btn  = event.relatedTarget;
       const pk   = btn.dataset.pk;
       const form = document.getElementById('formProponerCambio');
       form.action = URL_TEMPLATE.replace('/0/', '/' + pk + '/');
+      document.getElementById('mpNext').value = window.location.pathname + window.location.search;
 
-      document.getElementById('modalProponerCambioTitulo').textContent =
-        'Proponer cambio — ' + btn.dataset.materia;
-      document.getElementById('modalProponerCambioPlan').textContent =
-        btn.dataset.plan;
+      document.getElementById('modalProponerCambioTitulo').textContent = 'Proponer cambio — ' + btn.dataset.materia;
+      document.getElementById('modalProponerCambioPlan').textContent   = btn.dataset.plan;
 
-      document.getElementById('mpPresidenteNombre').value  = btn.dataset.presidenteNombre || '';
-      document.getElementById('mpPresidenteDni').value     = btn.dataset.presidenteDni    || '';
-      document.getElementById('mpVocal1Nombre').value      = btn.dataset.vocal1Nombre     || '';
-      document.getElementById('mpVocal1Dni').value         = btn.dataset.vocal1Dni        || '';
-      document.getElementById('mpVocal2Nombre').value      = btn.dataset.vocal2Nombre     || '';
-      document.getElementById('mpVocal2Dni').value         = btn.dataset.vocal2Dni        || '';
-      document.getElementById('mpDiaSemana').value         = btn.dataset.diaSemana        || '';
-      document.getElementById('mpHora').value              = btn.dataset.hora             || '';
-      document.getElementById('mpPermiteLibres').checked   = btn.dataset.permiteLibres === 'true';
+      const tienePropuesta = btn.dataset.tienePropuesta === 'true';
+
+      // Datos actuales del tribunal
+      const actual = {
+        presidenteNombre: btn.dataset.presidenteNombre || '',
+        presidenteDni:    btn.dataset.presidenteDni    || '',
+        vocal1Nombre:     btn.dataset.vocal1Nombre     || '',
+        vocal1Dni:        btn.dataset.vocal1Dni        || '',
+        vocal2Nombre:     btn.dataset.vocal2Nombre     || '',
+        vocal2Dni:        btn.dataset.vocal2Dni        || '',
+        diaSemana:        btn.dataset.diaSemana        || '',
+        hora:             btn.dataset.hora             || '',
+        permiteLibres:    btn.dataset.permiteLibres === 'true',
+      };
+
+      // Datos a precargar en los pickers (propuestos si existen, si no actuales)
+      const fill = tienePropuesta ? {
+        presidenteNombre: btn.dataset.propPresidenteNombre || '',
+        presidenteDni:    btn.dataset.propPresidenteDni    || '',
+        vocal1Nombre:     btn.dataset.propVocal1Nombre     || '',
+        vocal1Dni:        btn.dataset.propVocal1Dni        || '',
+        vocal2Nombre:     btn.dataset.propVocal2Nombre     || '',
+        vocal2Dni:        btn.dataset.propVocal2Dni        || '',
+        diaSemana:        btn.dataset.propDiaSemana        || '',
+        hora:             btn.dataset.propHora             || '',
+        permiteLibres:    btn.dataset.propPermiteLibres === 'true',
+      } : actual;
+
+      // Picker configs
+      const configs = [
+        { field: 'presidente_id', actualNombre: actual.presidenteNombre, actualDni: actual.presidenteDni,
+          fillNombre: fill.presidenteNombre, fillDni: fill.presidenteDni },
+        { field: 'vocal_1_id',   actualNombre: actual.vocal1Nombre,     actualDni: actual.vocal1Dni,
+          fillNombre: fill.vocal1Nombre,     fillDni: fill.vocal1Dni },
+        { field: 'vocal_2_id',   actualNombre: actual.vocal2Nombre,     actualDni: actual.vocal2Dni,
+          fillNombre: fill.vocal2Nombre,     fillDni: fill.vocal2Dni },
+      ];
+
+      configs.forEach(({ field, actualNombre, actualDni, fillNombre, fillDni }) => {
+        const picker = getPicker(field);
+        if (!picker) return;
+        // Mostrar fila "Actual" solo si hay propuesta (para ver qué había antes)
+        if (tienePropuesta) renderActual(picker, 'Actual', actualNombre, actualDni);
+        // Precargar picker con los datos a editar
+        if (fillNombre) {
+          picker._selectDocente('', fillNombre, fillDni || '');
+        } else {
+          picker._reset();
+        }
+        // Resaltar si hay diferencia
+        if (tienePropuesta) highlightDiff(picker, actualNombre, fillNombre);
+      });
+
+      document.getElementById('mpDiaSemana').value       = fill.diaSemana;
+      document.getElementById('mpHora').value            = fill.hora;
+      document.getElementById('mpPermiteLibres').checked = fill.permiteLibres;
+
+      // Resaltar día/hora/modalidad si difieren
+      const diaEl = document.getElementById('mpDiaSemana');
+      const horaEl = document.getElementById('mpHora');
+      const libresEl = document.getElementById('mpPermiteLibres').closest('.form-check');
+      [diaEl, horaEl].forEach(el => {
+        el.style.outline = (tienePropuesta && el.value !== (el === diaEl ? actual.diaSemana : actual.hora))
+          ? '2px solid #ffc107' : '';
+      });
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', function () {
+      modalEl.querySelectorAll('.docente-picker').forEach(p => {
+        p._reset && p._reset();
+        p.style.outline = '';
+        p.querySelector('.dp-actual-row')?.remove();
+      });
+      ['mpDiaSemana', 'mpHora'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.outline = '';
+      });
+      if (copiarInput) { copiarInput.value = ''; copiarDropdown.classList.add('d-none'); }
     });
   }
 
@@ -491,6 +1074,84 @@
         btn.disabled = false;
         btn.innerHTML = original;
       }
+    });
+  }
+})();
+
+// ── Checkboxes + barra flotante + modal agrupación ───────────────────────────
+(function () {
+  const barra     = document.getElementById('barraSeleccion');
+  const selCount  = document.getElementById('selCount');
+  const btnLimpiar = document.getElementById('btnLimpiarSel');
+  if (!barra) return;
+
+  function getChecked() {
+    return [...document.querySelectorAll('.tribunal-check:checked')];
+  }
+
+  function updateBarra() {
+    const checked = getChecked();
+    if (checked.length > 0) {
+      selCount.textContent = checked.length;
+      barra.classList.remove('d-none');
+    } else {
+      barra.classList.add('d-none');
+    }
+  }
+
+  document.addEventListener('change', e => {
+    if (e.target.classList.contains('tribunal-check')) updateBarra();
+  });
+
+  if (btnLimpiar) {
+    btnLimpiar.addEventListener('click', () => {
+      document.querySelectorAll('.tribunal-check:checked').forEach(cb => cb.checked = false);
+      updateBarra();
+    });
+  }
+
+  // Precargar hidden inputs y resumen al abrir modal crear agrupación
+  const modalCrear = document.getElementById('modalCrearAgrupacion');
+  if (modalCrear) {
+    modalCrear.addEventListener('show.bs.modal', () => {
+      const checked = getChecked();
+      const container = document.getElementById('agrupacionTribunalesHidden');
+      const resumen   = document.getElementById('agrupacionResumen');
+      container.innerHTML = '';
+      checked.forEach(cb => {
+        const inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = 'tribunal_ids'; inp.value = cb.value;
+        container.appendChild(inp);
+      });
+      resumen.textContent = `${checked.length} tribunal(es) seleccionado(s).`;
+    });
+  }
+
+  // Modal cambio grupal
+  const URL_CAMBIO_GRUPO = '{% url "planes:proponer_cambio_agrupacion" 0 %}';
+  const modalGrupo = document.getElementById('modalCambioGrupo');
+  if (modalGrupo) {
+    modalGrupo.querySelectorAll('.docente-picker').forEach(picker => {
+      // initPicker ya inicializa los pickers del modal principal;
+      // este modal tiene su propia copia así que necesitamos init también
+      if (typeof initPicker === 'function') initPicker(picker);
+    });
+
+    modalGrupo.addEventListener('show.bs.modal', function (event) {
+      const btn = event.relatedTarget;
+      const pk  = btn.dataset.agPk;
+      document.getElementById('cgNext').value = window.location.pathname + window.location.search;
+      const nombre = btn.dataset.agNombre;
+      const count  = btn.dataset.agCount;
+      document.getElementById('modalCambioGrupoTitulo').textContent = `Proponer cambio — ${nombre}`;
+      document.getElementById('cgCount').textContent = count;
+      document.getElementById('formCambioGrupo').action =
+        URL_CAMBIO_GRUPO.replace('/0/', '/' + pk + '/');
+      // Reset pickers
+      modalGrupo.querySelectorAll('.docente-picker').forEach(p => p._reset && p._reset());
+      modalGrupo.querySelector('.cg-dia').value = '';
+      modalGrupo.querySelector('.cg-hora').value = '';
+      modalGrupo.querySelector('.cg-libres').checked = true;
     });
   }
 })();

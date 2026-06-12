@@ -156,6 +156,18 @@ class TribunalExaminador(models.Model):
         MateriaEnPlan, on_delete=models.CASCADE,
         related_name='tribunal', verbose_name='Materia en plan',
     )
+    presidente = models.ForeignKey(
+        Docente, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='como_presidente', verbose_name='Presidente',
+    )
+    vocal_1 = models.ForeignKey(
+        Docente, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='como_vocal_1', verbose_name='1er. Vocal',
+    )
+    vocal_2 = models.ForeignKey(
+        Docente, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='como_vocal_2', verbose_name='2do. Vocal',
+    )
     presidente_nombre = models.CharField(max_length=250, blank=True, verbose_name='Presidente (nombre)')
     presidente_dni = models.CharField(max_length=15, blank=True, verbose_name='Presidente (DNI)')
     vocal_1_nombre = models.CharField(max_length=250, blank=True, verbose_name='1er. Vocal (nombre)')
@@ -175,8 +187,40 @@ class TribunalExaminador(models.Model):
         verbose_name = 'Tribunal Examinador'
         verbose_name_plural = 'Tribunales Examinadores'
 
+    def save(self, *args, **kwargs):
+        if self.presidente:
+            self.presidente_nombre = self.presidente.nombre
+            self.presidente_dni = self.presidente.dni
+        if self.vocal_1:
+            self.vocal_1_nombre = self.vocal_1.nombre
+            self.vocal_1_dni = self.vocal_1.dni
+        if self.vocal_2:
+            self.vocal_2_nombre = self.vocal_2.nombre
+            self.vocal_2_dni = self.vocal_2.dni
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'Tribunal — {self.materia_en_plan}'
+
+
+class AgrupacionTribunal(models.Model):
+    nombre = models.CharField(max_length=200, verbose_name='Nombre')
+    departamento = models.CharField(max_length=50, verbose_name='Departamento')
+    director = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='agrupaciones_tribunal',
+    )
+    tribunales = models.ManyToManyField(
+        TribunalExaminador, related_name='agrupaciones', blank=True,
+    )
+
+    class Meta:
+        ordering = ['nombre']
+        verbose_name = 'Agrupación de tribunales'
+        verbose_name_plural = 'Agrupaciones de tribunales'
+
+    def __str__(self):
+        return f'{self.nombre} ({self.departamento})'
 
 
 class SolicitudInformeTribunal(models.Model):
@@ -362,6 +406,9 @@ class SolicitudServicioItem(models.Model):
         related_name='solicitud_servicio_items', verbose_name='Materia en plan',
     )
     hs_totales = models.PositiveSmallIntegerField(verbose_name='Horas totales')
+    destinatario = models.CharField(
+        max_length=250, blank=True, verbose_name='A quien se dirige',
+    )
 
     class Meta:
         unique_together = [('solicitud', 'materia_en_plan')]

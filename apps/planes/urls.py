@@ -10,11 +10,21 @@ urlpatterns = [
     # Director: tribunales
     path('planes/tribunales/', views.lista_tribunales, name='lista_tribunales'),
     path('planes/tribunales/<int:pk>/proponer-cambio/', views.proponer_cambio_tribunal, name='proponer_cambio_tribunal'),
+    path('planes/tribunales/<int:pk>/datos/', views.datos_tribunal_ajax, name='datos_tribunal_ajax'),
+    path('planes/tribunales/buscar/', views.buscar_tribunal_ajax, name='buscar_tribunal_ajax'),
+    path('planes/docentes/buscar/', views.buscar_docente, name='buscar_docente'),
+    path('planes/docentes/crear/', views.crear_docente_ajax, name='crear_docente_ajax'),
+    path('planes/agrupaciones/crear/', views.crear_agrupacion, name='crear_agrupacion'),
+    path('planes/agrupaciones/<int:pk>/eliminar/', views.eliminar_agrupacion, name='eliminar_agrupacion'),
+    path('planes/agrupaciones/<int:pk>/proponer-cambio/', views.proponer_cambio_agrupacion, name='proponer_cambio_agrupacion'),
     path('planes/tribunales/enviar-solicitud/', views.enviar_solicitud_cambio, name='enviar_solicitud_cambio'),
     path('planes/tribunales/solicitudes/<int:pk>/descargar/', views.descargar_solicitud_cambio, name='descargar_solicitud_cambio'),
+    path('planes/tribunales/solicitudes/<int:pk>/descargar-docx/', views.descargar_solicitud_cambio_docx, name='descargar_solicitud_cambio_docx'),
 
     # Director: solicitudes de cambio propias
     path('planes/tribunales/mis-solicitudes/', views.mis_solicitudes_cambio, name='mis_solicitudes_cambio'),
+    path('planes/tribunales/mis-solicitudes/<int:pk>/reabrir/', views.reabrir_solicitud_cambio, name='reabrir_solicitud_cambio'),
+    path('planes/tribunales/mis-solicitudes/<int:pk>/', views.detalle_mi_solicitud_cambio, name='detalle_mi_solicitud_cambio'),
 
     # Director: informe anual
     path('planes/tribunales/enviar-informe/', views.enviar_informe_tribunales, name='enviar_informe_tribunales'),

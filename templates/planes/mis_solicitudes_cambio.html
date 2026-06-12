@@ -40,10 +40,34 @@
             <span class="badge bg-secondary">{{ s.items.count }}</span>
           </td>
           <td class="text-center">
-            <a href="{% url 'planes:descargar_solicitud_cambio' s.pk %}"
-               download class="btn btn-sm btn-outline-secondary" title="Descargar PDF">
-              <i class="bi bi-file-earmark-pdf me-1"></i>Descargar PDF
-            </a>
+            <div class="d-flex gap-1 justify-content-center flex-wrap">
+              <a href="{% url 'planes:detalle_mi_solicitud_cambio' s.pk %}"
+                 class="btn btn-sm btn-outline-primary" title="Ver detalle">
+                <i class="bi bi-eye"></i>
+              </a>
+              <a href="{% url 'planes:descargar_solicitud_cambio' s.pk %}"
+                 download class="btn btn-sm btn-outline-danger" title="Descargar PDF">
+                <i class="bi bi-file-earmark-pdf"></i>
+              </a>
+              <a href="{% url 'planes:descargar_solicitud_cambio_docx' s.pk %}"
+                 download class="btn btn-sm btn-outline-primary" title="Descargar Word">
+                <i class="bi bi-file-earmark-word"></i>
+              </a>
+              {% if s.estado == 'borrador' %}
+              <a href="{% url 'planes:lista_tribunales' %}"
+                 class="btn btn-sm btn-outline-primary" title="Continuar editando">
+                <i class="bi bi-pencil me-1"></i>Editar
+              </a>
+              {% elif s.estado == 'enviada' %}
+              <form method="post" action="{% url 'planes:reabrir_solicitud_cambio' s.pk %}"
+                    onsubmit="return confirm('¿Retractás esta solicitud para poder modificarla? Volverá a borrador.')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-warning" title="Reabrir para editar">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Modificar
+                </button>
+              </form>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}

@@ -58,6 +58,7 @@
           <th>Plan</th>
           <th>Año</th>
           <th>Materia</th>
+          <th>A quien se dirige</th>
           <th class="text-end">Carga horaria</th>
         </tr>
       </thead>
@@ -69,6 +70,7 @@
           <td class="small text-muted">{{ item.materia_en_plan.plan.codigo }}</td>
           <td class="small">{{ item.materia_en_plan.ano }}°</td>
           <td>{{ item.materia_en_plan.materia.nombre }}</td>
+          <td class="small text-muted">{{ item.destinatario|default:"—" }}</td>
           <td class="text-end"><span class="badge bg-secondary">{{ item.hs_totales }} hs</span></td>
         </tr>
         {% endfor %}

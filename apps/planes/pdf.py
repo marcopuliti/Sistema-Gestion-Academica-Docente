@@ -266,77 +266,89 @@ def generar_pdf_solicitud_servicio(solicitud, admin_user, items):
     s = _styles()
     story = []
 
-    hoy = datetime.date.today()
-    fecha_str = f"San Luis, {hoy.day} de {MESES[hoy.month - 1]} de {hoy.year}"
-    story.append(Paragraph(fecha_str, s['fecha']))
-    story.append(Spacer(1, 0.9 * cm))
+    from collections import defaultdict, OrderedDict
 
     es_externo = solicitud.departamento_dictante == 'Externo'
-    receptor_externo = solicitud.dictante_externo_nombre or 'Organismo externo'
-
-    if es_externo:
-        story.append(Paragraph(f"{receptor_externo}<br/>S / D:", s['dest']))
-    else:
-        admin_nombre = admin_user.get_full_name() if admin_user else 'Secretario Académico'
-        story.append(Paragraph(
-            f"Sr. Secretario Académico de la FCFMyN<br/>{admin_nombre}<br/>S / D:",
-            s['dest'],
-        ))
-    story.append(Spacer(1, 0.7 * cm))
-
-    _cuat_item = {1: '1° Cuatrimestre', 2: '2° Cuatrimestre', 3: 'Anual'}
-
-    # Group by (carrera, plan) — cuatrimestre label goes per-item
-    from collections import defaultdict
-    grupos = defaultdict(list)
-    for it in items:
-        mep = it.materia_en_plan
-        key = (mep.plan.carrera.nombre, mep.plan.codigo, mep.plan_id)
-        grupos[key].append(it)
-
     director = solicitud.director
-
-    for (carrera_nombre, plan_codigo, _), grupo_items in sorted(grupos.items()):
-        if es_externo:
-            intro = (
-                f"Me dirijo a Ud. a fin de solicitar el dictado de las siguientes asignaturas "
-                f"de la carrera {carrera_nombre} plan {plan_codigo}."
-            )
-        else:
-            intro = (
-                f"Me dirijo a Ud., y por su intermedio a quien corresponda, a fin de solicitar se disponga "
-                f"el dictado por servicio de las siguientes asignaturas de la carrera "
-                f"{carrera_nombre} plan {plan_codigo}."
-            )
-        story.append(Paragraph(intro, s['cuerpo']))
-        story.append(Spacer(1, 0.3 * cm))
-
-        for it in sorted(
-            grupo_items,
-            key=lambda x: (x.materia_en_plan.cuatrimestre, x.materia_en_plan.materia.nombre),
-        ):
-            mep = it.materia_en_plan
-            cuat_label = _cuat_item.get(mep.cuatrimestre, '')
-            linea = f"{mep.materia.nombre} ({cuat_label}) – Crédito horario total: {it.hs_totales} hs"
-            story.append(Paragraph(linea, ParagraphStyle(
-                'item_servicio', parent=s['cuerpo'],
-                firstLineIndent=0, leftIndent=2 * cm,
-            )))
-        story.append(Spacer(1, 0.4 * cm))
-
-    story.append(Paragraph("Sin otro particular, saludo a Ud. con atenta consideración.", s['cuerpo']))
-    story.append(Spacer(1, 2 * cm))
-
     if director:
-        firma = (
+        firma_txt = (
             f"{director.get_full_name()}<br/>"
             f"Director del Departamento<br/>"
             f"de {solicitud.departamento_solicitante}<br/>"
             f"F.C.F.M.yN."
         )
     else:
-        firma = f"Director del Departamento de {solicitud.departamento_solicitante}<br/>F.C.F.M.yN."
-    story.append(Paragraph(firma, s['firma']))
+        firma_txt = f"Director del Departamento de {solicitud.departamento_solicitante}<br/>F.C.F.M.yN."
+
+    _cuat_item = {1: '1° Cuatrimestre', 2: '2° Cuatrimestre', 3: 'Anual'}
+
+    # Agrupar items por destinatario (preservando orden de aparición)
+    por_destinatario = OrderedDict()
+    for it in items:
+        dest = it.destinatario or solicitud.dictante_externo_nombre or ''
+        por_destinatario.setdefault(dest, []).append(it)
+
+    admin_nombre = admin_user.get_full_name() if admin_user else 'Secretario Académico'
+
+    hoy = datetime.date.today()
+    fecha_str = f"San Luis, {hoy.day} de {MESES[hoy.month - 1]} de {hoy.year}"
+
+    first = True
+    for dest, dest_items in por_destinatario.items():
+        if not first:
+            story.append(PageBreak())
+        first = False
+
+        story.append(Paragraph(fecha_str, s['fecha']))
+        story.append(Spacer(1, 0.9 * cm))
+
+        if dest:
+            story.append(Paragraph(f"{dest}<br/>S / D:", s['dest']))
+        else:
+            story.append(Paragraph(
+                f"Sr. Secretario Académico de la FCFMyN<br/>{admin_nombre}<br/>S / D:",
+                s['dest'],
+            ))
+        story.append(Spacer(1, 0.7 * cm))
+
+        # Agrupar por (carrera, plan) dentro de este destinatario
+        grupos = defaultdict(list)
+        for it in dest_items:
+            mep = it.materia_en_plan
+            key = (mep.plan.carrera.nombre, mep.plan.codigo, mep.plan_id)
+            grupos[key].append(it)
+
+        for (carrera_nombre, plan_codigo, _), grupo_items in sorted(grupos.items()):
+            if es_externo:
+                intro = (
+                    f"Me dirijo a Ud. a fin de solicitar el dictado de las siguientes asignaturas "
+                    f"de la carrera {carrera_nombre} plan {plan_codigo}."
+                )
+            else:
+                intro = (
+                    f"Me dirijo a Ud., y por su intermedio a quien corresponda, a fin de solicitar se disponga "
+                    f"el dictado por servicio de las siguientes asignaturas de la carrera "
+                    f"{carrera_nombre} plan {plan_codigo}."
+                )
+            story.append(Paragraph(intro, s['cuerpo']))
+            story.append(Spacer(1, 0.3 * cm))
+
+            for it in sorted(
+                grupo_items,
+                key=lambda x: (x.materia_en_plan.cuatrimestre, x.materia_en_plan.materia.nombre),
+            ):
+                mep = it.materia_en_plan
+                cuat_label = _cuat_item.get(mep.cuatrimestre, '')
+                linea = f"{mep.materia.nombre} ({cuat_label}) – Crédito horario total: {it.hs_totales} hs"
+                story.append(Paragraph(linea, ParagraphStyle(
+                    'item_servicio', parent=s['cuerpo'],
+                    firstLineIndent=0, leftIndent=2 * cm,
+                )))
+            story.append(Spacer(1, 0.4 * cm))
+
+        story.append(Paragraph("Sin otro particular, saludo a Ud. con atenta consideración.", s['cuerpo']))
+        story.append(Spacer(1, 2 * cm))
+        story.append(Paragraph(firma_txt, s['firma']))
 
     doc.build(story)
     buffer.seek(0)

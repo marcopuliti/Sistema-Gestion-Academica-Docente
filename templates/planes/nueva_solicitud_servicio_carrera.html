@@ -37,23 +37,10 @@
 </div>
 
 {% if dept_destino %}
-  {% if meps %}
+  {% if meps_con_dest %}
   <form method="post">
     {% csrf_token %}
     <input type="hidden" name="departamento_dictante" value="{{ dept_destino }}">
-
-    {% if dept_destino == 'Externo' %}
-    <div class="card mb-3">
-      <div class="card-body">
-        <label class="form-label fw-semibold">Organismo / cátedra receptor <span class="text-danger">*</span></label>
-        <input type="text" name="dictante_externo_nombre"
-               class="form-control" style="max-width:420px"
-               placeholder="Ej: Departamento de Química, UNSJ"
-               value="{{ dictante_externo_nombre }}" required>
-        <div class="form-text">A quién va dirigida la solicitud (institución o cátedra externa).</div>
-      </div>
-    </div>
-    {% endif %}
 
     <div class="card mb-3">
       <div class="card-header">
@@ -68,10 +55,11 @@
               <th>Año</th>
               <th>Materia</th>
               <th style="width:160px">Carga horaria (hs)</th>
+              {% if dept_destino == 'Externo' %}<th style="min-width:220px">A quien se dirige <span class="text-danger">*</span></th>{% endif %}
             </tr>
           </thead>
           <tbody>
-            {% for mep in meps %}
+            {% for mep, dest_previo in meps_con_dest %}
             <tr {% if mep in sin_hs %}class="table-warning"{% endif %}>
               <td class="small">{{ mep.get_cuatrimestre_display }}</td>
               <td class="small text-muted">Plan {{ mep.plan.codigo }}</td>
@@ -90,6 +78,15 @@
                   </div>
                 {% endif %}
               </td>
+              {% if dept_destino == 'Externo' %}
+              <td>
+                <input type="text" name="dest_{{ mep.pk }}"
+                       class="form-control form-control-sm"
+                       placeholder="Ej: Instituto de Química, UNSJ"
+                       value="{{ dest_previo }}"
+                       required>
+              </td>
+              {% endif %}
             </tr>
             {% endfor %}
           </tbody>
@@ -101,6 +98,13 @@
     <div class="alert alert-warning py-2 small mb-3">
       <i class="bi bi-exclamation-triangle me-1"></i>
       Las filas en amarillo requieren la carga horaria. El valor quedará guardado permanentemente.
+    </div>
+    {% endif %}
+
+    {% if dept_destino == 'Externo' %}
+    <div class="alert alert-secondary py-2 small mb-3">
+      <i class="bi bi-info-circle me-1"></i>
+      Las materias con el mismo destinatario se agruparán en una sola nota. Las de distinto destinatario generarán notas separadas al descargar el PDF.
     </div>
     {% endif %}
 

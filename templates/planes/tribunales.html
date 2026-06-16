@@ -1018,26 +1018,34 @@
       btnEnviar.disabled = true;
       btnEnviar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando…';
       try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
         const resp = await fetch('{% url "planes:enviar_solicitud_cambio" %}', {
           method: 'POST',
-          body: new FormData(document.querySelector('[name=csrfmiddlewaretoken]').closest('form') ||
-                             (() => { const f = document.createElement('form'); return f; })()),
           headers: {
-            'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
+            'Content-Type': 'application/x-www-form-urlencoded',
             'X-Requested-With': 'XMLHttpRequest',
           },
+          body: 'csrfmiddlewaretoken=' + encodeURIComponent(csrfToken),
         });
+        if (!resp.ok) {
+          const txt = await resp.text();
+          console.error('enviar_solicitud_cambio error', resp.status, txt);
+          alert('Error del servidor (' + resp.status + '). Revisá la consola para más detalles.');
+          btnEnviar.disabled = false;
+          btnEnviar.innerHTML = original;
+          return;
+        }
         const data = await resp.json();
         if (data.ok) {
-          window.location.href = data.download_url;
-          setTimeout(() => location.reload(), 500);
+          location.href = data.redirect_url;
         } else {
           alert(data.error || 'Error al enviar la solicitud.');
           btnEnviar.disabled = false;
           btnEnviar.innerHTML = original;
         }
-      } catch {
-        alert('Error de conexión. Intentá de nuevo.');
+      } catch(e) {
+        console.error('enviar_solicitud_cambio excepción:', e);
+        alert('Error inesperado: ' + e.message);
         btnEnviar.disabled = false;
         btnEnviar.innerHTML = original;
       }

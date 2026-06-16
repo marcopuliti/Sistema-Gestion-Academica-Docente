@@ -1,5 +1,6 @@
 from decouple import config
 from pathlib import Path
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -70,22 +71,20 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-import dj_database_url
+DATABASES = {
+    'default': dj_database_url.parse(config('DATABASE_URL'))
+}
 
 #DATABASES = {
-#    'default': dj_database_url.parse(config('DATABASE_URL'))
+#    'default': {
+#        'ENGINE': 'django.db.backends.postgresql',  # compatible con psycopg2 y psycopg3
+#        'NAME': config('DB_NAME', default='gestion_docente'),
+#        'USER': config('DB_USER', default='postgres'),
+#        'PASSWORD': config('DB_PASSWORD', default=''),
+#        'HOST': config('DB_HOST', default='localhost'),
+#        'PORT': config('DB_PORT', default='5432'),
+#    }
 #}
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',  # compatible con psycopg2 y psycopg3
-        'NAME': config('DB_NAME', default='gestion_docente'),
-        'USER': config('DB_USER', default='postgres'),
-        'PASSWORD': config('DB_PASSWORD', default=''),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default='5432'),
-    }
-}
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
 LOGIN_URL = 'accounts:login'

@@ -1,0 +1,335 @@
+{% extends 'base.html' %}
+{% block title %}Solicitud de cambio — detalle{% endblock %}
+{% block nav_mis_solicitudes_cambio %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .tribunal-card { margin-bottom: 1rem; }
+  .tribunal-header {
+    background-color: var(--color-primario);
+    color: #fff;
+    padding: .5rem 1rem;
+    border-radius: 6px 6px 0 0;
+    font-size: .9rem;
+  }
+  .campo-row { font-size: .88rem; vertical-align: middle; }
+  .campo-label { font-weight: 600; color: #555; width: 130px; }
+  .diff-row { --bs-table-bg: #fff3cd; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <nav aria-label="breadcrumb" class="mb-1">
+      <ol class="breadcrumb mb-0" style="font-size:.85rem">
+        <li class="breadcrumb-item">
+          <a href="{% url 'planes:mis_solicitudes_cambio' %}">Mis solicitudes de cambio</a>
+        </li>
+        <li class="breadcrumb-item active">Detalle</li>
+      </ol>
+    </nav>
+    <h2><i class="bi bi-file-earmark-diff me-2"></i>Solicitud — Dpto. {{ solicitud.departamento }}</h2>
+    <p class="text-muted mb-0 small">
+      {{ solicitud.fecha_creacion|date:"d/m/Y H:i" }}
+      &middot; {{ items|length }} tribunal{{ items|length|pluralize:"es" }}
+      &middot;
+      {% if solicitud.estado == 'borrador' %}
+      <span class="badge bg-secondary">Borrador</span>
+      {% elif solicitud.estado == 'enviada' %}
+      <span class="badge bg-info text-dark">Enviada — pendiente de revisión</span>
+      {% elif solicitud.estado == 'aplicada' %}
+      <span class="badge bg-success">Aplicada</span>
+      {% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'planes:descargar_solicitud_cambio' solicitud.pk %}"
+       download class="btn btn-outline-secondary">
+      <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+    </a>
+    <a href="{% url 'planes:descargar_solicitud_cambio_docx' solicitud.pk %}"
+       download class="btn btn-outline-secondary">
+      <i class="bi bi-file-earmark-word me-1"></i>Word
+    </a>
+  </div>
+</div>
+
+{% if solicitud.estado == 'enviada' %}
+<div class="alert alert-info py-2 small mb-3">
+  <i class="bi bi-pencil-square me-1"></i>
+  Esta solicitud está pendiente de revisión. Podés modificar los cambios propuestos
+  usando el botón <strong>Editar</strong> en cada tribunal antes de que administración la aplique.
+</div>
+{% endif %}
+
+{% if items %}
+<div class="alert alert-secondary py-2 small mb-3">
+  <i class="bi bi-info-circle me-1"></i>
+  Las filas resaltadas en <strong>amarillo</strong> indican campos que difieren respecto al tribunal original.
+  La columna <strong>Propuesto</strong> muestra los valores que solicitaste aplicar.
+</div>
+
+{% for item in items %}
+{% with mep=item.tribunal.materia_en_plan diff=item.diff t_actual=item.t_actual %}
+<div class="tribunal-card">
+  <div class="tribunal-header d-flex justify-content-between align-items-center">
+    <span>
+      <strong>{{ mep.materia.nombre }}</strong>
+      <span class="ms-2 opacity-75 small">{{ mep.materia.codigo }}</span>
+    </span>
+    <div class="d-flex align-items-center gap-2">
+      <span class="small opacity-75">
+        Plan {{ mep.plan.codigo }} &middot; {{ mep.plan.carrera.nombre }} &middot; {{ mep.ano }}° año
+      </span>
+      {% if solicitud.estado == 'enviada' %}
+      <button type="button" class="btn btn-sm btn-light btn-editar-item"
+              data-item-pk="{{ item.pk }}"
+              data-solicitud-pk="{{ solicitud.pk }}"
+              data-presidente-nombre="{{ item.presidente_nombre }}"
+              data-presidente-dni="{{ item.presidente_dni }}"
+              data-vocal1-nombre="{{ item.vocal_1_nombre }}"
+              data-vocal1-dni="{{ item.vocal_1_dni }}"
+              data-vocal2-nombre="{{ item.vocal_2_nombre }}"
+              data-vocal2-dni="{{ item.vocal_2_dni }}"
+              data-dia="{{ item.dia_semana|default:'' }}"
+              data-hora="{{ item.hora|time:'H:i'|default:'' }}"
+              data-permite-libres="{{ item.permite_libres|yesno:'true,false' }}"
+              data-orig-presidente-nombre="{{ t_actual.presidente_nombre }}"
+              data-orig-presidente-dni="{{ t_actual.presidente_dni }}"
+              data-orig-vocal1-nombre="{{ t_actual.vocal_1_nombre }}"
+              data-orig-vocal1-dni="{{ t_actual.vocal_1_dni }}"
+              data-orig-vocal2-nombre="{{ t_actual.vocal_2_nombre }}"
+              data-orig-vocal2-dni="{{ t_actual.vocal_2_dni }}"
+              data-orig-dia="{{ t_actual.dia_semana|default:'' }}"
+              data-orig-hora="{{ t_actual.hora|time:'H:i'|default:'' }}"
+              data-materia="{{ mep.materia.nombre }}"
+              data-bs-toggle="modal" data-bs-target="#modalEditar">
+        <i class="bi bi-pencil me-1"></i>Editar
+      </button>
+      {% endif %}
+    </div>
+  </div>
+  <div class="table-responsive border border-top-0 rounded-bottom">
+    <table class="table table-sm mb-0">
+      <thead>
+        <tr>
+          <th class="campo-label" style="width:130px">Campo</th>
+          <th>Original</th>
+          <th>Propuesto</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="campo-row {% if diff.presidente %}diff-row{% endif %}">
+          <td class="campo-label">Presidente</td>
+          <td>
+            {% if t_actual.presidente_nombre %}
+              {{ t_actual.presidente_nombre }}
+              {% if t_actual.presidente_dni %}<span class="text-muted small ms-1">DNI {{ t_actual.presidente_dni }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Sin asignar</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.presidente_nombre %}
+              {{ item.presidente_nombre }}
+              {% if item.presidente_dni %}<span class="text-muted small ms-1">DNI {{ item.presidente_dni }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Sin asignar</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr class="campo-row {% if diff.vocal_1 %}diff-row{% endif %}">
+          <td class="campo-label">1er. Vocal</td>
+          <td>
+            {% if t_actual.vocal_1_nombre %}
+              {{ t_actual.vocal_1_nombre }}
+              {% if t_actual.vocal_1_dni %}<span class="text-muted small ms-1">DNI {{ t_actual.vocal_1_dni }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Sin asignar</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.vocal_1_nombre %}
+              {{ item.vocal_1_nombre }}
+              {% if item.vocal_1_dni %}<span class="text-muted small ms-1">DNI {{ item.vocal_1_dni }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Sin asignar</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr class="campo-row {% if diff.vocal_2 %}diff-row{% endif %}">
+          <td class="campo-label">2do. Vocal</td>
+          <td>
+            {% if t_actual.vocal_2_nombre %}
+              {{ t_actual.vocal_2_nombre }}
+              {% if t_actual.vocal_2_dni %}<span class="text-muted small ms-1">DNI {{ t_actual.vocal_2_dni }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Sin asignar</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.vocal_2_nombre %}
+              {{ item.vocal_2_nombre }}
+              {% if item.vocal_2_dni %}<span class="text-muted small ms-1">DNI {{ item.vocal_2_dni }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Sin asignar</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr class="campo-row {% if diff.dia %}diff-row{% endif %}">
+          <td class="campo-label">Día</td>
+          <td>
+            {% if t_actual.dia_semana %}{{ t_actual.get_dia_semana_display }}
+            {% else %}<span class="text-muted fst-italic">Sin asignar</span>{% endif %}
+          </td>
+          <td>
+            {% if item.dia_semana %}{{ item.get_dia_semana_display }}
+            {% else %}<span class="text-muted fst-italic">Sin asignar</span>{% endif %}
+          </td>
+        </tr>
+        <tr class="campo-row {% if diff.hora %}diff-row{% endif %}">
+          <td class="campo-label">Hora</td>
+          <td>
+            {% if t_actual.hora %}{{ t_actual.hora|time:"H:i" }}
+            {% else %}<span class="text-muted fst-italic">Sin asignar</span>{% endif %}
+          </td>
+          <td>
+            {% if item.hora %}{{ item.hora|time:"H:i" }}
+            {% else %}<span class="text-muted fst-italic">Sin asignar</span>{% endif %}
+          </td>
+        </tr>
+        <tr class="campo-row {% if diff.modalidad %}diff-row{% endif %}">
+          <td class="campo-label">Modalidad</td>
+          <td>
+            {% if t_actual.permite_libres %}
+              <span class="badge bg-success">Libres y regulares</span>
+            {% else %}
+              <span class="badge bg-secondary">Solo regulares</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.permite_libres %}
+              <span class="badge bg-success">Libres y regulares</span>
+            {% else %}
+              <span class="badge bg-secondary">Solo regulares</span>
+            {% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endwith %}
+{% endfor %}
+
+{% else %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle me-2"></i>Esta solicitud no tiene tribunales asociados.
+</div>
+{% endif %}
+
+{# ── Modal editar item (solo para estado enviada) ─────────────────────────── #}
+{% if solicitud.estado == 'enviada' %}
+<div class="modal fade" id="modalEditar" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
+        <h5 class="modal-title" id="modalEditarTitulo">
+          <i class="bi bi-pencil-square me-2"></i>Editar cambio propuesto
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="formEditar" method="post" action="">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-sm-8">
+              <label class="form-label form-label-sm fw-semibold">Presidente — Nombre completo</label>
+              <input type="text" name="presidente_nombre" id="ed_presidente_nombre" class="form-control form-control-sm">
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label form-label-sm fw-semibold">Presidente — DNI</label>
+              <input type="text" name="presidente_dni" id="ed_presidente_dni" class="form-control form-control-sm">
+            </div>
+            <div class="col-sm-8">
+              <label class="form-label form-label-sm fw-semibold">1er. Vocal — Nombre completo</label>
+              <input type="text" name="vocal_1_nombre" id="ed_vocal1_nombre" class="form-control form-control-sm">
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label form-label-sm fw-semibold">1er. Vocal — DNI</label>
+              <input type="text" name="vocal_1_dni" id="ed_vocal1_dni" class="form-control form-control-sm">
+            </div>
+            <div class="col-sm-8">
+              <label class="form-label form-label-sm fw-semibold">2do. Vocal — Nombre completo</label>
+              <input type="text" name="vocal_2_nombre" id="ed_vocal2_nombre" class="form-control form-control-sm">
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label form-label-sm fw-semibold">2do. Vocal — DNI</label>
+              <input type="text" name="vocal_2_dni" id="ed_vocal2_dni" class="form-control form-control-sm">
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label form-label-sm fw-semibold">Día de la semana</label>
+              <select name="dia_semana" id="ed_dia_semana" class="form-select form-select-sm">
+                <option value="">— Seleccionar —</option>
+                <option value="1">Lunes</option>
+                <option value="2">Martes</option>
+                <option value="3">Miércoles</option>
+                <option value="4">Jueves</option>
+                <option value="5">Viernes</option>
+              </select>
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label form-label-sm fw-semibold">Hora del examen</label>
+              <input type="time" name="hora" id="ed_hora" class="form-control form-control-sm">
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="permite_libres" id="ed_permite_libres" value="true">
+                <label class="form-check-label" for="ed_permite_libres">Pueden rendir libres</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg me-1"></i>Guardar cambios
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const modal = document.getElementById('modalEditar');
+  modal.addEventListener('show.bs.modal', function (event) {
+    const btn = event.relatedTarget;
+    const solicitudPk = btn.dataset.solicitudPk;
+    const itemPk = btn.dataset.itemPk;
+
+    document.getElementById('modalEditarTitulo').innerHTML =
+      '<i class="bi bi-pencil-square me-2"></i>Editar: ' + btn.dataset.materia;
+
+    const actionUrl = "{% url 'planes:director_editar_item_solicitud' solicitud_pk=0 item_pk=0 %}"
+      .replace('/0/items/0/', '/' + solicitudPk + '/items/' + itemPk + '/');
+    document.getElementById('formEditar').action = actionUrl;
+
+    document.getElementById('ed_presidente_nombre').value = btn.dataset.presidenteNombre || btn.dataset.origPresidenteNombre || '';
+    document.getElementById('ed_presidente_dni').value    = btn.dataset.presidenteDni    || btn.dataset.origPresidenteDni    || '';
+    document.getElementById('ed_vocal1_nombre').value     = btn.dataset.vocal1Nombre     || btn.dataset.origVocal1Nombre     || '';
+    document.getElementById('ed_vocal1_dni').value        = btn.dataset.vocal1Dni        || btn.dataset.origVocal1Dni        || '';
+    document.getElementById('ed_vocal2_nombre').value     = btn.dataset.vocal2Nombre     || btn.dataset.origVocal2Nombre     || '';
+    document.getElementById('ed_vocal2_dni').value        = btn.dataset.vocal2Dni        || btn.dataset.origVocal2Dni        || '';
+
+    document.getElementById('ed_dia_semana').value = btn.dataset.dia || btn.dataset.origDia || '';
+    document.getElementById('ed_hora').value        = btn.dataset.hora || btn.dataset.origHora || '';
+    document.getElementById('ed_permite_libres').checked = btn.dataset.permiteLibres === 'true';
+  });
+});
+</script>
+{% endif %}
+
+{% endblock %}

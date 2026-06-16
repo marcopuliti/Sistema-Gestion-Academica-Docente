@@ -696,8 +696,8 @@ def enviar_solicitud_cambio(request):
             url=url_lista,
         )
 
-    download_url = reverse('planes:descargar_solicitud_cambio_docx', args=[borrador.pk])
-    return JsonResponse({'ok': True, 'pk': borrador.pk, 'download_url': download_url})
+    redirect_url = reverse('planes:detalle_mi_solicitud_cambio', args=[borrador.pk])
+    return JsonResponse({'ok': True, 'pk': borrador.pk, 'redirect_url': redirect_url})
 
 
 @login_required

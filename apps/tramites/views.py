@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect
 
 from apps.notifications.models import Notificacion
 from apps.planes.models import (
-    AnioDictado, InformeTribunalesEnviado, MateriaEnPlan,
+    AnioDictado, Comision, InformeTribunalesEnviado, MateriaEnPlan, SolicitudInformeComisiones,
     SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeTribunal, SolicitudServicio, TribunalExaminador,
 )
 from apps.solicitudes.models import SolicitudProtocolizacion, SolicitudTaller
@@ -136,8 +136,26 @@ def _dashboard_director(request, user):
     else:
         solicitud_para_dept = False
 
+    informe_comisiones = None
+    solicitud_comisiones = SolicitudInformeComisiones.objects.filter(activa=True).first()
+    if solicitud_comisiones:
+        comisiones = list(
+            Comision.objects
+            .filter(departamento=departamento, anio=solicitud_comisiones.anio,
+                    cuatrimestre__in=solicitud_comisiones.cuatrimestres)
+            .prefetch_related('equipo')
+        )
+        if comisiones:
+            informe_comisiones = {
+                'solicitud': solicitud_comisiones,
+                'total': len(comisiones),
+                'incompletas': sum(1 for c in comisiones if not c.esta_completa),
+                'enviado': solicitud_comisiones.informes_enviados.filter(departamento=departamento).exists(),
+            }
+
     return render(request, 'tramites/dashboard_director.html', {
         'departamento': departamento,
+        'informe_comisiones': informe_comisiones,
         'por_revisar': por_revisar,
         'total_tribunales': total_tribunales,
         'sin_tribunal': sin_tribunal,

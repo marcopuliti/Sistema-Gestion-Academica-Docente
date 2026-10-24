@@ -1,9 +1,12 @@
-"""Bolsa de materias optativas: alta desde protocolizaciones y comisiones de dictado."""
+"""Bolsa de materias optativas y comisiones: alta desde protocolizaciones, comisiones de
+dictado de optativas y comisiones de materias de plan para el informe cuatrimestral."""
+from collections import defaultdict
+
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 
 from apps.tramites.models import DEPARTAMENTO_CHOICES, EstadoTramite
-from .models import ComisionOptativa, Materia, MateriaOptativa, MiembroComisionOptativa, PlanEstudio
+from .models import AnioDictado, Comision, Materia, MateriaEnPlan, MateriaOptativa, MiembroComision, PlanEstudio
 
 CUATRIMESTRE_DE_PERIODO = {'1c': 1, '2c': 2, 'anual': 3}
 _PLAN_EN_USO = Q(vigente=True) | Q(activo=True)
@@ -67,12 +70,13 @@ def materias_ofrecidas_en_carrera(carrera):
 def crear_comision(materia, carrera, anio, director):
     """Crea la comisión del año para la materia en la carrera. Si la materia viene de una
     protocolización aprobada, precarga su condición y su equipo docente."""
-    comision, creada = ComisionOptativa.objects.get_or_create(
+    comision, creada = Comision.objects.get_or_create(
         materia_optativa=materia, carrera=carrera, anio=anio,
         defaults={
             'cuatrimestre': materia.cuatrimestre,
             'credito_horario': materia.hs_totales,
             'director': director,
+            'departamento': Comision.departamento_responsable(materia.departamento, carrera),
         },
     )
     if not creada:
@@ -94,11 +98,52 @@ def crear_comision(materia, carrera, anio, director):
         if protocolizacion.condicion:
             comision.condicion = protocolizacion.condicion
             comision.save(update_fields=['condicion'])
-        MiembroComisionOptativa.objects.bulk_create([
-            MiembroComisionOptativa(
+        MiembroComision.objects.bulk_create([
+            MiembroComision(
                 comision=comision, nombre=m.nombre, dni=m.dni, funcion=m.funcion,
                 cargo=m.cargo, dedicacion=m.dedicacion, orden=i,
             )
             for i, m in enumerate(protocolizacion.equipo_docente.all())
         ])
     return comision, True
+
+
+# ── comisiones de materias de plan (informe cuatrimestral) ────────────────────
+
+def meps_del_periodo(cuatrimestres):
+    """MateriaEnPlan que se dictan en el período: planes en uso, años dictados, sin slots optativos."""
+    ano_dictado = AnioDictado.objects.filter(plan=OuterRef('plan'), ano=OuterRef('ano'))
+    return (
+        MateriaEnPlan.objects
+        .filter(Q(plan__vigente=True) | Q(plan__activo=True))
+        .filter(cuatrimestre__in=cuatrimestres, es_optativa=False)
+        .filter(Exists(ano_dictado))
+        .select_related('materia', 'plan__carrera')
+    )
+
+
+def crear_comisiones_del_periodo(anio, cuatrimestres):
+    """Crea las comisiones que falten: una por materia, carrera y cuatrimestre, con los planes
+    de esa carrera donde se dicta. Devuelve (creadas, departamentos responsables)."""
+    grupos = defaultdict(list)
+    for mep in meps_del_periodo(cuatrimestres):
+        grupos[(mep.materia_id, mep.plan.carrera_id, mep.cuatrimestre)].append(mep)
+
+    creadas, departamentos = 0, set()
+    with transaction.atomic():
+        for (materia_id, carrera_id, cuatrimestre), meps in grupos.items():
+            mep = meps[0]
+            dictante = mep.departamento_dictante if mep.es_servicio else ''
+            comision, creada = Comision.objects.get_or_create(
+                materia_id=materia_id, carrera_id=carrera_id, anio=anio, cuatrimestre=cuatrimestre,
+                defaults={
+                    'departamento': Comision.departamento_responsable(dictante, mep.plan.carrera),
+                    'credito_horario': next((m.hs_totales for m in meps if m.hs_totales), None),
+                },
+            )
+            if creada:
+                comision.planes.set({m.plan_id for m in meps})
+                creadas += 1
+            if comision.departamento:
+                departamentos.add(comision.departamento)
+    return creadas, departamentos

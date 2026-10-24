@@ -12,11 +12,11 @@ from django.utils import timezone
 from apps.tramites.decorators import solo_administrador, solo_admin_general, solo_director_carrera, solo_director_departamento
 from apps.tramites.models import DEPARTAMENTO_CHOICES
 from apps.notifications.utils import _crear_notificacion
-from .forms import ComisionOptativaForm, MateriaOptativaForm, MiembroComisionFormSet, TribunalForm
-from .models import AgrupacionTribunal, AnioDictado, Carrera, ComisionOptativa, ConvocatoriaSolicitudServicio, Docente, InformeTribunalesEnviado, MateriaEnPlan, MateriaOptativa, SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeTribunal, SolicitudServicio, SolicitudServicioItem, TribunalExaminador
-from .optativas import advertencias_hs, crear_comision, materias_ofrecidas_en_carrera
-from .pdf import generar_pdf_informe_tribunales, generar_pdf_solicitud_cambio, generar_pdf_solicitud_servicio
-from .docx_gen import generar_docx_solicitud_cambio
+from .forms import ComisionForm, MateriaOptativaForm, MiembroComisionFormSet, TribunalForm
+from .models import AgrupacionTribunal, AnioDictado, Carrera, Comision, ConvocatoriaSolicitudServicio, Docente, InformeComisionesEnviado, InformeTribunalesEnviado, MateriaEnPlan, MateriaOptativa, SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeComisiones, SolicitudInformeTribunal, SolicitudServicio, SolicitudServicioItem, TribunalExaminador
+from .optativas import advertencias_hs, crear_comision, crear_comisiones_del_periodo, materias_ofrecidas_en_carrera
+from .pdf import generar_pdf_informe_comisiones, generar_pdf_informe_tribunales, generar_pdf_solicitud_cambio, generar_pdf_solicitud_servicio
+from .docx_gen import generar_docx_informe_comisiones, generar_docx_solicitud_cambio
 
 DEPARTAMENTO_OPCIONES = [(v, l) for v, l in DEPARTAMENTO_CHOICES if v]
 
@@ -1513,7 +1513,7 @@ def detalle_solicitud_servicio(request, pk):
     items = (
         solicitud.items
         .select_related(*_ITEMS_SERVICIO_RELACIONADOS)
-        .prefetch_related('comision_optativa__planes', 'comision_optativa__materia_optativa__optativas__plan')
+        .prefetch_related('comision__planes', 'comision__materia_optativa__optativas__plan')
         .order_by(
             'materia_en_plan__cuatrimestre',
             'materia_en_plan__plan__carrera__nombre',
@@ -1554,7 +1554,7 @@ def descargar_solicitud_servicio(request, pk):
     items = list(
         solicitud.items
         .select_related(*_ITEMS_SERVICIO_RELACIONADOS)
-        .prefetch_related('comision_optativa__planes', 'comision_optativa__materia_optativa__optativas__plan')
+        .prefetch_related('comision__planes', 'comision__materia_optativa__optativas__plan')
         .order_by(
             'materia_en_plan__cuatrimestre',
             'materia_en_plan__plan__carrera__nombre',
@@ -1703,9 +1703,9 @@ def _meps_servicio_para_carrera(carrera, departamento_dictante):
 def _comisiones_servicio_para_carrera(carrera, departamento_dictante, anio, cuatrimestres):
     """Comisiones de optativas de la carrera que dicta otro departamento (o un externo)."""
     if departamento_dictante == carrera.departamento:
-        return ComisionOptativa.objects.none()
+        return Comision.objects.none()
     return (
-        ComisionOptativa.objects
+        Comision.objects
         .filter(
             carrera=carrera, anio=anio, cuatrimestre__in=cuatrimestres,
             materia_optativa__departamento=departamento_dictante,
@@ -1718,7 +1718,7 @@ def _comisiones_servicio_para_carrera(carrera, departamento_dictante, anio, cuat
 
 _ITEMS_SERVICIO_RELACIONADOS = (
     'materia_en_plan__materia', 'materia_en_plan__plan__carrera',
-    'comision_optativa__materia_optativa', 'comision_optativa__carrera',
+    'comision__materia_optativa', 'comision__carrera',
 )
 
 
@@ -1905,7 +1905,7 @@ def nueva_solicitud_servicio_carrera(request):
         for c in comisiones:
             SolicitudServicioItem.objects.create(
                 solicitud=solicitud,
-                comision_optativa=c,
+                comision=c,
                 hs_totales=c.credito_horario,
                 destinatario=dest_com_map.get(c.pk, ''),
             )
@@ -2066,7 +2066,7 @@ def optativas_carrera(request):
     habilitadas = [m for m in materias if m.cuatrimestre in cuats]
     comisiones = {
         c.materia_optativa_id: c
-        for c in ComisionOptativa.objects.filter(carrera=carrera, anio=convocatoria.anio)
+        for c in Comision.objects.filter(carrera=carrera, anio=convocatoria.anio, materia_optativa__isnull=False)
     } if convocatoria else {}
     for m in habilitadas:
         m.comision = comisiones.get(m.pk)
@@ -2116,20 +2116,29 @@ def optativas_carrera(request):
     })
 
 
-# ── comisiones de optativas ──────────────────────────────────────────────────
+# ── comisiones ───────────────────────────────────────────────────────────────
 
 def _comisiones_visibles(user):
-    qs = ComisionOptativa.objects.select_related('materia_optativa', 'carrera', 'director')
+    qs = Comision.objects.select_related('materia', 'materia_optativa', 'carrera', 'director')
     if user.es_administrador:
         return qs
     if user.es_director_carrera and user.carrera_id:
         return qs.filter(carrera_id=user.carrera_id)
     if user.es_director_departamento:
-        dep = user.departamento
-        return qs.filter(
-            models.Q(materia_optativa__departamento=dep) | models.Q(carrera__departamento=dep)
-        )
+        return qs.filter(departamento=user.departamento)
     return qs.none()
+
+
+def _puede_editar_comision(user, comision):
+    """Optativas: el director de su carrera. Materias de plan: el director del departamento responsable."""
+    if comision.es_optativa_bolsa:
+        return user.es_director_carrera and comision.carrera_id == user.carrera_id
+    return user.es_director_departamento and comision.departamento == user.departamento
+
+
+def _cuatrimestres_de_periodo(periodo):
+    """Período del informe ('1' = 1° cuatrimestre + anuales, '2' = 2° cuatrimestre)."""
+    return [1, 3] if periodo == '1' else [2]
 
 
 @login_required
@@ -2139,17 +2148,54 @@ def lista_comisiones(request):
         messages.error(request, 'No tenés permisos para acceder a esta sección.')
         return redirect('tramites:dashboard')
 
-    qs = _comisiones_visibles(user).prefetch_related('planes', 'equipo')
-    anios = sorted(set(qs.values_list('anio', flat=True)), reverse=True)
+    activa = SolicitudInformeComisiones.objects.filter(activa=True).first()
     try:
-        anio = int(request.GET.get('anio') or (anios[0] if anios else timezone.now().year))
+        anio = int(request.GET.get('anio') or (activa.anio if activa else timezone.now().year))
     except ValueError:
         anio = timezone.now().year
+    periodo = request.GET.get('periodo') or (str(activa.cuatrimestre) if activa else '1')
+    if periodo not in ('1', '2'):
+        periodo = '1'
+    tipo = request.GET.get('tipo', '')
+    estado = request.GET.get('estado', '')
 
+    qs = (
+        _comisiones_visibles(user)
+        .filter(anio=anio, cuatrimestre__in=_cuatrimestres_de_periodo(periodo))
+        .prefetch_related('planes', 'equipo')
+        .order_by('materia__nombre', 'materia_optativa__nombre', 'carrera__nombre')
+    )
+    if tipo == 'plan':
+        qs = qs.filter(materia__isnull=False)
+    elif tipo == 'optativas':
+        qs = qs.filter(materia_optativa__isnull=False)
+    comisiones = list(qs)
+    for c in comisiones:
+        c.editable = _puede_editar_comision(user, c)
+    incompletas = sum(1 for c in comisiones if not c.esta_completa)
+    if estado == 'incompletas':
+        comisiones = [c for c in comisiones if not c.esta_completa]
+
+    informe = None
+    if (user.es_director_departamento and activa
+            and activa.anio == anio and str(activa.cuatrimestre) == periodo):
+        informe = {
+            'solicitud': activa,
+            'enviado': InformeComisionesEnviado.objects.filter(
+                solicitud=activa, departamento=user.departamento,
+            ).first(),
+        }
+
+    anios = sorted(set(_comisiones_visibles(user).values_list('anio', flat=True)) | {anio}, reverse=True)
     return render(request, 'planes/comisiones.html', {
-        'comisiones': qs.filter(anio=anio).order_by('cuatrimestre', 'materia_optativa__nombre', 'carrera__nombre'),
+        'comisiones': comisiones,
         'anio': anio,
         'anios': anios,
+        'periodo': periodo,
+        'tipo': tipo,
+        'estado': estado,
+        'incompletas': incompletas,
+        'informe': informe,
     })
 
 
@@ -2160,19 +2206,21 @@ def detalle_comision(request, pk):
     )
     return render(request, 'planes/comision_detalle.html', {
         'comision': comision,
-        'puede_editar': request.user.es_director_carrera and comision.carrera_id == request.user.carrera_id,
+        'puede_editar': _puede_editar_comision(request.user, comision),
         'items_servicio': comision.items_servicio.select_related('solicitud'),
     })
 
 
 @login_required
-@solo_director_carrera
 def editar_comision(request, pk):
     comision = get_object_or_404(
-        ComisionOptativa.objects.select_related('materia_optativa', 'carrera'),
-        pk=pk, carrera_id=request.user.carrera_id,
+        Comision.objects.select_related('materia', 'materia_optativa', 'carrera'), pk=pk,
     )
-    form = ComisionOptativaForm(request.POST or None, instance=comision)
+    if not _puede_editar_comision(request.user, comision):
+        messages.error(request, 'No podés editar esta comisión.')
+        return redirect('tramites:dashboard')
+
+    form = ComisionForm(request.POST or None, instance=comision)
     formset = MiembroComisionFormSet(request.POST or None, instance=comision, prefix='equipo')
 
     if request.method == 'POST' and form.is_valid() and formset.is_valid():
@@ -2189,3 +2237,178 @@ def editar_comision(request, pk):
         'form': form,
         'formset': formset,
     })
+
+
+# ── informe cuatrimestral de comisiones ──────────────────────────────────────
+
+def _comisiones_del_informe(solicitud, departamento):
+    return (
+        Comision.objects
+        .filter(departamento=departamento, anio=solicitud.anio, cuatrimestre__in=solicitud.cuatrimestres)
+        .select_related('materia', 'materia_optativa', 'carrera')
+        .prefetch_related('planes', 'equipo')
+        .order_by('cuatrimestre', 'materia__nombre', 'materia_optativa__nombre', 'carrera__nombre')
+    )
+
+
+@login_required
+@solo_admin_general
+def solicitar_informe_comisiones(request):
+    if request.method != 'POST':
+        return redirect('planes:admin_informes_comisiones')
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    try:
+        cuatrimestre = int(request.POST.get('cuatrimestre', 0))
+        anio = int(request.POST.get('anio', 0))
+    except ValueError:
+        cuatrimestre = anio = 0
+    if cuatrimestre not in (1, 2) or anio < 2020:
+        messages.error(request, 'Cuatrimestre o año inválido.')
+        return redirect('planes:admin_informes_comisiones')
+
+    solicitud, _ = SolicitudInformeComisiones.objects.get_or_create(
+        anio=anio, cuatrimestre=cuatrimestre, defaults={'solicitante': request.user},
+    )
+    SolicitudInformeComisiones.objects.exclude(pk=solicitud.pk).update(activa=False)
+    if not solicitud.activa:
+        solicitud.activa = True
+        solicitud.save(update_fields=['activa'])
+
+    creadas, departamentos = crear_comisiones_del_periodo(anio, solicitud.cuatrimestres)
+    departamentos |= set(
+        Comision.objects
+        .filter(anio=anio, cuatrimestre__in=solicitud.cuatrimestres)
+        .exclude(departamento='')
+        .values_list('departamento', flat=True)
+    )
+
+    periodo_label = solicitud.get_cuatrimestre_display()
+    url = reverse('planes:lista_comisiones') + f'?anio={anio}&periodo={cuatrimestre}'
+    notificados = 0
+    for director in User.objects.filter(rol='director_departamento', is_active=True, departamento__in=departamentos):
+        _crear_notificacion(
+            director, 'nuevo_tramite',
+            f'Informe de comisiones — {periodo_label} {anio}',
+            (
+                f'Se solicita el informe de comisiones del {periodo_label.lower()} {anio} de las materias '
+                'de tu departamento.\n\nCompletá la condición de cursada, el crédito horario, los planes '
+                'y el equipo docente de cada comisión y enviá el informe.'
+            ),
+            url=url,
+        )
+        notificados += 1
+
+    messages.success(
+        request,
+        f'Informe de comisiones {periodo_label} {anio} solicitado a {notificados} '
+        f'director{"es" if notificados != 1 else ""}. Se crearon {creadas} comisión(es) nuevas.',
+    )
+    return redirect(reverse('planes:admin_informes_comisiones') + f'?solicitud={solicitud.pk}')
+
+
+@login_required
+@solo_admin_general
+def admin_informes_comisiones(request):
+    solicitudes = list(SolicitudInformeComisiones.objects.all())
+    solicitud = None
+    if request.GET.get('solicitud', '').isdigit():
+        solicitud = next((s for s in solicitudes if s.pk == int(request.GET['solicitud'])), None)
+    if solicitud is None:
+        solicitud = next((s for s in solicitudes if s.activa), solicitudes[0] if solicitudes else None)
+
+    filas = []
+    if solicitud:
+        enviados = {i.departamento: i for i in solicitud.informes_enviados.select_related('director')}
+        for dep, label in DEPARTAMENTO_OPCIONES:
+            if dep == 'Externo':
+                continue
+            comisiones = list(_comisiones_del_informe(solicitud, dep))
+            filas.append({
+                'departamento': dep,
+                'label': label,
+                'total': len(comisiones),
+                'completas': sum(1 for c in comisiones if c.esta_completa),
+                'enviado': enviados.get(dep),
+            })
+
+    return render(request, 'planes/admin_informes_comisiones.html', {
+        'solicitudes': solicitudes,
+        'solicitud': solicitud,
+        'filas': filas,
+        'anio_actual': timezone.now().year,
+    })
+
+
+@login_required
+@solo_director_departamento
+def enviar_informe_comisiones(request):
+    if request.method != 'POST':
+        return redirect('planes:lista_comisiones')
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    solicitud = SolicitudInformeComisiones.objects.filter(activa=True).first()
+    if not solicitud:
+        messages.error(request, 'No hay un informe de comisiones solicitado.')
+        return redirect('planes:lista_comisiones')
+
+    departamento = request.user.departamento
+    InformeComisionesEnviado.objects.update_or_create(
+        solicitud=solicitud, departamento=departamento,
+        defaults={'director': request.user, 'fecha_envio': timezone.now()},
+    )
+    for admin_user in User.objects.filter(rol__in=['secretario', 'direccion_academica'], is_active=True):
+        _crear_notificacion(
+            admin_user, 'nuevo_tramite',
+            f'Informe de comisiones enviado — Dpto. {departamento}',
+            f'{request.user.get_full_name()} envió el informe de comisiones del '
+            f'{solicitud.get_cuatrimestre_display().lower()} {solicitud.anio} del Departamento de {departamento}.',
+            url=reverse('planes:admin_informes_comisiones') + f'?solicitud={solicitud.pk}',
+        )
+    messages.success(request, 'Informe de comisiones enviado.')
+    return redirect(reverse('planes:lista_comisiones') + f'?anio={solicitud.anio}&periodo={solicitud.cuatrimestre}')
+
+
+@login_required
+def descargar_informe_comisiones(request, pk):
+    from django.contrib.auth import get_user_model
+    from django.http import HttpResponse
+    User = get_user_model()
+
+    solicitud = get_object_or_404(SolicitudInformeComisiones, pk=pk)
+    user = request.user
+    if user.puede_admin_general:
+        departamento = request.GET.get('departamento', '')
+        if departamento not in {v for v, _ in DEPARTAMENTO_OPCIONES}:
+            messages.error(request, 'Departamento inválido.')
+            return redirect('planes:admin_informes_comisiones')
+    elif user.es_director_departamento:
+        departamento = user.departamento
+    else:
+        messages.error(request, 'No tenés permiso.')
+        return redirect('tramites:dashboard')
+
+    comisiones = list(_comisiones_del_informe(solicitud, departamento))
+    enviado = solicitud.informes_enviados.filter(departamento=departamento).select_related('director').first()
+    director = (
+        (enviado.director if enviado else None)
+        or (user if user.es_director_departamento else None)
+        or User.objects.filter(rol='director_departamento', departamento=departamento, is_active=True).first()
+    )
+    admin_user = User.objects.filter(rol='secretario', is_active=True).first()
+
+    nombre = f'informe_comisiones_{departamento.lower().replace(" ", "_")}_{solicitud.anio}_c{solicitud.cuatrimestre}'
+    if request.GET.get('formato') == 'docx':
+        buffer = generar_docx_informe_comisiones(departamento, director, admin_user, solicitud, comisiones)
+        response = HttpResponse(
+            buffer.read(),
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{nombre}.docx"'
+        return response
+    buffer = generar_pdf_informe_comisiones(departamento, director, admin_user, solicitud, comisiones)
+    response = HttpResponse(buffer.read(), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{nombre}.pdf"'
+    return response

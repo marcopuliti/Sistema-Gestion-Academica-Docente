@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}Informes de comisiones{% endblock %}
+{% block nav_admin_informes_comisiones %}active{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+  <h2><i class="bi bi-clipboard-data me-2"></i>Informes cuatrimestrales de comisiones</h2>
+  <p class="text-muted mb-0 small">
+    Al solicitar un informe se crean las comisiones de las materias que se dictan en el período
+    (planes vigentes o activos, años dictados; una por materia y carrera) y se notifica a los
+    directores de departamento.
+  </p>
+</div>
+
+<div class="card mb-4 border-primary">
+  <div class="card-header bg-primary text-white"><i class="bi bi-megaphone me-2"></i>Solicitar informe</div>
+  <div class="card-body">
+    <form method="post" action="{% url 'planes:solicitar_informe_comisiones' %}" class="row g-2 align-items-end"
+          onsubmit="return confirm('Se crearán las comisiones del período y se notificará a los directores de departamento. ¿Continuar?');">
+      {% csrf_token %}
+      <div class="col-auto">
+        <label class="form-label small fw-semibold">Período</label>
+        <select name="cuatrimestre" class="form-select form-select-sm">
+          <option value="1">1° cuatrimestre + anuales</option>
+          <option value="2">2° cuatrimestre</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small fw-semibold">Año</label>
+        <input type="number" name="anio" value="{{ anio_actual }}" min="2020" max="2100" class="form-control form-control-sm" style="width:100px">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-send me-1"></i>Solicitar</button>
+      </div>
+      <div class="col-12 form-text">Si el período ya se había solicitado, se reactiva y solo se agregan las comisiones que falten.</div>
+    </form>
+  </div>
+</div>
+
+{% if solicitud %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+  <h5 class="mb-0">
+    {{ solicitud.get_cuatrimestre_display }} {{ solicitud.anio }}
+    {% if solicitud.activa %}<span class="badge bg-success ms-1">Activo</span>{% endif %}
+  </h5>
+  {% if solicitudes|length > 1 %}
+  <form method="get">
+    <select name="solicitud" class="form-select form-select-sm" onchange="this.form.submit()">
+      {% for s in solicitudes %}<option value="{{ s.pk }}" {% if s.pk == solicitud.pk %}selected{% endif %}>{{ s.get_cuatrimestre_display }} {{ s.anio }}</option>{% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Departamento</th>
+          <th class="text-center">Comisiones</th>
+          <th class="text-center">Completas</th>
+          <th>Informe</th>
+          <th class="text-end">Descargar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in filas %}
+        <tr>
+          <td>{{ f.label }}</td>
+          <td class="text-center">{{ f.total }}</td>
+          <td class="text-center">
+            {% if f.total %}
+            <span class="badge {% if f.completas == f.total %}bg-success{% else %}bg-warning text-dark{% endif %}">{{ f.completas }} / {{ f.total }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="small">
+            {% if f.enviado %}
+              <span class="text-success"><i class="bi bi-check-circle me-1"></i>Enviado el {{ f.enviado.fecha_envio|date:"d/m/Y H:i" }}</span>
+              {% if f.enviado.director %}<span class="text-muted">· {{ f.enviado.director.get_full_name }}</span>{% endif %}
+            {% else %}<span class="text-muted">Pendiente</span>{% endif %}
+          </td>
+          <td class="text-end">
+            {% if f.total %}
+            <a href="{% url 'planes:descargar_informe_comisiones' solicitud.pk %}?departamento={{ f.departamento|urlencode }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-file-earmark-pdf"></i></a>
+            <a href="{% url 'planes:descargar_informe_comisiones' solicitud.pk %}?departamento={{ f.departamento|urlencode }}&formato=docx" class="btn btn-sm btn-outline-primary"><i class="bi bi-file-earmark-word"></i></a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="small mt-2"><a href="{% url 'planes:lista_comisiones' %}?anio={{ solicitud.anio }}&periodo={{ solicitud.cuatrimestre }}">Ver todas las comisiones del período</a></p>
+{% else %}
+<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>Todavía no se solicitó ningún informe de comisiones.</div>
+{% endif %}
+{% endblock %}

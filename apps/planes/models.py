@@ -581,8 +581,8 @@ class SolicitudServicioItem(models.Model):
         null=True, blank=True,
         related_name='solicitud_servicio_items', verbose_name='Materia en plan',
     )
-    comision_optativa = models.ForeignKey(
-        'ComisionOptativa', on_delete=models.PROTECT,
+    comision = models.ForeignKey(
+        'Comision', on_delete=models.PROTECT,
         null=True, blank=True,
         related_name='items_servicio', verbose_name='Comisión de optativa',
     )
@@ -597,8 +597,8 @@ class SolicitudServicioItem(models.Model):
         constraints = [
             models.CheckConstraint(
                 condition=(
-                    Q(materia_en_plan__isnull=False, comision_optativa__isnull=True) |
-                    Q(materia_en_plan__isnull=True, comision_optativa__isnull=False)
+                    Q(materia_en_plan__isnull=False, comision__isnull=True) |
+                    Q(materia_en_plan__isnull=True, comision__isnull=False)
                 ),
                 name='servicio_item_materia_o_comision',
             ),
@@ -608,21 +608,21 @@ class SolicitudServicioItem(models.Model):
                 name='servicio_item_unico_materia_en_plan',
             ),
             models.UniqueConstraint(
-                fields=['solicitud', 'comision_optativa'],
-                condition=Q(comision_optativa__isnull=False),
+                fields=['solicitud', 'comision'],
+                condition=Q(comision__isnull=False),
                 name='servicio_item_unico_comision',
             ),
         ]
 
     def __str__(self):
-        return f'{self.materia_en_plan or self.comision_optativa} en {self.solicitud}'
+        return f'{self.materia_en_plan or self.comision} en {self.solicitud}'
 
     @property
     def fila(self):
         """La MateriaEnPlan, o una FilaOptativa de la comisión con la misma interfaz."""
         if self.materia_en_plan_id:
             return self.materia_en_plan
-        c = self.comision_optativa
+        c = self.comision
         return FilaOptativa(c.materia_optativa, c.carrera, clave=f'com-{c.pk}', planes=list(c.planes.all()))
 
 
@@ -650,24 +650,38 @@ class ConvocatoriaSolicitudServicio(models.Model):
         return f'Convocatoria {self.get_cuatrimestre_display()} {self.anio}'
 
 
-class ComisionOptativa(models.Model):
-    """Dictado de una materia de la bolsa en una carrera durante un año académico.
-    Se crea cuando el director de carrera pide el dictado y él mismo la completa."""
+class Comision(models.Model):
+    """Dictado de una materia en una carrera durante un período (año + cuatrimestre).
+    - Materia de plan: la crea el informe cuatrimestral de comisiones y la completa el
+      director del departamento responsable.
+    - Materia de la bolsa de optativas: la crea y completa el director de carrera al pedir
+      el dictado; entra en el informe del departamento que la dicta."""
+    materia = models.ForeignKey(
+        Materia, on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='comisiones', verbose_name='Materia de plan',
+    )
     materia_optativa = models.ForeignKey(
         MateriaOptativa, on_delete=models.PROTECT,
-        related_name='comisiones', verbose_name='Materia',
+        null=True, blank=True,
+        related_name='comisiones', verbose_name='Materia de la bolsa de optativas',
     )
     carrera = models.ForeignKey(
         Carrera, on_delete=models.PROTECT,
-        related_name='comisiones_optativas', verbose_name='Carrera',
+        related_name='comisiones', verbose_name='Carrera',
     )
     anio = models.PositiveSmallIntegerField(verbose_name='Año académico')
     cuatrimestre = models.PositiveSmallIntegerField(
         choices=MateriaEnPlan.CUATRIMESTRE_CHOICES, verbose_name='Período',
     )
+    departamento = models.CharField(
+        max_length=50, blank=True,
+        choices=DEPARTAMENTO_CHOICES, verbose_name='Departamento responsable',
+        help_text='El que informa la comisión. Si la dicta un externo, el de la carrera.',
+    )
     planes = models.ManyToManyField(
         PlanEstudio, blank=True,
-        related_name='comisiones_optativas', verbose_name='Planes de estudio asociados',
+        related_name='comisiones', verbose_name='Planes de estudio asociados',
     )
     condicion = models.CharField(
         max_length=20, blank=True,
@@ -678,22 +692,58 @@ class ComisionOptativa(models.Model):
     )
     director = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='comisiones_optativas', verbose_name='Solicitada por',
+        related_name='comisiones_solicitadas', verbose_name='Solicitada por',
     )
     fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de creación')
 
     class Meta:
-        unique_together = [('materia_optativa', 'carrera', 'anio')]
-        ordering = ['-anio', 'cuatrimestre', 'materia_optativa__nombre']
-        verbose_name = 'Comisión de optativa'
-        verbose_name_plural = 'Comisiones de optativas'
+        ordering = ['-anio', 'cuatrimestre', 'materia__nombre', 'materia_optativa__nombre', 'carrera__nombre']
+        verbose_name = 'Comisión'
+        verbose_name_plural = 'Comisiones'
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(materia__isnull=False, materia_optativa__isnull=True) |
+                    Q(materia__isnull=True, materia_optativa__isnull=False)
+                ),
+                name='comision_materia_o_optativa',
+            ),
+            models.UniqueConstraint(
+                fields=['materia', 'carrera', 'anio', 'cuatrimestre'],
+                condition=Q(materia__isnull=False),
+                name='comision_unica_materia_carrera_periodo',
+            ),
+            models.UniqueConstraint(
+                fields=['materia_optativa', 'carrera', 'anio'],
+                condition=Q(materia_optativa__isnull=False),
+                name='comision_unica_optativa_carrera_anio',
+            ),
+        ]
 
     def __str__(self):
-        return f'{self.materia_optativa.nombre} — {self.carrera.nombre} — {self.periodo_display}'
+        return f'{self.nombre_materia} — {self.carrera.nombre} — {self.periodo_display}'
+
+    @staticmethod
+    def departamento_responsable(departamento_dictante, carrera):
+        if not departamento_dictante or departamento_dictante == 'Externo':
+            return carrera.departamento
+        return departamento_dictante
+
+    @property
+    def es_optativa_bolsa(self):
+        return self.materia_optativa_id is not None
+
+    @property
+    def materia_obj(self):
+        return self.materia_optativa if self.materia_optativa_id else self.materia
+
+    @property
+    def nombre_materia(self):
+        return self.materia_obj.nombre
 
     @property
     def codigo_materia(self):
-        return self.materia_optativa.codigo
+        return self.materia_obj.codigo
 
     @property
     def periodo_display(self):
@@ -701,21 +751,23 @@ class ComisionOptativa(models.Model):
 
     @property
     def departamento_dictante(self):
-        return self.materia_optativa.departamento or self.carrera.departamento
+        if self.es_optativa_bolsa:
+            return self.materia_optativa.departamento or self.carrera.departamento
+        return self.departamento
 
     @property
     def requiere_servicio(self):
-        """La dicta otro departamento (o un externo): va en la solicitud de servicio."""
-        return self.departamento_dictante != self.carrera.departamento
+        """Optativa que dicta otro departamento (o un externo): va en la solicitud de servicio."""
+        return self.es_optativa_bolsa and self.departamento_dictante != self.carrera.departamento
 
     @property
     def esta_completa(self):
-        return bool(self.condicion and self.credito_horario and self.equipo.exists())
+        return bool(self.condicion and self.credito_horario and self.equipo.all())
 
 
-class MiembroComisionOptativa(models.Model):
+class MiembroComision(models.Model):
     comision = models.ForeignKey(
-        ComisionOptativa, on_delete=models.CASCADE,
+        Comision, on_delete=models.CASCADE,
         related_name='equipo',
     )
     nombre = models.CharField(max_length=200, verbose_name='Apellido y Nombre')
@@ -732,3 +784,56 @@ class MiembroComisionOptativa(models.Model):
 
     def __str__(self):
         return f'{self.nombre} ({self.get_funcion_display()})'
+
+
+class SolicitudInformeComisiones(models.Model):
+    """Pedido de administración para que los departamentos informen las comisiones de un período."""
+    CUATRIMESTRE_CHOICES = [
+        (1, '1° Cuatrimestre + Anuales'),
+        (2, '2° Cuatrimestre'),
+    ]
+    anio = models.PositiveSmallIntegerField(verbose_name='Año académico')
+    cuatrimestre = models.PositiveSmallIntegerField(choices=CUATRIMESTRE_CHOICES, verbose_name='Período')
+    fecha = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de solicitud')
+    solicitante = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='solicitudes_informe_comisiones', verbose_name='Solicitante',
+    )
+    activa = models.BooleanField(default=True, verbose_name='Activa')
+
+    class Meta:
+        unique_together = [('anio', 'cuatrimestre')]
+        ordering = ['-anio', '-cuatrimestre']
+        verbose_name = 'Solicitud de informe de comisiones'
+        verbose_name_plural = 'Solicitudes de informe de comisiones'
+
+    def __str__(self):
+        return f'Informe de comisiones — {self.get_cuatrimestre_display()} {self.anio}'
+
+    @property
+    def cuatrimestres(self):
+        """Cuatrimestres de comisión que abarca: el 1° incluye las anuales."""
+        return [1, 3] if self.cuatrimestre == 1 else [2]
+
+
+class InformeComisionesEnviado(models.Model):
+    """Registra que un departamento envió su informe de comisiones para una solicitud."""
+    solicitud = models.ForeignKey(
+        SolicitudInformeComisiones, on_delete=models.CASCADE,
+        related_name='informes_enviados', verbose_name='Solicitud',
+    )
+    departamento = models.CharField(max_length=50, choices=DEPARTAMENTO_CHOICES, verbose_name='Departamento')
+    director = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='informes_comisiones_enviados', verbose_name='Director',
+    )
+    fecha_envio = models.DateTimeField(verbose_name='Fecha de envío')
+
+    class Meta:
+        unique_together = [('solicitud', 'departamento')]
+        ordering = ['-fecha_envio']
+        verbose_name = 'Informe de comisiones enviado'
+        verbose_name_plural = 'Informes de comisiones enviados'
+
+    def __str__(self):
+        return f'Informe de comisiones {self.departamento} — {self.solicitud}'

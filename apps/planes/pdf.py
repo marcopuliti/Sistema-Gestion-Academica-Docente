@@ -354,3 +354,104 @@ def generar_pdf_solicitud_servicio(solicitud, admin_user, items):
     doc.build(story)
     buffer.seek(0)
     return buffer
+
+
+# ── Informe cuatrimestral de comisiones ──────────────────────────────────────
+
+def texto_periodo_informe(solicitud):
+    if solicitud.cuatrimestre == 1:
+        return f'1° cuatrimestre y materias anuales del Ciclo Lectivo {solicitud.anio}'
+    return f'2° cuatrimestre del Ciclo Lectivo {solicitud.anio}'
+
+
+def _comision_table(c, s):
+    def p(text, style):
+        return Paragraph(str(text) if text not in (None, '') else '—', style)
+
+    optativa = ' — Optativa' if c.es_optativa_bolsa else ''
+    planes = ', '.join(f'Plan {pl.codigo}' for pl in c.planes.all()) or '—'
+    credito = f'{c.credito_horario} hs' if c.credito_horario else '—'
+    titulo = f'{c.nombre_materia} ({c.codigo_materia}){optativa} — {c.carrera.nombre} — {c.get_cuatrimestre_display()}'
+    rows = [
+        [p(titulo, s['mat_hdr']), '', '', '', ''],
+        [p('Planes', s['campo']), p(planes, s['valor']), '', '', ''],
+        [p('Condición', s['campo']), p(c.get_condicion_display(), s['valor']),
+         p('Crédito horario', s['campo']), p(credito, s['valor']), ''],
+        [p('Apellido y nombre', s['subhdr']), p('DNI', s['subhdr']), p('Función', s['subhdr']),
+         p('Cargo', s['subhdr']), p('Dedicación', s['subhdr'])],
+    ]
+    equipo = list(c.equipo.all())
+    for m in equipo:
+        rows.append([p(m.nombre, s['valor']), p(m.dni, s['valor']), p(m.get_funcion_display(), s['valor']),
+                     p(m.get_cargo_display(), s['valor']), p(m.get_dedicacion_display(), s['valor'])])
+    if not equipo:
+        rows.append([p('Sin equipo docente cargado', s['valor']), '', '', '', ''])
+
+    col_widths = [CONTENT_W * f for f in (0.34, 0.14, 0.2, 0.17, 0.15)]
+    style_cmds = [
+        ('SPAN', (0, 0), (4, 0)),
+        ('BACKGROUND', (0, 0), (4, 0), AZUL),
+        ('SPAN', (1, 1), (4, 1)),
+        ('SPAN', (3, 2), (4, 2)),
+        ('BACKGROUND', (0, 3), (4, 3), GRIS),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#cccccc')),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]
+    if not equipo:
+        style_cmds.append(('SPAN', (0, 4), (4, 4)))
+    tbl = Table(rows, colWidths=col_widths)
+    tbl.setStyle(TableStyle(style_cmds))
+    return tbl
+
+
+def generar_pdf_informe_comisiones(departamento, director, admin, solicitud, comisiones):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        leftMargin=MARGIN_H, rightMargin=MARGIN_H,
+        topMargin=MARGIN_V, bottomMargin=MARGIN_V,
+    )
+    s = _styles()
+    story = []
+
+    hoy = datetime.date.today()
+    story.append(Paragraph(f"San Luis, {hoy.day} de {MESES[hoy.month - 1]} de {hoy.year}", s['fecha']))
+    story.append(Spacer(1, 0.9 * cm))
+    admin_nombre = admin.get_full_name() if admin else 'Secretario Académico'
+    story.append(Paragraph(f"Sr. Secretario Académico de la FCFMyN<br/>{admin_nombre}<br/>S / D:", s['dest']))
+    story.append(Spacer(1, 0.7 * cm))
+    n = len(comisiones)
+    story.append(Paragraph(
+        f"Me dirijo a Ud., y por su intermedio a quien corresponda, para elevar el informe de "
+        f"comisiones del {texto_periodo_informe(solicitud)} de las materias del Departamento de "
+        f"{departamento}, que comprende {n} {'comisiones' if n != 1 else 'comisión'} con su "
+        f"condición de cursada, crédito horario, planes de estudio asociados y equipo docente.",
+        s['cuerpo'],
+    ))
+    story.append(Spacer(1, 0.4 * cm))
+    story.append(Paragraph("Sin otro particular, saludo a Ud. con atenta consideración.", s['cuerpo']))
+    story.append(Spacer(1, 2 * cm))
+    nombre_director = director.get_full_name() if director else ''
+    story.append(Paragraph(
+        f"{nombre_director}<br/>Director del Departamento<br/>de {departamento}<br/>F.C.F.M.yN.",
+        s['firma'],
+    ))
+
+    story.append(PageBreak())
+    story.append(Paragraph(
+        f"Informe de Comisiones — Dpto. {departamento} — {solicitud.get_cuatrimestre_display()} {solicitud.anio}",
+        s['titulo_seccion'],
+    ))
+    story.append(Spacer(1, 0.3 * cm))
+    for c in comisiones:
+        story.append(_comision_table(c, s))
+        story.append(Spacer(1, 0.35 * cm))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer

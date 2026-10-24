@@ -1,8 +1,8 @@
 from django import forms
 from django.db.models import Q
 from .models import (
-    DIA_SEMANA_CHOICES, ComisionOptativa, Materia, MateriaEnPlan, MateriaOptativa,
-    MiembroComisionOptativa, PlanEstudio,
+    DIA_SEMANA_CHOICES, Comision, Materia, MateriaEnPlan, MateriaOptativa,
+    MiembroComision, PlanEstudio,
 )
 
 _txt = {'class': 'form-control form-control-sm'}
@@ -45,9 +45,9 @@ class MateriaOptativaForm(forms.ModelForm):
         return codigo
 
 
-class ComisionOptativaForm(forms.ModelForm):
+class ComisionForm(forms.ModelForm):
     class Meta:
-        model = ComisionOptativa
+        model = Comision
         fields = ['condicion', 'credito_horario', 'planes']
         widgets = {
             'condicion': forms.Select(attrs=_sel),
@@ -67,7 +67,7 @@ class ComisionOptativaForm(forms.ModelForm):
 
 
 MiembroComisionFormSet = forms.inlineformset_factory(
-    ComisionOptativa, MiembroComisionOptativa,
+    Comision, MiembroComision,
     fields=['nombre', 'dni', 'funcion', 'cargo', 'dedicacion'],
     widgets={
         'nombre': forms.TextInput(attrs=_txt),

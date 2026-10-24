@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Editar comisión — {{ comision.materia_optativa.nombre }}{% endblock %}
+{% block title %}Editar comisión — {{ comision.nombre_materia }}{% endblock %}
 {% block nav_comisiones %}active{% endblock %}
 
 {% block content %}
@@ -7,7 +7,7 @@
   <a href="{% url 'planes:detalle_comision' comision.pk %}" class="text-muted small text-decoration-none">
     <i class="bi bi-arrow-left me-1"></i>Volver a la comisión
   </a>
-  <h2 class="mt-1"><i class="bi bi-person-video3 me-2"></i>{{ comision.materia_optativa.nombre }}</h2>
+  <h2 class="mt-1"><i class="bi bi-person-video3 me-2"></i>{{ comision.nombre_materia }}</h2>
   <p class="text-muted mb-0 small">{{ comision.codigo_materia }} · {{ comision.carrera.nombre }} · {{ comision.periodo_display }}</p>
 </div>
 
@@ -25,8 +25,8 @@
           <label class="form-label fw-semibold small">{{ form.credito_horario.label }}</label>
           {{ form.credito_horario }}
           {% if form.credito_horario.errors %}<div class="text-danger small">{{ form.credito_horario.errors.0 }}</div>{% endif %}
-          {% if comision.materia_optativa.hs_totales %}
-          <div class="form-text">La materia tiene {{ comision.materia_optativa.hs_totales }} hs.</div>
+          {% if comision.es_optativa_bolsa and comision.materia_obj.hs_totales %}
+          <div class="form-text">La materia tiene {{ comision.materia_obj.hs_totales }} hs.</div>
           {% endif %}
         </div>
         <div class="col-md-5">

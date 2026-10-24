@@ -171,6 +171,24 @@
       </div>
     </div>
   </div>
+
+  {% if user.puede_admin_general %}
+  <div class="col-lg-6 mt-3">
+    <div class="card h-100">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-clipboard-data me-2"></i>Informe cuatrimestral de comisiones</h6>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Crea las comisiones de las materias del período y pide a los directores de departamento que las completen y envíen.
+        </p>
+        <a href="{% url 'planes:admin_informes_comisiones' %}" class="btn btn-primary btn-sm">
+          <i class="bi bi-clipboard-data me-1"></i>Informes de comisiones
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 {# ── Últimos cambios de tribunal enviados ─────────────────────────────────── #}

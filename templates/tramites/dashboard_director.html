@@ -42,6 +42,22 @@
 </div>
 
 {# ── Alerta de informe anual ──────────────────────────────────────────────── #}
+{% if informe_comisiones and not informe_comisiones.enviado %}
+<div class="alert alert-warning d-flex align-items-start gap-3 mb-4" role="alert">
+  <i class="bi bi-person-video3 fs-4 mt-1 flex-shrink-0"></i>
+  <div class="flex-grow-1">
+    <strong>Informe de comisiones — {{ informe_comisiones.solicitud.get_cuatrimestre_display }} {{ informe_comisiones.solicitud.anio }}.</strong><br>
+    <span class="small">
+      Completá las {{ informe_comisiones.total }} comisiones de tu departamento
+      ({{ informe_comisiones.incompletas }} incompleta{{ informe_comisiones.incompletas|pluralize }}) y enviá el informe.
+    </span>
+  </div>
+  <a href="{% url 'planes:lista_comisiones' %}?anio={{ informe_comisiones.solicitud.anio }}&periodo={{ informe_comisiones.solicitud.cuatrimestre }}" class="btn btn-warning btn-sm text-nowrap">
+    <i class="bi bi-person-video3 me-1"></i>Ir a comisiones
+  </a>
+</div>
+{% endif %}
+
 {% if solicitud_informe_activa %}
 <div class="alert alert-warning d-flex align-items-start gap-3 mb-4" role="alert">
   <i class="bi bi-megaphone-fill fs-4 mt-1 flex-shrink-0"></i>

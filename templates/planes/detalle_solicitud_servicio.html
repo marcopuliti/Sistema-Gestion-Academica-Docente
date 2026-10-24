@@ -69,7 +69,7 @@
           <td class="small">{{ item.fila.plan.carrera.nombre }}</td>
           <td class="small text-muted">{{ item.fila.plan.codigo }}</td>
           <td class="small">{{ item.fila.ano }}°</td>
-          <td>{{ item.fila.materia.nombre }}{% if item.comision_optativa_id %} <span class="badge bg-primary" style="font-size:.7rem">Optativa</span>{% endif %}</td>
+          <td>{{ item.fila.materia.nombre }}{% if item.comision_id %} <span class="badge bg-primary" style="font-size:.7rem">Optativa</span>{% endif %}</td>
           <td class="small text-muted">{{ item.destinatario|default:"—" }}</td>
           <td class="text-end"><span class="badge bg-secondary">{{ item.hs_totales }} hs</span></td>
         </tr>

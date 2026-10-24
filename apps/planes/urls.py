@@ -55,10 +55,14 @@ urlpatterns = [
     path('planes/admin/optativas/nueva/', views.admin_editar_optativa, name='admin_crear_optativa'),
     path('planes/admin/optativas/<int:pk>/', views.admin_editar_optativa, name='admin_editar_optativa'),
 
-    # Comisiones de optativas
+    # Comisiones e informe cuatrimestral de comisiones
     path('planes/comisiones/', views.lista_comisiones, name='lista_comisiones'),
     path('planes/comisiones/<int:pk>/', views.detalle_comision, name='detalle_comision'),
     path('planes/comisiones/<int:pk>/editar/', views.editar_comision, name='editar_comision'),
+    path('planes/comisiones/enviar-informe/', views.enviar_informe_comisiones, name='enviar_informe_comisiones'),
+    path('planes/comisiones/informes/<int:pk>/descargar/', views.descargar_informe_comisiones, name='descargar_informe_comisiones'),
+    path('planes/admin/informes-comisiones/', views.admin_informes_comisiones, name='admin_informes_comisiones'),
+    path('planes/admin/informes-comisiones/solicitar/', views.solicitar_informe_comisiones, name='solicitar_informe_comisiones'),
 
     # Director de carrera
     path('planes/carrera/materias/', views.materias_carrera, name='materias_carrera'),

@@ -216,3 +216,91 @@ def generar_docx_solicitud_cambio(director, admin, meps, item_map, current_map):
     doc.save(buffer)
     buffer.seek(0)
     return buffer
+
+
+# ── Informe cuatrimestral de comisiones ──────────────────────────────────────
+
+def _add_comision_table(doc, c):
+    optativa = ' — Optativa' if c.es_optativa_bolsa else ''
+    planes = ', '.join(f'Plan {pl.codigo}' for pl in c.planes.all()) or '—'
+    credito = f'{c.credito_horario} hs' if c.credito_horario else '—'
+    equipo = list(c.equipo.all())
+
+    table = doc.add_table(rows=4 + max(len(equipo), 1), cols=5)
+    table.style = 'Table Grid'
+
+    hdr = table.rows[0].cells[0].merge(table.rows[0].cells[4])
+    _write_cell(
+        hdr, f'{c.nombre_materia} ({c.codigo_materia}){optativa} — {c.carrera.nombre} — {c.get_cuatrimestre_display()}',
+        bold=True, color=COLOR_BLANCO,
+    )
+    _set_cell_bg(hdr, COLOR_AZUL)
+
+    r = table.rows[1].cells
+    _write_cell(r[0], 'Planes', bold=True)
+    _write_cell(r[1].merge(r[4]), planes)
+    r = table.rows[2].cells
+    _write_cell(r[0], 'Condición', bold=True)
+    _write_cell(r[1], c.get_condicion_display() or '—')
+    _write_cell(r[2], 'Crédito horario', bold=True)
+    _write_cell(r[3].merge(r[4]), credito)
+
+    for cell, texto in zip(table.rows[3].cells, ('Apellido y nombre', 'DNI', 'Función', 'Cargo', 'Dedicación')):
+        _write_cell(cell, texto, bold=True, size=8)
+        _set_cell_bg(cell, COLOR_GRIS)
+
+    if equipo:
+        for row, m in zip(table.rows[4:], equipo):
+            valores = (m.nombre, m.dni, m.get_funcion_display(), m.get_cargo_display(), m.get_dedicacion_display())
+            for cell, texto in zip(row.cells, valores):
+                _write_cell(cell, texto or '—')
+    else:
+        _write_cell(table.rows[4].cells[0].merge(table.rows[4].cells[4]), 'Sin equipo docente cargado', italic=True)
+    doc.add_paragraph()
+
+
+def generar_docx_informe_comisiones(departamento, director, admin, solicitud, comisiones):
+    from .pdf import texto_periodo_informe
+
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin = section.bottom_margin = Cm(2.5)
+        section.left_margin = section.right_margin = Cm(2.5)
+
+    hoy = datetime.date.today()
+    p_fecha = _p(doc, f"San Luis, {hoy.day} de {MESES[hoy.month - 1]} de {hoy.year}", size=11)
+    p_fecha.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    doc.add_paragraph()
+
+    admin_nombre = admin.get_full_name() if admin else 'Secretario Académico'
+    _p(doc, "Sr. Secretario Académico de la FCFMyN", bold=True)
+    _p(doc, admin_nombre)
+    _p(doc, "S / D:")
+    doc.add_paragraph()
+
+    n = len(comisiones)
+    p_cuerpo = _p(doc, (
+        f"Me dirijo a Ud., y por su intermedio a quien corresponda, para elevar el informe de "
+        f"comisiones del {texto_periodo_informe(solicitud)} de las materias del Departamento de "
+        f"{departamento}, que comprende {n} {'comisiones' if n != 1 else 'comisión'} con su "
+        f"condición de cursada, crédito horario, planes de estudio asociados y equipo docente."
+    ))
+    p_cuerpo.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    doc.add_paragraph()
+    _p(doc, "Sin otro particular, saludo a Ud. con atenta consideración.")
+    doc.add_paragraph()
+    doc.add_paragraph()
+    nombre_director = director.get_full_name() if director else ''
+    _p(doc, f"{nombre_director}\nDirector del Departamento de {departamento}\nF.C.F.M.yN.")
+
+    doc.add_page_break()
+    _p(doc, f"Informe de Comisiones — Dpto. {departamento} — {solicitud.get_cuatrimestre_display()} {solicitud.anio}",
+       size=12, bold=True)
+    doc.add_paragraph()
+    for c in comisiones:
+        _add_comision_table(doc, c)
+
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer

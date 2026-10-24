@@ -141,9 +141,16 @@
         {% endif %}
         <li class="nav-item">
           <a class="nav-link {% block nav_comisiones %}{% endblock %}" href="{% url 'planes:lista_comisiones' %}">
-            <i class="bi bi-person-video3 me-2"></i>Comisiones de optativas
+            <i class="bi bi-person-video3 me-2"></i>Comisiones
           </a>
         </li>
+        {% if user.puede_admin_general %}
+        <li class="nav-item">
+          <a class="nav-link {% block nav_admin_informes_comisiones %}{% endblock %}" href="{% url 'planes:admin_informes_comisiones' %}">
+            <i class="bi bi-clipboard-data me-2"></i>Informes de comisiones
+          </a>
+        </li>
+        {% endif %}
         {% endif %}
 
         {# ── TRÁMITES ── #}

@@ -2,6 +2,7 @@ import datetime
 from io import BytesIO
 
 from docx import Document
+from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -219,51 +220,71 @@ def generar_docx_solicitud_cambio(director, admin, meps, item_map, current_map):
 
 
 # ── Informe cuatrimestral de comisiones ──────────────────────────────────────
+# Mismo formato que el PDF (pdf.datos_tabla_comision): encabezado "DEPARTAMENTO DE …",
+# columnas MATERIA | COMISIÓN | PERIODO | CONDICIÓN | CRÉDITO HORARIO | PLAN DE ESTUDIOS.
 
-def _add_comision_table(doc, c):
-    optativa = ' — Optativa' if c.es_optativa_bolsa else ''
-    planes = ', '.join(f'Plan {pl.codigo}' for pl in c.planes.all()) or '—'
-    credito = f'{c.credito_horario} hs' if c.credito_horario else '—'
-    equipo = list(c.equipo.all())
+_ANCHOS_COMISION_CM = (4.25, 2.2, 8.15, 2.0, 2.25, 2.0, 2.15)
 
-    table = doc.add_table(rows=4 + max(len(equipo), 1), cols=5)
+
+def _celda_comision(cell, texto, size=7.5, bold=False, center=True):
+    cell.text = ''
+    para = cell.paragraphs[0]
+    para.alignment = WD_ALIGN_PARAGRAPH.CENTER if center else WD_ALIGN_PARAGRAPH.LEFT
+    para.paragraph_format.space_after = Pt(0)
+    for i, linea in enumerate((texto or '').split('\n')):
+        if i:
+            para.add_run().add_break()
+        run = para.add_run(linea)
+        run.font.name = 'Arial'
+        run.font.size = Pt(size)
+        run.font.bold = bold
+    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    _cell_margins(cell, top=20, bottom=20, left=50, right=50)
+
+
+def _add_comision_table(doc, c, departamento):
+    from .pdf import datos_tabla_comision
+    d = datos_tabla_comision(c)
+    n = len(d['equipo'])
+
+    table = doc.add_table(rows=2 + n, cols=7)
     table.style = 'Table Grid'
+    table.alignment = 1  # centrada
+    for row in table.rows:
+        for cell, ancho in zip(row.cells, _ANCHOS_COMISION_CM):
+            cell.width = Cm(ancho)
 
-    hdr = table.rows[0].cells[0].merge(table.rows[0].cells[4])
-    _write_cell(
-        hdr, f'{c.nombre_materia} ({c.codigo_materia}){optativa} — {c.carrera.nombre} — {c.get_cuatrimestre_display()}',
-        bold=True, color=COLOR_BLANCO,
-    )
-    _set_cell_bg(hdr, COLOR_AZUL)
+    _celda_comision(table.cell(0, 0).merge(table.cell(0, 6)), f'DEPARTAMENTO DE {departamento.upper()}', size=8, bold=True)
+    _celda_comision(table.cell(1, 0), 'MATERIA', size=8, bold=True)
+    _celda_comision(table.cell(1, 1).merge(table.cell(1, 2)), 'COMISIÓN', size=8, bold=True)
+    for col, texto in ((3, 'PERIODO'), (4, 'CONDICIÓN'), (5, 'CRÉDITO\nHORARIO'), (6, 'PLAN DE\nESTUDIOS')):
+        _celda_comision(table.cell(1, col), texto, size=7)
 
-    r = table.rows[1].cells
-    _write_cell(r[0], 'Planes', bold=True)
-    _write_cell(r[1].merge(r[4]), planes)
-    r = table.rows[2].cells
-    _write_cell(r[0], 'Condición', bold=True)
-    _write_cell(r[1], c.get_condicion_display() or '—')
-    _write_cell(r[2], 'Crédito horario', bold=True)
-    _write_cell(r[3].merge(r[4]), credito)
+    for i, (materia, (rol, docente)) in enumerate(zip(d['materia'], d['equipo'])):
+        r = 2 + i
+        _celda_comision(table.cell(r, 0), materia, bold=(i == 2))
+        _celda_comision(table.cell(r, 1), rol, size=8, center=False)
+        _celda_comision(table.cell(r, 2), docente)
+    ultima = 1 + n
+    for col, clave in ((3, 'periodo'), (4, 'condicion'), (5, 'credito'), (6, 'plan')):
+        _celda_comision(table.cell(2, col).merge(table.cell(ultima, col)), d[clave])
 
-    for cell, texto in zip(table.rows[3].cells, ('Apellido y nombre', 'DNI', 'Función', 'Cargo', 'Dedicación')):
-        _write_cell(cell, texto, bold=True, size=8)
-        _set_cell_bg(cell, COLOR_GRIS)
+    # Que la tabla no se corte entre páginas
+    for row in table.rows[:-1]:
+        for cell in row.cells:
+            for para in cell.paragraphs:
+                para.paragraph_format.keep_with_next = True
 
-    if equipo:
-        for row, m in zip(table.rows[4:], equipo):
-            valores = (m.nombre, m.dni, m.get_funcion_display(), m.get_cargo_display(), m.get_dedicacion_display())
-            for cell, texto in zip(row.cells, valores):
-                _write_cell(cell, texto or '—')
-    else:
-        _write_cell(table.rows[4].cells[0].merge(table.rows[4].cells[4]), 'Sin equipo docente cargado', italic=True)
     doc.add_paragraph()
 
 
 def generar_docx_informe_comisiones(departamento, director, admin, solicitud, comisiones):
+    from docx.enum.section import WD_ORIENT, WD_SECTION
     from .pdf import texto_periodo_informe
 
     doc = Document()
     for section in doc.sections:
+        section.page_width, section.page_height = Cm(21), Cm(29.7)  # A4, como el PDF
         section.top_margin = section.bottom_margin = Cm(2.5)
         section.left_margin = section.right_margin = Cm(2.5)
 
@@ -293,12 +314,14 @@ def generar_docx_informe_comisiones(departamento, director, admin, solicitud, co
     nombre_director = director.get_full_name() if director else ''
     _p(doc, f"{nombre_director}\nDirector del Departamento de {departamento}\nF.C.F.M.yN.")
 
-    doc.add_page_break()
-    _p(doc, f"Informe de Comisiones — Dpto. {departamento} — {solicitud.get_cuatrimestre_display()} {solicitud.anio}",
-       size=12, bold=True)
-    doc.add_paragraph()
+    # Tablas en páginas apaisadas
+    apaisada = doc.add_section(WD_SECTION.NEW_PAGE)
+    apaisada.orientation = WD_ORIENT.LANDSCAPE
+    apaisada.page_width, apaisada.page_height = apaisada.page_height, apaisada.page_width
+    apaisada.left_margin = apaisada.right_margin = Cm(2)
+    apaisada.top_margin = apaisada.bottom_margin = Cm(1.5)
     for c in comisiones:
-        _add_comision_table(doc, c)
+        _add_comision_table(doc, c, departamento)
 
     buffer = BytesIO()
     doc.save(buffer)

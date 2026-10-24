@@ -357,6 +357,20 @@ def generar_pdf_solicitud_servicio(solicitud, admin_user, items):
 
 
 # ── Informe cuatrimestral de comisiones ──────────────────────────────────────
+# Las tablas replican el formato de las notas de "Comisiones de Cursada" de los departamentos:
+# encabezado "DEPARTAMENTO DE …", columnas MATERIA | COMISIÓN (rol + docente) | PERIODO |
+# CONDICIÓN | CRÉDITO HORARIO | PLAN DE ESTUDIOS, y páginas apaisadas.
+
+FUNCION_ABREVIADA = {
+    'prof_responsable': 'Prof. Resp.',
+    'prof_colaborador': 'Prof. Colab.',
+    'resp_practico':    'Resp. T.P',
+    'aux_practico':     'Aux. Práctico',
+    'aux_laboratorio':  'Aux. Lab',
+}
+PERIODO_ABREVIADO = {1: '1° Cuat.', 2: '2° Cuat.', 3: 'ANUAL'}
+FILAS_MINIMAS_COMISION = 5
+
 
 def texto_periodo_informe(solicitud):
     if solicitud.cuatrimestre == 1:
@@ -364,58 +378,95 @@ def texto_periodo_informe(solicitud):
     return f'2° cuatrimestre del Ciclo Lectivo {solicitud.anio}'
 
 
-def _comision_table(c, s):
-    def p(text, style):
-        return Paragraph(str(text) if text not in (None, '') else '—', style)
+def datos_tabla_comision(c):
+    """Contenido de la tabla de una comisión, compartido por el PDF y el DOCX."""
+    nombre = f'Optat. ({c.nombre_materia})' if c.es_optativa_bolsa else c.nombre_materia
+    equipo = [
+        (FUNCION_ABREVIADA.get(m.funcion, m.get_funcion_display()),
+         f'{m.nombre} DNI {m.dni}' if m.dni else m.nombre)
+        for m in c.equipo.all()
+    ]
+    filas = max(FILAS_MINIMAS_COMISION, len(equipo))
+    materia = [nombre, f'Cod. ({c.codigo_materia})', c.carrera.nombre]
+    return {
+        'materia': materia + [''] * (filas - len(materia)),
+        'equipo': equipo + [('', '')] * (filas - len(equipo)),
+        'periodo': PERIODO_ABREVIADO.get(c.cuatrimestre, ''),
+        'condicion': c.get_condicion_display(),
+        'credito': f'{c.credito_horario} hs' if c.credito_horario else '',
+        'plan': ' '.join(p.codigo for p in sorted(c.planes.all(), key=lambda p: p.codigo)),
+    }
 
-    optativa = ' — Optativa' if c.es_optativa_bolsa else ''
-    planes = ', '.join(f'Plan {pl.codigo}' for pl in c.planes.all()) or '—'
-    credito = f'{c.credito_horario} hs' if c.credito_horario else '—'
-    titulo = f'{c.nombre_materia} ({c.codigo_materia}){optativa} — {c.carrera.nombre} — {c.get_cuatrimestre_display()}'
+
+# Proporciones de columnas de la nota original
+_COLS_COMISION = (0.185, 0.095, 0.355, 0.087, 0.098, 0.087, 0.093)
+
+
+def _comision_table(c, departamento, ancho):
+    base = getSampleStyleSheet()['Normal']
+    def st(nombre, **kw):
+        return ParagraphStyle(nombre, parent=base, **{
+            'fontName': 'Helvetica', 'fontSize': 7.5, 'leading': 9, 'alignment': TA_CENTER, **kw,
+        })
+    s_titulo = st('c_tit', fontName='Helvetica-Bold', fontSize=8)
+    s_hdr = st('c_hdr', fontName='Helvetica-Bold', fontSize=8)
+    s_hdr2 = st('c_hdr2', fontSize=7)
+    s_txt = st('c_txt')
+    s_rol = st('c_rol', alignment=TA_LEFT, fontSize=8)
+    s_carrera = st('c_car', fontName='Helvetica-Bold')
+    # Las celdas vacías llevan un espacio para conservar el alto de fila de la nota original
+    p = lambda texto, estilo: Paragraph(texto or '&nbsp;', estilo)
+
+    d = datos_tabla_comision(c)
     rows = [
-        [p(titulo, s['mat_hdr']), '', '', '', ''],
-        [p('Planes', s['campo']), p(planes, s['valor']), '', '', ''],
-        [p('Condición', s['campo']), p(c.get_condicion_display(), s['valor']),
-         p('Crédito horario', s['campo']), p(credito, s['valor']), ''],
-        [p('Apellido y nombre', s['subhdr']), p('DNI', s['subhdr']), p('Función', s['subhdr']),
-         p('Cargo', s['subhdr']), p('Dedicación', s['subhdr'])],
+        [p(f'DEPARTAMENTO DE {departamento.upper()}', s_titulo), '', '', '', '', '', ''],
+        [p('MATERIA', s_hdr), p('COMISIÓN', s_hdr), '', p('PERIODO', s_hdr2), p('CONDICIÓN', s_hdr2),
+         p('CRÉDITO<br/>HORARIO', s_hdr2), p('PLAN DE<br/>ESTUDIOS', s_hdr2)],
     ]
-    equipo = list(c.equipo.all())
-    for m in equipo:
-        rows.append([p(m.nombre, s['valor']), p(m.dni, s['valor']), p(m.get_funcion_display(), s['valor']),
-                     p(m.get_cargo_display(), s['valor']), p(m.get_dedicacion_display(), s['valor'])])
-    if not equipo:
-        rows.append([p('Sin equipo docente cargado', s['valor']), '', '', '', ''])
-
-    col_widths = [CONTENT_W * f for f in (0.34, 0.14, 0.2, 0.17, 0.15)]
-    style_cmds = [
-        ('SPAN', (0, 0), (4, 0)),
-        ('BACKGROUND', (0, 0), (4, 0), AZUL),
-        ('SPAN', (1, 1), (4, 1)),
-        ('SPAN', (3, 2), (4, 2)),
-        ('BACKGROUND', (0, 3), (4, 3), GRIS),
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#cccccc')),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    for i, (materia, (rol, docente)) in enumerate(zip(d['materia'], d['equipo'])):
+        rows.append([
+            p(materia, s_carrera if i == 2 else s_txt), p(rol, s_rol), p(docente, s_txt),
+            p(d['periodo'], s_txt) if i == 0 else '',
+            p(d['condicion'], s_txt) if i == 0 else '',
+            p(d['credito'], s_txt) if i == 0 else '',
+            p(d['plan'], s_txt) if i == 0 else '',
+        ])
+    ultima = len(rows) - 1
+    estilo = [
+        ('SPAN', (0, 0), (6, 0)),
+        ('SPAN', (1, 1), (2, 1)),
+        *[('SPAN', (col, 2), (col, ultima)) for col in range(3, 7)],
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('BOX', (0, 0), (-1, 0), 1.2, colors.black),
+        ('BOX', (0, 1), (-1, ultima), 1.2, colors.black),
+        ('LINEAFTER', (2, 1), (2, ultima), 1, colors.black),
+        ('LINEAFTER', (5, 1), (5, ultima), 1, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
     ]
-    if not equipo:
-        style_cmds.append(('SPAN', (0, 4), (4, 4)))
-    tbl = Table(rows, colWidths=col_widths)
-    tbl.setStyle(TableStyle(style_cmds))
+    tbl = Table(rows, colWidths=[ancho * f for f in _COLS_COMISION])
+    tbl.setStyle(TableStyle(estilo))
     return tbl
 
 
 def generar_pdf_informe_comisiones(departamento, director, admin, solicitud, comisiones):
+    from reportlab.lib.pagesizes import landscape
+    from reportlab.platypus import BaseDocTemplate, Frame, KeepTogether, NextPageTemplate, PageTemplate
+
     buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, pagesize=A4,
-        leftMargin=MARGIN_H, rightMargin=MARGIN_H,
-        topMargin=MARGIN_V, bottomMargin=MARGIN_V,
-    )
+    apaisada = landscape(A4)
+    doc = BaseDocTemplate(buffer, pagesize=A4)
+    doc.addPageTemplates([
+        PageTemplate(id='carta', pagesize=A4, frames=[
+            Frame(MARGIN_H, MARGIN_V, PAGE_W - 2 * MARGIN_H, PAGE_H - 2 * MARGIN_V, id='f_carta'),
+        ]),
+        PageTemplate(id='tablas', pagesize=apaisada, frames=[
+            Frame(2 * cm, 1.5 * cm, apaisada[0] - 4 * cm, apaisada[1] - 3 * cm, id='f_tablas'),
+        ]),
+    ])
     s = _styles()
     story = []
 
@@ -442,15 +493,11 @@ def generar_pdf_informe_comisiones(departamento, director, admin, solicitud, com
         s['firma'],
     ))
 
+    story.append(NextPageTemplate('tablas'))
     story.append(PageBreak())
-    story.append(Paragraph(
-        f"Informe de Comisiones — Dpto. {departamento} — {solicitud.get_cuatrimestre_display()} {solicitud.anio}",
-        s['titulo_seccion'],
-    ))
-    story.append(Spacer(1, 0.3 * cm))
+    ancho = 23 * cm
     for c in comisiones:
-        story.append(_comision_table(c, s))
-        story.append(Spacer(1, 0.35 * cm))
+        story.append(KeepTogether([_comision_table(c, departamento, ancho), Spacer(1, 0.6 * cm)]))
 
     doc.build(story)
     buffer.seek(0)

@@ -163,6 +163,35 @@ erDiagram
         int         cuatrimestre            "1=1° | 2=2° | 3=Anual"
     }
 
+    MateriaOptativa {
+        bigint      id                  PK
+        varchar     codigo              "único, propio de la materia"
+        varchar     nombre
+        varchar     departamento        "departamento que la dicta"
+        int         hs_totales
+        int         cuatrimestre        "1=1° | 2=2° | 3=Anual"
+        varchar     numero_resolucion
+        boolean     vigente
+    }
+
+    ComisionOptativa {
+        bigint      id                  PK
+        int         anio
+        int         cuatrimestre
+        varchar     condicion           "regular | promocional"
+        int         credito_horario
+    }
+
+    MiembroComisionOptativa {
+        bigint      id          PK
+        varchar     nombre
+        varchar     dni
+        varchar     funcion
+        varchar     cargo
+        varchar     dedicacion
+        int         orden
+    }
+
     Docente {
         bigint      id      PK
         varchar     nombre
@@ -170,7 +199,7 @@ erDiagram
     }
 
     TribunalExaminador {
-        bigint      id                  PK
+        bigint      id                  PK  "de una MateriaEnPlan o de una MateriaOptativa en una Carrera"
         varchar     presidente_nombre
         varchar     presidente_dni
         varchar     vocal_1_nombre
@@ -290,7 +319,15 @@ erDiagram
     MateriaEnPlan                 }o--||  PlanEstudio                     : "plan"
 
     %% Tribunales
-    TribunalExaminador            ||--||  MateriaEnPlan                   : "materia_en_plan"
+    TribunalExaminador            |o--o|  MateriaEnPlan                   : "materia_en_plan"
+    TribunalExaminador            }o--o|  MateriaOptativa                 : "materia_optativa"
+    TribunalExaminador            }o--o|  Carrera                         : "carrera (optativas)"
+    MateriaOptativa               }o--o{  MateriaEnPlan                   : "optativas (slots)"
+    ComisionOptativa              }o--||  MateriaOptativa                 : "materia_optativa"
+    ComisionOptativa              }o--||  Carrera                         : "carrera"
+    ComisionOptativa              }o--o{  PlanEstudio                     : "planes"
+    ComisionOptativa              ||--o{  MiembroComisionOptativa         : "equipo"
+    SolicitudProtocolizacion      }o--o|  MateriaOptativa                 : "materia_optativa"
     SolicitudInformeTribunal      }o--o|  CustomUser                      : "solicitante"
     InformeTribunalesEnviado      }o--||  SolicitudInformeTribunal        : "solicitud"
     InformeTribunalesEnviado      }o--o|  CustomUser                      : "director"
@@ -301,7 +338,8 @@ erDiagram
     %% Solicitudes de Servicio
     SolicitudServicio             }o--o|  CustomUser                      : "director"
     SolicitudServicioItem         }o--||  SolicitudServicio               : "solicitud"
-    SolicitudServicioItem         }o--||  MateriaEnPlan                   : "materia_en_plan"
+    SolicitudServicioItem         }o--o|  MateriaEnPlan                   : "materia_en_plan"
+    SolicitudServicioItem         }o--o|  ComisionOptativa                : "comision_optativa"
     ConvocatoriaSolicitudServicio }o--o|  CustomUser                      : "enviado_por"
 
     %% Notificaciones

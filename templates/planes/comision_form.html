@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block title %}Editar comisión — {{ comision.materia_optativa.nombre }}{% endblock %}
+{% block nav_comisiones %}active{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+  <a href="{% url 'planes:detalle_comision' comision.pk %}" class="text-muted small text-decoration-none">
+    <i class="bi bi-arrow-left me-1"></i>Volver a la comisión
+  </a>
+  <h2 class="mt-1"><i class="bi bi-person-video3 me-2"></i>{{ comision.materia_optativa.nombre }}</h2>
+  <p class="text-muted mb-0 small">{{ comision.codigo_materia }} · {{ comision.carrera.nombre }} · {{ comision.periodo_display }}</p>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  <div class="card mb-3">
+    <div class="card-header"><i class="bi bi-card-text me-2"></i>Datos de la comisión</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold small">{{ form.condicion.label }}</label>
+          {{ form.condicion }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold small">{{ form.credito_horario.label }}</label>
+          {{ form.credito_horario }}
+          {% if form.credito_horario.errors %}<div class="text-danger small">{{ form.credito_horario.errors.0 }}</div>{% endif %}
+          {% if comision.materia_optativa.hs_totales %}
+          <div class="form-text">La materia tiene {{ comision.materia_optativa.hs_totales }} hs.</div>
+          {% endif %}
+        </div>
+        <div class="col-md-5">
+          <label class="form-label fw-semibold small">{{ form.planes.label }}</label>
+          <div>
+            {% for cb in form.planes %}
+            <div class="form-check form-check-inline">{{ cb.tag }} <label class="form-check-label small" for="{{ cb.id_for_label }}">{{ cb.choice_label }}</label></div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-people me-2"></i>Equipo docente</span>
+      <button type="button" class="btn btn-sm btn-outline-primary" id="agregarMiembro">
+        <i class="bi bi-plus-lg me-1"></i>Agregar
+      </button>
+    </div>
+    {{ formset.management_form }}
+    {% if formset.non_form_errors %}<div class="alert alert-danger m-2">{{ formset.non_form_errors }}</div>{% endif %}
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr><th>Apellido y nombre</th><th style="width:130px">DNI</th><th>Función</th><th>Cargo</th><th>Dedicación</th><th class="text-center">Quitar</th></tr>
+        </thead>
+        <tbody id="equipoFilas">
+          {% for f in formset %}
+          <tr>
+            <td>{{ f.id }}{{ f.nombre }}{% if f.nombre.errors %}<div class="text-danger small">{{ f.nombre.errors.0 }}</div>{% endif %}</td>
+            <td>{{ f.dni }}</td>
+            <td>{{ f.funcion }}{% if f.funcion.errors %}<div class="text-danger small">{{ f.funcion.errors.0 }}</div>{% endif %}</td>
+            <td>{{ f.cargo }}</td>
+            <td>{{ f.dedicacion }}</td>
+            <td class="text-center">{% if f.instance.pk %}{{ f.DELETE }}{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <template id="filaVacia">
+    <tr>
+      <td>{{ formset.empty_form.id }}{{ formset.empty_form.nombre }}</td>
+      <td>{{ formset.empty_form.dni }}</td>
+      <td>{{ formset.empty_form.funcion }}</td>
+      <td>{{ formset.empty_form.cargo }}</td>
+      <td>{{ formset.empty_form.dedicacion }}</td>
+      <td></td>
+    </tr>
+  </template>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Guardar</button>
+    <a href="{% url 'planes:detalle_comision' comision.pk %}" class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('agregarMiembro').addEventListener('click', function () {
+  const total = document.getElementById('id_equipo-TOTAL_FORMS');
+  const html = document.getElementById('filaVacia').innerHTML.replace(/__prefix__/g, total.value);
+  document.getElementById('equipoFilas').insertAdjacentHTML('beforeend', html);
+  total.value = parseInt(total.value, 10) + 1;
+});
+</script>
+{% endblock %}

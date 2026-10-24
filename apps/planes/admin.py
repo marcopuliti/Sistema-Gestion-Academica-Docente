@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.html import format_html
-from .models import Carrera, PlanEstudio, Materia, MateriaEnPlan, AnioDictado, Docente, TribunalExaminador, SolicitudInformeTribunal, InformeTribunalesEnviado, SolicitudCambioTribunal, SolicitudCambioItem, SolicitudServicio, SolicitudServicioItem, ConvocatoriaSolicitudServicio
+from .models import Carrera, PlanEstudio, Materia, MateriaEnPlan, AnioDictado, Docente, TribunalExaminador, SolicitudInformeTribunal, InformeTribunalesEnviado, SolicitudCambioTribunal, SolicitudCambioItem, SolicitudServicio, SolicitudServicioItem, ConvocatoriaSolicitudServicio, MateriaOptativa, ComisionOptativa, MiembroComisionOptativa
 from .management.commands.importar_materias import PlanParser, fetch_html
 
 
@@ -202,24 +202,29 @@ class DocenteAdmin(admin.ModelAdmin):
 
 @admin.register(TribunalExaminador)
 class TribunalExaminadorAdmin(admin.ModelAdmin):
-    list_display = ('materia_en_plan', 'get_plan', 'get_ano', 'presidente_nombre', 'vocal_1_nombre', 'vocal_2_nombre', 'dia_semana', 'hora', 'permite_libres')
-    list_filter = ('permite_libres', 'materia_en_plan__plan__vigente', 'materia_en_plan__plan__activo', 'materia_en_plan__plan__carrera', 'materia_en_plan__ano')
-    search_fields = ('materia_en_plan__materia__nombre', 'presidente_nombre', 'vocal_1_nombre', 'vocal_2_nombre')
-    autocomplete_fields = ['materia_en_plan']
+    list_display = ('get_materia', 'get_plan', 'get_ano', 'presidente_nombre', 'vocal_1_nombre', 'vocal_2_nombre', 'dia_semana', 'hora', 'permite_libres')
+    list_filter = ('permite_libres', 'materia_en_plan__plan__vigente', 'materia_en_plan__plan__activo', 'materia_en_plan__plan__carrera', 'materia_en_plan__ano', 'carrera')
+    search_fields = ('materia_en_plan__materia__nombre', 'materia_optativa__nombre', 'presidente_nombre', 'vocal_1_nombre', 'vocal_2_nombre')
+    autocomplete_fields = ['materia_en_plan', 'materia_optativa']
     ordering = ('materia_en_plan__plan__carrera__nombre', 'materia_en_plan__plan__codigo', 'materia_en_plan__ano')
+
+    @admin.display(description='Materia')
+    def get_materia(self, obj):
+        return obj.materia_en_plan or obj.materia_optativa
 
     @admin.display(description='Plan', ordering='materia_en_plan__plan__codigo')
     def get_plan(self, obj):
-        return obj.materia_en_plan.plan
+        return obj.materia_en_plan.plan if obj.materia_en_plan_id else f'Optativa — {obj.carrera.nombre}'
 
     @admin.display(description='Año', ordering='materia_en_plan__ano')
     def get_ano(self, obj):
-        return f'{obj.materia_en_plan.ano}°'
+        return f'{obj.materia_en_plan.ano}°' if obj.materia_en_plan_id else '—'
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
             'materia_en_plan__materia',
             'materia_en_plan__plan__carrera',
+            'materia_optativa', 'carrera',
         )
 
 
@@ -264,12 +269,13 @@ class SolicitudServicioItemInline(admin.TabularInline):
     model = SolicitudServicioItem
     extra = 0
     can_delete = False
-    readonly_fields = ('materia_en_plan', 'hs_totales')
-    fields = ('materia_en_plan', 'hs_totales')
+    readonly_fields = ('materia_en_plan', 'comision_optativa', 'hs_totales')
+    fields = ('materia_en_plan', 'comision_optativa', 'hs_totales')
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
             'materia_en_plan__materia', 'materia_en_plan__plan__carrera',
+            'comision_optativa__materia_optativa', 'comision_optativa__carrera',
         )
 
 
@@ -299,3 +305,35 @@ class ConvocatoriaSolicitudServicioAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('enviado_por')
+
+
+@admin.register(MateriaOptativa)
+class MateriaOptativaAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'nombre', 'departamento', 'cuatrimestre', 'hs_totales', 'numero_resolucion', 'vigente')
+    list_filter = ('vigente', 'departamento', 'cuatrimestre')
+    search_fields = ('codigo', 'nombre')
+    filter_horizontal = ('optativas',)
+    ordering = ('nombre',)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        form.instance.sincronizar_tribunales()
+
+
+class MiembroComisionOptativaInline(admin.TabularInline):
+    model = MiembroComisionOptativa
+    extra = 0
+    fields = ('nombre', 'dni', 'funcion', 'cargo', 'dedicacion', 'orden')
+
+
+@admin.register(ComisionOptativa)
+class ComisionOptativaAdmin(admin.ModelAdmin):
+    list_display = ('materia_optativa', 'carrera', 'anio', 'cuatrimestre', 'condicion', 'credito_horario', 'director')
+    list_filter = ('anio', 'cuatrimestre', 'carrera')
+    search_fields = ('materia_optativa__nombre', 'materia_optativa__codigo')
+    filter_horizontal = ('planes',)
+    inlines = [MiembroComisionOptativaInline]
+    ordering = ('-anio', 'cuatrimestre')
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('materia_optativa', 'carrera', 'director')

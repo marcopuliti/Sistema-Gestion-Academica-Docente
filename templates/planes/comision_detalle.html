@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}Comisión — {{ comision.materia_optativa.nombre }}{% endblock %}
+{% block nav_comisiones %}active{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4 d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <a href="{% url 'planes:lista_comisiones' %}?anio={{ comision.anio }}" class="text-muted small text-decoration-none">
+      <i class="bi bi-arrow-left me-1"></i>Comisiones de optativas
+    </a>
+    <h2 class="mt-1"><i class="bi bi-person-video3 me-2"></i>{{ comision.materia_optativa.nombre }}</h2>
+    <p class="text-muted mb-0 small">{{ comision.carrera.nombre }} · {{ comision.periodo_display }}</p>
+  </div>
+  {% if puede_editar %}
+  <a href="{% url 'planes:editar_comision' comision.pk %}" class="btn btn-primary">
+    <i class="bi bi-pencil me-1"></i>Completar / editar
+  </a>
+  {% endif %}
+</div>
+
+{% if not comision.esta_completa %}
+<div class="alert alert-warning small">
+  <i class="bi bi-exclamation-triangle me-1"></i>
+  La comisión está incompleta: falta {% if not comision.condicion %}la condición de cursada{% endif %}{% if not comision.condicion and not comision.credito_horario %}, {% endif %}{% if not comision.credito_horario %}el crédito horario{% endif %}{% if not comision.equipo.exists %}{% if not comision.condicion or not comision.credito_horario %} y {% endif %}el equipo docente{% endif %}.
+</div>
+{% endif %}
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-3 small">
+      <div class="col-md-3"><div class="text-muted">Materia</div><div class="fw-semibold">{{ comision.materia_optativa.nombre }}</div></div>
+      <div class="col-md-2"><div class="text-muted">Código</div><div class="fw-semibold">{{ comision.codigo_materia }}</div></div>
+      <div class="col-md-3"><div class="text-muted">Carrera</div><div class="fw-semibold">{{ comision.carrera.nombre }}</div></div>
+      <div class="col-md-2"><div class="text-muted">Período</div><div class="fw-semibold">{{ comision.periodo_display }}</div></div>
+      <div class="col-md-2"><div class="text-muted">Dicta</div><div class="fw-semibold">{{ comision.departamento_dictante }}</div></div>
+      <div class="col-md-3"><div class="text-muted">Condición de cursada</div><div class="fw-semibold">{{ comision.get_condicion_display|default:"—" }}</div></div>
+      <div class="col-md-2"><div class="text-muted">Crédito horario</div><div class="fw-semibold">{% if comision.credito_horario %}{{ comision.credito_horario }} hs{% else %}—{% endif %}</div></div>
+      <div class="col-md-7"><div class="text-muted">Planes de estudio asociados</div><div class="fw-semibold">{% for p in comision.planes.all %}Plan {{ p.codigo }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><i class="bi bi-people me-2"></i>Equipo docente</div>
+  {% if comision.equipo.all %}
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Apellido y nombre</th><th>DNI</th><th>Función</th><th>Cargo</th><th>Dedicación</th></tr></thead>
+      <tbody>
+        {% for m in comision.equipo.all %}
+        <tr class="small">
+          <td>{{ m.nombre }}</td><td>{{ m.dni|default:"—" }}</td><td>{{ m.get_funcion_display }}</td>
+          <td>{{ m.get_cargo_display|default:"—" }}</td><td>{{ m.get_dedicacion_display|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body text-muted small fst-italic">Sin equipo docente cargado.</div>
+  {% endif %}
+</div>
+
+{% if comision.requiere_servicio %}
+<div class="card">
+  <div class="card-header"><i class="bi bi-envelope-paper me-2"></i>Solicitud de servicio</div>
+  <div class="card-body small">
+    {% for it in items_servicio %}
+      <a href="{% url 'planes:detalle_solicitud_servicio' it.solicitud.pk %}">
+        Solicitud a {{ it.solicitud.departamento_dictante }} del {{ it.solicitud.fecha_creacion|date:"d/m/Y" }}
+      </a>{% if not forloop.last %}<br>{% endif %}
+    {% empty %}
+      <span class="text-muted">La dicta {{ comision.departamento_dictante }}: todavía no se envió la solicitud de servicio.</span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

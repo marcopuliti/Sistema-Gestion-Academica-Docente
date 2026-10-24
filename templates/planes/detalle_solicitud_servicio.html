@@ -65,11 +65,11 @@
       <tbody>
         {% for item in items %}
         <tr>
-          <td class="small">{{ item.materia_en_plan.get_cuatrimestre_display }}</td>
-          <td class="small">{{ item.materia_en_plan.plan.carrera.nombre }}</td>
-          <td class="small text-muted">{{ item.materia_en_plan.plan.codigo }}</td>
-          <td class="small">{{ item.materia_en_plan.ano }}°</td>
-          <td>{{ item.materia_en_plan.materia.nombre }}</td>
+          <td class="small">{{ item.fila.get_cuatrimestre_display }}</td>
+          <td class="small">{{ item.fila.plan.carrera.nombre }}</td>
+          <td class="small text-muted">{{ item.fila.plan.codigo }}</td>
+          <td class="small">{{ item.fila.ano }}°</td>
+          <td>{{ item.fila.materia.nombre }}{% if item.comision_optativa_id %} <span class="badge bg-primary" style="font-size:.7rem">Optativa</span>{% endif %}</td>
           <td class="small text-muted">{{ item.destinatario|default:"—" }}</td>
           <td class="text-end"><span class="badge bg-secondary">{{ item.hs_totales }} hs</span></td>
         </tr>

@@ -1,6 +1,11 @@
+import types
+
 from django.conf import settings
 from django.db import models
-from apps.tramites.models import DEPARTAMENTO_CHOICES
+from django.db.models import Exists, OuterRef, Q
+from apps.tramites.models import (
+    CARGO_CHOICES, CONDICION_CHOICES, DEDICACION_CHOICES, DEPARTAMENTO_CHOICES, FUNCION_CHOICES,
+)
 
 DIA_SEMANA_CHOICES = [
     (1, 'Lunes'),
@@ -138,6 +143,105 @@ class MateriaEnPlan(models.Model):
         return f'{self.get_nombre()} — Año {self.ano} ({self.get_cuatrimestre_display()})'
 
 
+class MateriaOptativa(models.Model):
+    """Materia de la bolsa de optativas. Tiene su propio código y se vincula a uno o más
+    slots optativos (MateriaEnPlan con es_optativa=True) de distintas carreras y planes."""
+    codigo = models.CharField(max_length=30, unique=True, verbose_name='Código')
+    nombre = models.CharField(max_length=250, verbose_name='Nombre')
+    departamento = models.CharField(
+        max_length=50, blank=True,
+        choices=DEPARTAMENTO_CHOICES, verbose_name='Departamento que la dicta',
+    )
+    hs_totales = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='Horas totales')
+    cuatrimestre = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        choices=MateriaEnPlan.CUATRIMESTRE_CHOICES, verbose_name='Cuatrimestre',
+    )
+    numero_resolucion = models.CharField(max_length=50, blank=True, verbose_name='N° de resolución')
+    vigente = models.BooleanField(
+        default=True, verbose_name='Vigente',
+        help_text='Las materias dadas de baja salen de la bolsa pero conservan su historial.',
+    )
+    optativas = models.ManyToManyField(
+        MateriaEnPlan, blank=True,
+        related_name='materias_bolsa',
+        limit_choices_to={'es_optativa': True},
+        verbose_name='Optativas vinculadas',
+    )
+
+    class Meta:
+        ordering = ['nombre']
+        verbose_name = 'Materia de la bolsa de optativas'
+        verbose_name_plural = 'Bolsa de materias optativas'
+
+    def __str__(self):
+        return f'{self.nombre} ({self.codigo})'
+
+    def slots_con_hs_distintas(self):
+        """Optativas vinculadas cuyo slot tiene una carga horaria distinta a la de esta materia."""
+        if self.hs_totales is None:
+            return []
+        return [
+            s for s in self.optativas.all()
+            if s.hs_totales is not None and s.hs_totales != self.hs_totales
+        ]
+
+    def carreras_vinculadas(self):
+        return Carrera.objects.filter(planes__materias_en_plan__materias_bolsa=self).distinct()
+
+    def sincronizar_tribunales(self):
+        """Toda materia vigente tiene un tribunal por cada carrera donde está vinculada.
+        Los tribunales que quedan sin vínculo se eliminan si están vacíos; si tienen datos
+        o cambios propuestos se conservan (no aparecen en los listados)."""
+        carreras = set(self.carreras_vinculadas().values_list('pk', flat=True)) if self.vigente else set()
+        creados = eliminados = conservados = 0
+        for carrera_id in carreras:
+            _, creado = TribunalExaminador.objects.get_or_create(materia_optativa=self, carrera_id=carrera_id)
+            creados += creado
+        for t in self.tribunales.exclude(carrera_id__in=carreras):
+            if t.esta_vacio() and not t.solicitud_items.exists():
+                t.delete()
+                eliminados += 1
+            else:
+                conservados += 1
+        return creados, eliminados, conservados
+
+
+class FilaOptativa:
+    """Materia de la bolsa en una carrera, presentada con la interfaz de MateriaEnPlan
+    (id, materia, plan, plan_id, ano, cuatrimestre) para reutilizar listados, PDFs y DOCX."""
+    es_optativa_bolsa = True
+    se_dicta = True
+
+    def __init__(self, materia_optativa, carrera, clave, planes=None):
+        self.id = clave
+        self.materia = materia_optativa
+        self.slots = [s for s in materia_optativa.optativas.all() if s.plan.carrera_id == carrera.pk]
+        if planes is None:
+            planes = [s.plan for s in self.slots]
+        planes = sorted(set(planes), key=lambda p: p.codigo)
+        if len(planes) == 1:
+            self.plan = planes[0]
+            self.plan_id = planes[0].pk
+        else:
+            self.plan = types.SimpleNamespace(
+                carrera=carrera,
+                codigo=', '.join(p.codigo for p in planes) or '—',
+                vigente=any(p.vigente for p in planes),
+                activo=any(p.activo for p in planes),
+            )
+            self.plan_id = 0
+        self.ano = min((s.ano for s in self.slots), default=0)
+        self.cuatrimestre = materia_optativa.cuatrimestre or 0
+
+    def get_cuatrimestre_display(self):
+        return self.materia.get_cuatrimestre_display() or 'Sin cuatrimestre'
+
+    @property
+    def slots_display(self):
+        return ', '.join(sorted({s.materia.nombre for s in self.slots}))
+
+
 class Docente(models.Model):
     nombre = models.CharField(max_length=250, verbose_name='Nombre completo')
     dni = models.CharField(max_length=15, unique=True, verbose_name='DNI')
@@ -151,10 +255,42 @@ class Docente(models.Model):
         return f'{self.nombre} (DNI {self.dni})'
 
 
+class TribunalExaminadorQuerySet(models.QuerySet):
+    def de_materias_en_plan(self):
+        return self.filter(materia_en_plan__isnull=False)
+
+    def de_optativas(self):
+        """Tribunales de materias de la bolsa vigentes y todavía vinculadas a su carrera."""
+        vinculo = MateriaOptativa.optativas.through.objects.filter(
+            materiaoptativa_id=OuterRef('materia_optativa_id'),
+            materiaenplan__plan__carrera_id=OuterRef('carrera_id'),
+        )
+        return self.filter(materia_optativa__vigente=True).filter(Exists(vinculo))
+
+    def de_optativas_del_departamento(self, departamento):
+        """Las que dicta el departamento, o las externas/sin departamento de sus carreras."""
+        return self.de_optativas().filter(
+            Q(materia_optativa__departamento=departamento) |
+            Q(materia_optativa__departamento__in=['', 'Externo'], carrera__departamento=departamento)
+        )
+
+
 class TribunalExaminador(models.Model):
+    """Tribunal de una MateriaEnPlan, o de una materia de la bolsa de optativas en una carrera."""
     materia_en_plan = models.OneToOneField(
         MateriaEnPlan, on_delete=models.CASCADE,
+        null=True, blank=True,
         related_name='tribunal', verbose_name='Materia en plan',
+    )
+    materia_optativa = models.ForeignKey(
+        MateriaOptativa, on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='tribunales', verbose_name='Materia de la bolsa de optativas',
+    )
+    carrera = models.ForeignKey(
+        Carrera, on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='tribunales_optativas', verbose_name='Carrera',
     )
     presidente = models.ForeignKey(
         Docente, on_delete=models.SET_NULL, null=True, blank=True,
@@ -183,9 +319,46 @@ class TribunalExaminador(models.Model):
         help_text='Si está desmarcado, solo pueden rendir alumnos regulares.',
     )
 
+    objects = TribunalExaminadorQuerySet.as_manager()
+
     class Meta:
         verbose_name = 'Tribunal Examinador'
         verbose_name_plural = 'Tribunales Examinadores'
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(materia_en_plan__isnull=False, materia_optativa__isnull=True, carrera__isnull=True) |
+                    Q(materia_en_plan__isnull=True, materia_optativa__isnull=False, carrera__isnull=False)
+                ),
+                name='tribunal_materia_en_plan_o_optativa',
+            ),
+            models.UniqueConstraint(
+                fields=['materia_optativa', 'carrera'],
+                name='tribunal_unico_optativa_carrera',
+            ),
+        ]
+
+    @property
+    def es_optativa_bolsa(self):
+        return self.materia_optativa_id is not None
+
+    @property
+    def fila_id(self):
+        """Clave estable para mapas fila → tribunal (pk de MateriaEnPlan o 'opt-<pk>')."""
+        return self.materia_en_plan_id if self.materia_en_plan_id else f'opt-{self.pk}'
+
+    @property
+    def fila(self):
+        """La MateriaEnPlan, o una FilaOptativa con la misma interfaz."""
+        if self.materia_en_plan_id:
+            return self.materia_en_plan
+        return FilaOptativa(self.materia_optativa, self.carrera, clave=self.fila_id)
+
+    def esta_vacio(self):
+        return not any([
+            self.presidente_nombre, self.vocal_1_nombre, self.vocal_2_nombre,
+            self.dia_semana, self.hora,
+        ])
 
     def save(self, *args, **kwargs):
         if self.presidente:
@@ -200,6 +373,8 @@ class TribunalExaminador(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
+        if self.materia_optativa_id:
+            return f'Tribunal — {self.materia_optativa} — {self.carrera.nombre}'
         return f'Tribunal — {self.materia_en_plan}'
 
 
@@ -403,7 +578,13 @@ class SolicitudServicioItem(models.Model):
     )
     materia_en_plan = models.ForeignKey(
         MateriaEnPlan, on_delete=models.PROTECT,
+        null=True, blank=True,
         related_name='solicitud_servicio_items', verbose_name='Materia en plan',
+    )
+    comision_optativa = models.ForeignKey(
+        'ComisionOptativa', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='items_servicio', verbose_name='Comisión de optativa',
     )
     hs_totales = models.PositiveSmallIntegerField(verbose_name='Horas totales')
     destinatario = models.CharField(
@@ -411,12 +592,38 @@ class SolicitudServicioItem(models.Model):
     )
 
     class Meta:
-        unique_together = [('solicitud', 'materia_en_plan')]
         verbose_name = 'Item de solicitud de servicio'
         verbose_name_plural = 'Items de solicitud de servicio'
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(materia_en_plan__isnull=False, comision_optativa__isnull=True) |
+                    Q(materia_en_plan__isnull=True, comision_optativa__isnull=False)
+                ),
+                name='servicio_item_materia_o_comision',
+            ),
+            models.UniqueConstraint(
+                fields=['solicitud', 'materia_en_plan'],
+                condition=Q(materia_en_plan__isnull=False),
+                name='servicio_item_unico_materia_en_plan',
+            ),
+            models.UniqueConstraint(
+                fields=['solicitud', 'comision_optativa'],
+                condition=Q(comision_optativa__isnull=False),
+                name='servicio_item_unico_comision',
+            ),
+        ]
 
     def __str__(self):
-        return f'{self.materia_en_plan} en {self.solicitud}'
+        return f'{self.materia_en_plan or self.comision_optativa} en {self.solicitud}'
+
+    @property
+    def fila(self):
+        """La MateriaEnPlan, o una FilaOptativa de la comisión con la misma interfaz."""
+        if self.materia_en_plan_id:
+            return self.materia_en_plan
+        c = self.comision_optativa
+        return FilaOptativa(c.materia_optativa, c.carrera, clave=f'com-{c.pk}', planes=list(c.planes.all()))
 
 
 class ConvocatoriaSolicitudServicio(models.Model):
@@ -441,3 +648,87 @@ class ConvocatoriaSolicitudServicio(models.Model):
 
     def __str__(self):
         return f'Convocatoria {self.get_cuatrimestre_display()} {self.anio}'
+
+
+class ComisionOptativa(models.Model):
+    """Dictado de una materia de la bolsa en una carrera durante un año académico.
+    Se crea cuando el director de carrera pide el dictado y él mismo la completa."""
+    materia_optativa = models.ForeignKey(
+        MateriaOptativa, on_delete=models.PROTECT,
+        related_name='comisiones', verbose_name='Materia',
+    )
+    carrera = models.ForeignKey(
+        Carrera, on_delete=models.PROTECT,
+        related_name='comisiones_optativas', verbose_name='Carrera',
+    )
+    anio = models.PositiveSmallIntegerField(verbose_name='Año académico')
+    cuatrimestre = models.PositiveSmallIntegerField(
+        choices=MateriaEnPlan.CUATRIMESTRE_CHOICES, verbose_name='Período',
+    )
+    planes = models.ManyToManyField(
+        PlanEstudio, blank=True,
+        related_name='comisiones_optativas', verbose_name='Planes de estudio asociados',
+    )
+    condicion = models.CharField(
+        max_length=20, blank=True,
+        choices=CONDICION_CHOICES, verbose_name='Condición de cursada',
+    )
+    credito_horario = models.PositiveSmallIntegerField(
+        null=True, blank=True, verbose_name='Crédito horario (hs)',
+    )
+    director = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='comisiones_optativas', verbose_name='Solicitada por',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de creación')
+
+    class Meta:
+        unique_together = [('materia_optativa', 'carrera', 'anio')]
+        ordering = ['-anio', 'cuatrimestre', 'materia_optativa__nombre']
+        verbose_name = 'Comisión de optativa'
+        verbose_name_plural = 'Comisiones de optativas'
+
+    def __str__(self):
+        return f'{self.materia_optativa.nombre} — {self.carrera.nombre} — {self.periodo_display}'
+
+    @property
+    def codigo_materia(self):
+        return self.materia_optativa.codigo
+
+    @property
+    def periodo_display(self):
+        return f'{self.get_cuatrimestre_display()} {self.anio}'
+
+    @property
+    def departamento_dictante(self):
+        return self.materia_optativa.departamento or self.carrera.departamento
+
+    @property
+    def requiere_servicio(self):
+        """La dicta otro departamento (o un externo): va en la solicitud de servicio."""
+        return self.departamento_dictante != self.carrera.departamento
+
+    @property
+    def esta_completa(self):
+        return bool(self.condicion and self.credito_horario and self.equipo.exists())
+
+
+class MiembroComisionOptativa(models.Model):
+    comision = models.ForeignKey(
+        ComisionOptativa, on_delete=models.CASCADE,
+        related_name='equipo',
+    )
+    nombre = models.CharField(max_length=200, verbose_name='Apellido y Nombre')
+    dni = models.CharField(max_length=20, blank=True, verbose_name='DNI')
+    funcion = models.CharField(max_length=20, choices=FUNCION_CHOICES, verbose_name='Función')
+    cargo = models.CharField(max_length=20, blank=True, choices=CARGO_CHOICES, verbose_name='Cargo')
+    dedicacion = models.CharField(max_length=20, blank=True, choices=DEDICACION_CHOICES, verbose_name='Dedicación')
+    orden = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+        verbose_name = 'Miembro del equipo docente (comisión)'
+        verbose_name_plural = 'Equipo docente (comisión)'
+
+    def __str__(self):
+        return f'{self.nombre} ({self.get_funcion_display()})'

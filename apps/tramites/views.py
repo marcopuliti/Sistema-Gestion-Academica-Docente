@@ -40,7 +40,9 @@ def _dashboard_admin(request, user):
     todas_meps = MateriaEnPlan.objects.filter(es_optativa=False)
     total_meps = todas_meps.count()
     sin_tribunal = todas_meps.filter(tribunal__isnull=True).count()
-    incompleto = TribunalExaminador.objects.filter(presidente_nombre='').count()
+    incompleto = TribunalExaminador.objects.filter(
+        materia_en_plan__es_optativa=False, presidente_nombre='',
+    ).count()
     completo = total_meps - sin_tribunal - incompleto
 
     solicitudes_prot = SolicitudProtocolizacion.objects.all()
@@ -99,6 +101,10 @@ def _dashboard_director(request, user):
         materia_en_plan_id__in=mep_ids,
         presidente_nombre='',
     ).count()
+    # Optativas de la bolsa: un tribunal por materia y carrera, siempre creado
+    tribunales_optativas = TribunalExaminador.objects.de_optativas_del_departamento(departamento)
+    total_tribunales += tribunales_optativas.count()
+    con_datos_faltantes += tribunales_optativas.filter(presidente_nombre='').count()
     borrador_count = SolicitudCambioItem.objects.filter(
         solicitud__director=user,
         solicitud__departamento=departamento,

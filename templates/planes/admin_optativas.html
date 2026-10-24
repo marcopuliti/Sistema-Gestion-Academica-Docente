@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block title %}Bolsa de optativas{% endblock %}
+{% block nav_admin_optativas %}active{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h2><i class="bi bi-collection me-2"></i>Bolsa de materias optativas</h2>
+    <p class="text-muted mb-0 small">
+      Materias con código propio que se vinculan a las optativas de los planes. Cada materia vigente
+      tiene un tribunal por carrera donde se ofrece.
+    </p>
+  </div>
+  <a href="{% url 'planes:admin_crear_optativa' %}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Nueva materia
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-4">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" name="q" class="form-control" placeholder="Buscar por nombre o código…" value="{{ q }}">
+        </div>
+      </div>
+      <div class="col-md-3">
+        <select name="carrera" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">Todas las carreras</option>
+          {% for pk, nombre in carrera_opciones %}
+          <option value="{{ pk }}" {% if carrera_pk == pk|stringformat:"s" %}selected{% endif %}>{{ nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="estado" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="vigentes" {% if estado == 'vigentes' %}selected{% endif %}>Vigentes</option>
+          <option value="baja" {% if estado == 'baja' %}selected{% endif %}>Dadas de baja</option>
+          <option value="todas" {% if estado == 'todas' %}selected{% endif %}>Todas</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Buscar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if materias %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Materia</th>
+          <th>Departamento</th>
+          <th>Cuatrimestre</th>
+          <th class="text-center">Horas</th>
+          <th>Resolución</th>
+          <th>Optativas vinculadas</th>
+          <th class="text-center">Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in materias %}
+        <tr>
+          <td>
+            <div class="fw-semibold" style="font-size:.9rem">{{ m.nombre }}</div>
+            <div class="text-muted" style="font-size:.78rem">{{ m.codigo }}</div>
+          </td>
+          <td class="small">{{ m.departamento|default:"—" }}</td>
+          <td class="small">{{ m.get_cuatrimestre_display|default:"—" }}</td>
+          <td class="text-center small">
+            {{ m.hs_totales|default:"—" }}
+            {% if m.hs_distintas %}
+            <i class="bi bi-exclamation-triangle-fill text-warning ms-1"
+               title="Distinta a la carga horaria de: {% for s in m.hs_distintas %}{{ s.materia.nombre }} — Plan {{ s.plan.codigo }} ({{ s.hs_totales }} hs){% if not forloop.last %}; {% endif %}{% endfor %}"></i>
+            {% endif %}
+          </td>
+          <td class="small">{{ m.numero_resolucion|default:"—" }}</td>
+          <td class="small">
+            {% for s in m.optativas.all %}
+              <div>{{ s.plan.carrera.nombre }} · Plan {{ s.plan.codigo }} · {{ s.materia.nombre }}</div>
+            {% empty %}
+              <span class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>Sin vincular</span>
+            {% endfor %}
+          </td>
+          <td class="text-center">
+            {% if m.vigente %}<span class="badge bg-success">Vigente</span>
+            {% else %}<span class="badge bg-secondary">De baja</span>{% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{% url 'planes:admin_editar_optativa' m.pk %}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-pencil"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle me-2"></i>No hay materias en la bolsa con esos filtros.
+  Las materias se agregan solas al aprobar una protocolización de tipo Optativa, o desde <strong>Nueva materia</strong>.
+</div>
+{% endif %}
+{% endblock %}

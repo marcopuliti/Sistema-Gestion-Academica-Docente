@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Comisiones de optativas{% endblock %}
+{% block nav_comisiones %}active{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h2><i class="bi bi-person-video3 me-2"></i>Comisiones de optativas</h2>
+    <p class="text-muted mb-0 small">Dictados de materias de la bolsa pedidos por los directores de carrera.</p>
+  </div>
+  {% if anios %}
+  <form method="get">
+    <select name="anio" class="form-select form-select-sm" onchange="this.form.submit()">
+      {% for a in anios %}<option value="{{ a }}" {% if a == anio %}selected{% endif %}>{{ a }}</option>{% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+
+{% if comisiones %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Materia</th>
+          <th>Carrera</th>
+          <th>Período</th>
+          <th>Planes</th>
+          <th>Condición</th>
+          <th class="text-center">Crédito</th>
+          <th>Responsable</th>
+          <th class="text-center">Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in comisiones %}
+        <tr style="cursor:pointer" onclick="location.href='{% url 'planes:detalle_comision' c.pk %}'">
+          <td>
+            <div class="fw-semibold" style="font-size:.9rem">{{ c.materia_optativa.nombre }}</div>
+            <div class="text-muted" style="font-size:.78rem">{{ c.codigo_materia }}</div>
+          </td>
+          <td class="small">{{ c.carrera.nombre }}</td>
+          <td class="small">{{ c.periodo_display }}</td>
+          <td class="small">{% for p in c.planes.all %}{{ p.codigo }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+          <td class="small">{{ c.get_condicion_display|default:"—" }}</td>
+          <td class="text-center small">{% if c.credito_horario %}{{ c.credito_horario }} hs{% else %}—{% endif %}</td>
+          <td class="small">{{ c.equipo.all.0.nombre|default:"—" }}</td>
+          <td class="text-center">
+            {% if c.esta_completa %}<span class="badge bg-success">Completa</span>
+            {% else %}<span class="badge bg-warning text-dark">A completar</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle me-2"></i>No hay comisiones de optativas para {{ anio }}.
+</div>
+{% endif %}
+{% endblock %}

@@ -1,5 +1,7 @@
 from django.db import models
-from apps.tramites.models import TramiteBase
+from apps.tramites.models import (
+    TramiteBase, FUNCION_CHOICES, CARGO_CHOICES, DEDICACION_CHOICES, CONDICION_CHOICES,
+)
 from apps.planes.models import Carrera, PlanEstudio, MateriaEnPlan
 
 
@@ -7,30 +9,6 @@ PERIODO_CHOICES = [
     ('1c', '1° Cuatrimestre'),
     ('2c', '2° Cuatrimestre'),
     ('anual', 'Anual'),
-]
-
-FUNCION_CHOICES = [
-    ('prof_responsable', 'Prof. Responsable'),
-    ('prof_colaborador', 'Prof. Colaborador'),
-    ('resp_practico',    'Responsable de Práctico'),
-    ('aux_practico',     'Auxiliar de Práctico'),
-    ('aux_laboratorio',  'Auxiliar de Laboratorio'),
-]
-
-CARGO_CHOICES = [
-    ('titular', 'Titular'),
-    ('asociado', 'Asociado'),
-    ('adjunto', 'Adjunto'),
-    ('jtp', 'J.T.P.'),
-    ('ay1', 'Ayudante de 1ra'),
-    ('ay2', 'Ayudante de 2da'),
-    ('otro', 'Otro'),
-]
-
-DEDICACION_CHOICES = [
-    ('10hs', '10 Hs'),
-    ('20hs', '20 Hs'),
-    ('40hs', '40 Hs'),
 ]
 
 TIPIFICACION_CHOICES = [
@@ -44,11 +22,6 @@ MODALIDAD_CURSADO_CHOICES = [
     ('teo_aula_lab',     'Teoría con Prácticas de Aula y Laboratorios'),
     ('teo_aula',         'Teoría con Prácticas de Aula'),
     ('teo_aula_lab_campo', 'Teoría con Prácticas de Aula, Laboratorio y Campo'),
-]
-
-CONDICION_CHOICES = [
-    ('regular',     'Regular'),
-    ('promocional', 'Promocional'),
 ]
 
 CONDICION_CORRELATIVA_CHOICES = [
@@ -188,6 +161,15 @@ class SolicitudProtocolizacion(TramiteBase):
         max_length=50,
         verbose_name='Número de resolución',
         blank=True,
+    )
+    # Materia de la bolsa de optativas creada/actualizada al aprobar
+    materia_optativa = models.ForeignKey(
+        'planes.MateriaOptativa',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='protocolizaciones',
+        verbose_name='Materia de la bolsa de optativas',
     )
 
     # ── Actas de aval (sube el Director de Departamento) ─────────────────────

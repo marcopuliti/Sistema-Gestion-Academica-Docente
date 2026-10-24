@@ -12,6 +12,37 @@ DEPARTAMENTO_CHOICES = [
     ('Externo', 'Externo'),
 ]
 
+# Equipo docente y condición de aprobación: compartidos por protocolizaciones (solicitudes)
+# y comisiones de optativas (planes).
+FUNCION_CHOICES = [
+    ('prof_responsable', 'Prof. Responsable'),
+    ('prof_colaborador', 'Prof. Colaborador'),
+    ('resp_practico',    'Responsable de Práctico'),
+    ('aux_practico',     'Auxiliar de Práctico'),
+    ('aux_laboratorio',  'Auxiliar de Laboratorio'),
+]
+
+CARGO_CHOICES = [
+    ('titular', 'Titular'),
+    ('asociado', 'Asociado'),
+    ('adjunto', 'Adjunto'),
+    ('jtp', 'J.T.P.'),
+    ('ay1', 'Ayudante de 1ra'),
+    ('ay2', 'Ayudante de 2da'),
+    ('otro', 'Otro'),
+]
+
+DEDICACION_CHOICES = [
+    ('10hs', '10 Hs'),
+    ('20hs', '20 Hs'),
+    ('40hs', '40 Hs'),
+]
+
+CONDICION_CHOICES = [
+    ('regular',     'Regular'),
+    ('promocional', 'Promocional'),
+]
+
 
 class CalendarioAcademico(models.Model):
     """Fechas de inicio/fin de cada cuatrimestre por año, configuradas por el superusuario."""

@@ -1,0 +1,116 @@
+{# Fila de tribunal: `mep` es una MateriaEnPlan o una FilaOptativa (misma interfaz). #}
+{% with t=mep.tribunal_obj %}
+<div class="tribunal-row px-3 py-3 {% if not mep.se_dicta %}no-dictado-row{% elif not t %}sin-tribunal-row{% elif mep.tribunal_tiene_propuesta %}con-propuesta-row{% endif %}">
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+    <div class="d-flex align-items-start gap-2">
+    {% if not es_solo_consulta and t %}
+    <input type="checkbox" class="form-check-input mt-1 tribunal-check flex-shrink-0"
+           value="{{ t.pk }}" aria-label="Seleccionar tribunal">
+    {% endif %}
+    <div class="plan-info">
+      {{ mep.plan.carrera.nombre }} &middot; Plan {{ mep.plan.codigo }}
+      &middot; {{ mep.ano }}° año &middot; {{ mep.get_cuatrimestre_display }}
+      {% if mep.plan.vigente %}<span class="badge bg-success ms-1" style="font-size:.7rem">Vigente</span>
+      {% elif mep.plan.activo %}<span class="badge bg-warning text-dark ms-1" style="font-size:.7rem">Activo</span>
+      {% else %}<span class="badge bg-secondary ms-1" style="font-size:.7rem">No activo</span>{% endif %}
+      {% if not mep.se_dicta %}
+      <span class="badge bg-secondary ms-1" style="font-size:.7rem" title="Este año no figura entre los años dictados del plan">
+        <i class="bi bi-slash-circle me-1"></i>Año no dictado
+      </span>
+      {% endif %}
+      {% if mep.es_optativa_bolsa %}
+      <div class="text-muted" style="font-size:.78rem">
+        <i class="bi bi-diagram-3 me-1"></i>Optativa del plan: {{ mep.slots_display|default:"—" }}
+      </div>
+      {% endif %}
+    </div>
+    </div>{# cierre d-flex checkbox + plan-info #}
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      {% if not t %}
+        <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Sin tribunal</span>
+      {% else %}
+        {% if mep.tribunal_tiene_propuesta %}
+        <span class="badge bg-info text-dark">
+          <i class="bi bi-pencil me-1"></i>Cambio propuesto
+        </span>
+        {% endif %}
+        {% if not es_solo_consulta %}
+        <button class="btn btn-sm btn-outline-primary"
+                data-bs-toggle="modal" data-bs-target="#modalProponerCambio"
+                data-pk="{{ t.pk }}"
+                data-materia="{{ mep.materia.nombre }}"
+                data-plan="{{ mep.plan.carrera.nombre }} · Plan {{ mep.plan.codigo }} · {{ mep.ano }}° año · {{ mep.get_cuatrimestre_display }}"
+                data-presidente-id="{{ t.presidente_id|default:'' }}"
+                data-presidente-nombre="{{ t.presidente_nombre }}"
+                data-presidente-dni="{{ t.presidente_dni }}"
+                data-vocal1-id="{{ t.vocal_1_id|default:'' }}"
+                data-vocal1-nombre="{{ t.vocal_1_nombre }}"
+                data-vocal1-dni="{{ t.vocal_1_dni }}"
+                data-vocal2-id="{{ t.vocal_2_id|default:'' }}"
+                data-vocal2-nombre="{{ t.vocal_2_nombre }}"
+                data-vocal2-dni="{{ t.vocal_2_dni }}"
+                data-dia-semana="{{ t.dia_semana|default:'' }}"
+                data-hora="{% if t.hora %}{{ t.hora|time:'H:i' }}{% endif %}"
+                data-permite-libres="{{ t.permite_libres|yesno:'true,false' }}"
+                {% if mep.propuesta_item %}
+                data-tiene-propuesta="true"
+                data-prop-presidente-nombre="{{ mep.propuesta_item.presidente_nombre }}"
+                data-prop-presidente-dni="{{ mep.propuesta_item.presidente_dni }}"
+                data-prop-vocal1-nombre="{{ mep.propuesta_item.vocal_1_nombre }}"
+                data-prop-vocal1-dni="{{ mep.propuesta_item.vocal_1_dni }}"
+                data-prop-vocal2-nombre="{{ mep.propuesta_item.vocal_2_nombre }}"
+                data-prop-vocal2-dni="{{ mep.propuesta_item.vocal_2_dni }}"
+                data-prop-dia-semana="{{ mep.propuesta_item.dia_semana|default:'' }}"
+                data-prop-hora="{% if mep.propuesta_item.hora %}{{ mep.propuesta_item.hora|time:'H:i' }}{% endif %}"
+                data-prop-permite-libres="{{ mep.propuesta_item.permite_libres|yesno:'true,false' }}"
+                {% endif %}>
+          <i class="bi bi-pencil me-1"></i>{% if mep.propuesta_item %}Editar propuesta{% else %}Proponer cambio{% endif %}
+        </button>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  {% if t %}
+  <div class="row g-2">
+    <div class="col-sm-4 col-lg-2">
+      <div class="docente-label">Presidente</div>
+      {% if t.presidente_nombre %}
+        <div class="docente-val">{{ t.presidente_nombre }}</div>
+        <div class="text-muted" style="font-size:.78rem">DNI {{ t.presidente_dni }}</div>
+      {% else %}<div class="text-muted fst-italic" style="font-size:.82rem">Sin asignar</div>{% endif %}
+    </div>
+    <div class="col-sm-4 col-lg-2">
+      <div class="docente-label">1er. Vocal</div>
+      {% if t.vocal_1_nombre %}
+        <div class="docente-val">{{ t.vocal_1_nombre }}</div>
+        <div class="text-muted" style="font-size:.78rem">DNI {{ t.vocal_1_dni }}</div>
+      {% else %}<div class="text-muted fst-italic" style="font-size:.82rem">Sin asignar</div>{% endif %}
+    </div>
+    <div class="col-sm-4 col-lg-2">
+      <div class="docente-label">2do. Vocal</div>
+      {% if t.vocal_2_nombre %}
+        <div class="docente-val">{{ t.vocal_2_nombre }}</div>
+        <div class="text-muted" style="font-size:.78rem">DNI {{ t.vocal_2_dni }}</div>
+      {% else %}<div class="text-muted fst-italic" style="font-size:.82rem">Sin asignar</div>{% endif %}
+    </div>
+    <div class="col-sm-4 col-lg-2">
+      <div class="docente-label">Día y hora</div>
+      <div class="docente-val" style="font-size:.88rem">
+        {% if t.dia_semana %}{{ t.get_dia_semana_display }}{% if t.hora %} {{ t.hora|time:"H:i" }}{% endif %}
+        {% else %}<span class="text-muted fst-italic">Sin asignar</span>{% endif %}
+      </div>
+    </div>
+    <div class="col-sm-4 col-lg-2">
+      <div class="docente-label">Modalidad</div>
+      {% if t.permite_libres %}<span class="badge bg-success">Libres y regulares</span>
+      {% else %}<span class="badge bg-secondary">Solo regulares</span>{% endif %}
+    </div>
+  </div>
+  {% else %}
+  <p class="text-danger mb-0 small">
+    <i class="bi bi-exclamation-triangle me-1"></i>Sin tribunal examinador asignado.
+  </p>
+  {% endif %}
+</div>
+{% endwith %}

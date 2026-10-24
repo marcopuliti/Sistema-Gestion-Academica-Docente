@@ -12,8 +12,9 @@ from django.utils import timezone
 from apps.tramites.decorators import solo_administrador, solo_admin_general, solo_director_carrera, solo_director_departamento
 from apps.tramites.models import DEPARTAMENTO_CHOICES
 from apps.notifications.utils import _crear_notificacion
-from .forms import TribunalForm
-from .models import AgrupacionTribunal, AnioDictado, Carrera, ConvocatoriaSolicitudServicio, Docente, InformeTribunalesEnviado, MateriaEnPlan, SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeTribunal, SolicitudServicio, SolicitudServicioItem, TribunalExaminador
+from .forms import ComisionOptativaForm, MateriaOptativaForm, MiembroComisionFormSet, TribunalForm
+from .models import AgrupacionTribunal, AnioDictado, Carrera, ComisionOptativa, ConvocatoriaSolicitudServicio, Docente, InformeTribunalesEnviado, MateriaEnPlan, MateriaOptativa, SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeTribunal, SolicitudServicio, SolicitudServicioItem, TribunalExaminador
+from .optativas import advertencias_hs, crear_comision, materias_ofrecidas_en_carrera
 from .pdf import generar_pdf_informe_tribunales, generar_pdf_solicitud_cambio, generar_pdf_solicitud_servicio
 from .docx_gen import generar_docx_solicitud_cambio
 
@@ -49,7 +50,46 @@ def _pdf_buffer_departamento(departamento, director_user):
         t.materia_en_plan_id: t
         for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=mep_ids)
     }
+    for t in _tribunales_optativas(departamento).order_by('materia_optativa__codigo', 'carrera__nombre'):
+        meps.append(t.fila)
+        dir_map[t.fila_id] = t
     return generar_pdf_informe_tribunales(director_user, admin, meps, dir_map, dir_map)
+
+
+def _tribunales_optativas(departamento=None):
+    """Tribunales de la bolsa de optativas (de un departamento, o todos) listos para mostrar."""
+    qs = (
+        TribunalExaminador.objects.de_optativas_del_departamento(departamento)
+        if departamento else TribunalExaminador.objects.de_optativas()
+    )
+    return qs.select_related('materia_optativa', 'carrera').prefetch_related(
+        'materia_optativa__optativas__plan__carrera', 'materia_optativa__optativas__materia',
+    )
+
+
+def _tribunales_del_depto(departamento):
+    """Tribunales que el director del departamento puede ver y proponer cambiar."""
+    return TribunalExaminador.objects.filter(
+        models.Q(materia_en_plan_id__in=_mep_ids_para_depto(departamento)) |
+        models.Q(pk__in=TribunalExaminador.objects.de_optativas_del_departamento(departamento).values('pk'))
+    )
+
+
+def _filas_de_items(items):
+    """(filas ordenadas, item_map, current_map) de items de una solicitud de cambio, para PDF/DOCX."""
+    filas = sorted(
+        (item.tribunal.fila for item in items),
+        key=lambda m: (m.materia.codigo, m.plan.carrera.nombre, m.plan.codigo, m.ano, m.cuatrimestre),
+    )
+    item_map = {item.tribunal.fila_id: item for item in items}
+    current_map = {item.tribunal.fila_id: item.tribunal for item in items}
+    return filas, item_map, current_map
+
+
+_ITEMS_RELACIONADOS = (
+    'tribunal__materia_en_plan__materia', 'tribunal__materia_en_plan__plan__carrera',
+    'tribunal__materia_optativa', 'tribunal__carrera',
+)
 
 
 def _meps_del_departamento(departamento):
@@ -256,17 +296,40 @@ def lista_tribunales(request):
             borrador_items_map.get(mep.tribunal_obj.pk) if mep.tribunal_obj else None
         )
 
+    # Optativas de la bolsa: siempre tienen tribunal y se listan aparte (en la primera página)
+    opt_qs = _tribunales_optativas(departamento).order_by('materia_optativa__nombre', 'carrera__nombre')
+    if q:
+        opt_qs = opt_qs.filter(
+            models.Q(materia_optativa__nombre__unaccent__icontains=q) |
+            models.Q(materia_optativa__codigo__icontains=q)
+        )
+    if filtro in ('sin_registro', 'sin_dictado'):
+        opt_qs = opt_qs.none()
+    elif filtro == 'incompletos':
+        opt_qs = opt_qs.filter(presidente_nombre='')
+    elif filtro == 'con_propuesta' and borrador_tribunal_ids:
+        opt_qs = opt_qs.filter(pk__in=borrador_tribunal_ids)
+    filas_optativas = []
+    if page_obj.number == 1:
+        for t in opt_qs:
+            fila = t.fila
+            fila.tribunal_obj = t
+            fila.tribunal_tiene_propuesta = t.pk in borrador_tribunal_ids
+            fila.propuesta_item = borrador_items_map.get(t.pk)
+            filas_optativas.append(fila)
+
     all_ids = base_qs.values_list('id', flat=True)
     sin_registro_count = base_qs.filter(tribunal__isnull=True).count()
     incompletos_count = TribunalExaminador.objects.filter(
         materia_en_plan_id__in=all_ids,
         presidente_nombre='',
-    ).count()
+    ).count() + _tribunales_optativas(departamento).filter(presidente_nombre='').count()
     no_dictados_count = base_qs.filter(se_dicta=False).count()
 
     if es_solo_consulta:
         return render(request, 'planes/tribunales.html', {
             'page_obj': page_obj,
+            'filas_optativas': filas_optativas,
             'departamento': None,
             'q': q,
             'filtro': filtro,
@@ -320,12 +383,13 @@ def lista_tribunales(request):
     agrupaciones = (
         AgrupacionTribunal.objects
         .filter(director=request.user, departamento=departamento)
-        .prefetch_related('tribunales__materia_en_plan__materia')
+        .prefetch_related('tribunales__materia_en_plan__materia', 'tribunales__materia_optativa')
         .order_by('nombre')
     )
 
     return render(request, 'planes/tribunales.html', {
         'page_obj': page_obj,
+        'filas_optativas': filas_optativas,
         'departamento': departamento,
         'q': q,
         'filtro': filtro,
@@ -365,10 +429,7 @@ def crear_agrupacion(request):
     if not nombre:
         messages.error(request, 'El nombre de la agrupación es requerido.')
         return redirect('planes:lista_tribunales')
-    validos = TribunalExaminador.objects.filter(
-        pk__in=tribunal_ids,
-        materia_en_plan_id__in=_mep_ids_para_depto(departamento),
-    )
+    validos = _tribunales_del_depto(departamento).filter(pk__in=tribunal_ids)
     if not validos.exists():
         messages.error(request, 'Seleccioná al menos un tribunal válido.')
         return redirect('planes:lista_tribunales')
@@ -468,9 +529,8 @@ def proponer_cambio_agrupacion(request, pk):
 def datos_tribunal_ajax(request, pk):
     from django.http import JsonResponse
     departamento = request.user.departamento
-    mep_ids = _mep_ids_para_depto(departamento)
-    tribunal = TribunalExaminador.objects.filter(
-        pk=pk, materia_en_plan_id__in=mep_ids,
+    tribunal = _tribunales_del_depto(departamento).filter(
+        pk=pk,
     ).select_related('presidente', 'vocal_1', 'vocal_2').first()
     if not tribunal:
         return JsonResponse({'ok': False}, status=404)
@@ -499,26 +559,27 @@ def buscar_tribunal_ajax(request):
     if len(q) < 2:
         return JsonResponse({'results': []})
     departamento = request.user.departamento
-    mep_ids = _mep_ids_para_depto(departamento)
     tribunales = (
-        TribunalExaminador.objects
-        .filter(materia_en_plan_id__in=mep_ids)
-        .filter(materia_en_plan__materia__nombre__unaccent__icontains=q)
+        _tribunales_del_depto(departamento)
+        .filter(
+            models.Q(materia_en_plan__materia__nombre__unaccent__icontains=q) |
+            models.Q(materia_optativa__nombre__unaccent__icontains=q)
+        )
         .exclude(presidente_nombre='', vocal_1_nombre='', vocal_2_nombre='')
-        .select_related('materia_en_plan__materia', 'materia_en_plan__plan__carrera')
-        .order_by('materia_en_plan__materia__nombre')[:10]
+        .select_related(
+            'materia_en_plan__materia', 'materia_en_plan__plan__carrera',
+            'materia_optativa', 'carrera',
+        )
+        .order_by('materia_en_plan__materia__nombre', 'materia_optativa__nombre')[:10]
     )
-    return JsonResponse({'results': [
-        {
-            'id': t.pk,
-            'label': (
-                f"{t.materia_en_plan.materia.nombre} — "
-                f"Plan {t.materia_en_plan.plan.codigo} "
-                f"({t.materia_en_plan.plan.carrera.nombre})"
-            ),
-        }
-        for t in tribunales
-    ]})
+
+    def _label(t):
+        if t.es_optativa_bolsa:
+            return f"{t.materia_optativa.nombre} — Optativa ({t.carrera.nombre})"
+        mep = t.materia_en_plan
+        return f"{mep.materia.nombre} — Plan {mep.plan.codigo} ({mep.plan.carrera.nombre})"
+
+    return JsonResponse({'results': [{'id': t.pk, 'label': _label(t)} for t in tribunales]})
 
 
 @login_required
@@ -561,13 +622,7 @@ def proponer_cambio_tribunal(request, pk):
     next_url = request.POST.get('next', '')
 
     departamento = request.user.departamento
-    mep_ids = MateriaEnPlan.objects.filter(
-        models.Q(plan__carrera__departamento=departamento, es_servicio=False) |
-        models.Q(departamento_dictante=departamento) |
-        models.Q(plan__carrera__departamento=departamento, es_servicio=True, departamento_dictante='Externo')
-    ).filter(es_optativa=False).values_list('id', flat=True)
-
-    tribunal = get_object_or_404(TribunalExaminador, pk=pk, materia_en_plan_id__in=mep_ids)
+    tribunal = get_object_or_404(_tribunales_del_depto(departamento), pk=pk)
 
     def _docente_by_id(raw):
         if raw:
@@ -710,21 +765,10 @@ def descargar_solicitud_cambio(request, pk):
     departamento = request.user.departamento
     solicitud = get_object_or_404(SolicitudCambioTribunal, pk=pk, departamento=departamento)
 
-    items = list(
-        solicitud.items
-        .select_related('tribunal__materia_en_plan__materia', 'tribunal__materia_en_plan__plan__carrera')
-        .all()
-    )
-    meps = sorted(
-        [item.tribunal.materia_en_plan for item in items],
-        key=lambda m: (m.materia.codigo, m.plan.carrera.nombre, m.plan.codigo, m.ano, m.cuatrimestre),
-    )
-    item_map = {item.tribunal.materia_en_plan_id: item for item in items}
-    mep_ids = [mep.id for mep in meps]
-    current_map = {
-        t.materia_en_plan_id: t
-        for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=mep_ids)
-    }
+    items = list(solicitud.items.select_related(*_ITEMS_RELACIONADOS).prefetch_related(
+        'tribunal__materia_optativa__optativas__plan__carrera',
+    ))
+    meps, item_map, current_map = _filas_de_items(items)
 
     admin = User.objects.filter(rol='secretario', is_active=True).first()
     director_user = solicitud.director or request.user
@@ -750,21 +794,10 @@ def descargar_solicitud_cambio_docx(request, pk):
     departamento = request.user.departamento
     solicitud = get_object_or_404(SolicitudCambioTribunal, pk=pk, departamento=departamento)
 
-    items = list(
-        solicitud.items
-        .select_related('tribunal__materia_en_plan__materia', 'tribunal__materia_en_plan__plan__carrera')
-        .all()
-    )
-    meps = sorted(
-        [item.tribunal.materia_en_plan for item in items],
-        key=lambda m: (m.materia.nombre, m.plan.carrera.nombre, m.plan.codigo, m.ano, m.cuatrimestre),
-    )
-    item_map = {item.tribunal.materia_en_plan_id: item for item in items}
-    mep_ids = [mep.id for mep in meps]
-    current_map = {
-        t.materia_en_plan_id: t
-        for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=mep_ids)
-    }
+    items = list(solicitud.items.select_related(*_ITEMS_RELACIONADOS).prefetch_related(
+        'tribunal__materia_optativa__optativas__plan__carrera',
+    ))
+    meps, item_map, current_map = _filas_de_items(items)
 
     admin = User.objects.filter(rol='secretario', is_active=True).first()
     director_user = solicitud.director or request.user
@@ -1035,8 +1068,16 @@ def admin_lista_materias_en_plan(request):
         t.materia_en_plan_id: t
         for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=page_mep_ids)
     }
+    bolsa_por_slot = dict(
+        MateriaOptativa.optativas.through.objects
+        .filter(materiaenplan_id__in=page_mep_ids)
+        .values('materiaenplan_id')
+        .annotate(n=models.Count('id'))
+        .values_list('materiaenplan_id', 'n')
+    )
     for mep in page_obj:
         mep.tribunal_obj = tribunales_map.get(mep.id)
+        mep.n_bolsa = bolsa_por_slot.get(mep.id, 0)
 
     carrera_opciones = Carrera.objects.values_list('pk', 'nombre').order_by('nombre')
 
@@ -1125,18 +1166,19 @@ def _preparar_items_solicitud_cambio(solicitud):
 
     items = list(
         solicitud.items
-        .select_related(
-            'tribunal__materia_en_plan__materia',
-            'tribunal__materia_en_plan__plan__carrera',
-        )
+        .select_related(*_ITEMS_RELACIONADOS)
+        .prefetch_related('tribunal__materia_optativa__optativas__plan__carrera')
         .order_by(
             'tribunal__materia_en_plan__materia__codigo',
             'tribunal__materia_en_plan__plan__carrera__nombre',
             'tribunal__materia_en_plan__plan__codigo',
             'tribunal__materia_en_plan__ano',
+            'tribunal__materia_optativa__codigo',
+            'tribunal__carrera__nombre',
         )
     )
     for item in items:
+        item.fila = item.tribunal.fila
         snap = item.snapshot_tribunal or {}
         baseline = _snap_to_obj(snap) if snap else item.tribunal
         item.t_actual = baseline
@@ -1265,21 +1307,10 @@ def admin_descargar_solicitud_cambio(request, pk):
         pk=pk,
     )
 
-    items = list(
-        solicitud.items
-        .select_related('tribunal__materia_en_plan__materia', 'tribunal__materia_en_plan__plan__carrera')
-        .all()
-    )
-    meps = sorted(
-        [item.tribunal.materia_en_plan for item in items],
-        key=lambda m: (m.materia.codigo, m.plan.carrera.nombre, m.plan.codigo, m.ano, m.cuatrimestre),
-    )
-    item_map = {item.tribunal.materia_en_plan_id: item for item in items}
-    mep_ids = [mep.id for mep in meps]
-    current_map = {
-        t.materia_en_plan_id: t
-        for t in TribunalExaminador.objects.filter(materia_en_plan_id__in=mep_ids)
-    }
+    items = list(solicitud.items.select_related(*_ITEMS_RELACIONADOS).prefetch_related(
+        'tribunal__materia_optativa__optativas__plan__carrera',
+    ))
+    meps, item_map, current_map = _filas_de_items(items)
 
     admin_user = User.objects.filter(rol='secretario', is_active=True).first()
     director_user = solicitud.director or admin_user
@@ -1481,7 +1512,8 @@ def detalle_solicitud_servicio(request, pk):
 
     items = (
         solicitud.items
-        .select_related('materia_en_plan__materia', 'materia_en_plan__plan__carrera')
+        .select_related(*_ITEMS_SERVICIO_RELACIONADOS)
+        .prefetch_related('comision_optativa__planes', 'comision_optativa__materia_optativa__optativas__plan')
         .order_by(
             'materia_en_plan__cuatrimestre',
             'materia_en_plan__plan__carrera__nombre',
@@ -1521,7 +1553,8 @@ def descargar_solicitud_servicio(request, pk):
 
     items = list(
         solicitud.items
-        .select_related('materia_en_plan__materia', 'materia_en_plan__plan__carrera')
+        .select_related(*_ITEMS_SERVICIO_RELACIONADOS)
+        .prefetch_related('comision_optativa__planes', 'comision_optativa__materia_optativa__optativas__plan')
         .order_by(
             'materia_en_plan__cuatrimestre',
             'materia_en_plan__plan__carrera__nombre',
@@ -1667,6 +1700,28 @@ def _meps_servicio_para_carrera(carrera, departamento_dictante):
     )
 
 
+def _comisiones_servicio_para_carrera(carrera, departamento_dictante, anio, cuatrimestres):
+    """Comisiones de optativas de la carrera que dicta otro departamento (o un externo)."""
+    if departamento_dictante == carrera.departamento:
+        return ComisionOptativa.objects.none()
+    return (
+        ComisionOptativa.objects
+        .filter(
+            carrera=carrera, anio=anio, cuatrimestre__in=cuatrimestres,
+            materia_optativa__departamento=departamento_dictante,
+        )
+        .select_related('materia_optativa', 'carrera')
+        .prefetch_related('planes')
+        .order_by('cuatrimestre', 'materia_optativa__nombre')
+    )
+
+
+_ITEMS_SERVICIO_RELACIONADOS = (
+    'materia_en_plan__materia', 'materia_en_plan__plan__carrera',
+    'comision_optativa__materia_optativa', 'comision_optativa__carrera',
+)
+
+
 @login_required
 @solo_director_carrera
 def lista_solicitudes_servicio_carrera(request):
@@ -1696,6 +1751,8 @@ def lista_solicitudes_servicio_carrera(request):
                 continue
             tiene_materias = _meps_servicio_para_carrera(carrera, valor).filter(
                 cuatrimestre__in=cuats_validos
+            ).exists() or _comisiones_servicio_para_carrera(
+                carrera, valor, convocatoria.anio, cuats_validos,
             ).exists()
             if valor in enviadas_este_anio:
                 estado = 'realizada'
@@ -1740,20 +1797,25 @@ def nueva_solicitud_servicio_carrera(request):
 
     meps = []
     sin_hs = []
+    comisiones = []
     if dept_destino and dept_destino in valid_deptos:
         meps = list(
             _meps_servicio_para_carrera(carrera, dept_destino)
             .filter(cuatrimestre__in=cuats_validos)
         )
         sin_hs = [m for m in meps if m.hs_totales is None]
+        comisiones = list(_comisiones_servicio_para_carrera(carrera, dept_destino, anio, cuats_validos))
 
-    def _ctx(meps, sin_hs, dept_destino, dest_map=None):
+    def _ctx(meps, sin_hs, dept_destino, dest_map=None, dest_com_map=None):
         dest_map = dest_map or {}
+        dest_com_map = dest_com_map or {}
         return {
             'departamento_opciones': [(v, l) for v, l in DEPARTAMENTO_OPCIONES if v != departamento_solicitante],
             'dept_destino': dept_destino,
             'meps_con_dest': [(m, dest_map.get(m.pk, '')) for m in meps],
             'sin_hs': sin_hs,
+            'comisiones_con_dest': [(c, dest_com_map.get(c.pk, '')) for c in comisiones],
+            'comisiones_sin_credito': [c for c in comisiones if not c.credito_horario],
             'convocatoria': convocatoria,
             'carrera': carrera,
         }
@@ -1769,7 +1831,8 @@ def nueva_solicitud_servicio_carrera(request):
             _meps_servicio_para_carrera(carrera, dept_destino)
             .filter(cuatrimestre__in=cuats_validos)
         )
-        if not meps:
+        comisiones = list(_comisiones_servicio_para_carrera(carrera, dept_destino, anio, cuats_validos))
+        if not meps and not comisiones:
             messages.error(request, 'No hay materias de servicio habilitadas para ese departamento en la convocatoria actual.')
             return redirect('planes:nueva_solicitud_servicio_carrera')
 
@@ -1777,14 +1840,25 @@ def nueva_solicitud_servicio_carrera(request):
 
         if dept_destino == 'Externo':
             dest_map = {mep.pk: request.POST.get(f'dest_{mep.pk}', '').strip() for mep in meps}
-            errores_dest = [m.materia.nombre for m in meps if not dest_map.get(m.pk)]
+            dest_com_map = {c.pk: request.POST.get(f'dest_com_{c.pk}', '').strip() for c in comisiones}
+            errores_dest = (
+                [m.materia.nombre for m in meps if not dest_map.get(m.pk)] +
+                [c.materia_optativa.nombre for c in comisiones if not dest_com_map.get(c.pk)]
+            )
             if errores_dest:
                 messages.error(request, f'Falta el destinatario de: {", ".join(errores_dest)}.')
                 return render(request, 'planes/nueva_solicitud_servicio_carrera.html',
-                              _ctx(meps, sin_hs, dept_destino, dest_map))
+                              _ctx(meps, sin_hs, dept_destino, dest_map, dest_com_map))
         else:
             dest_auto = f'Director/a del Departamento de {dept_destino}'
             dest_map = {mep.pk: dest_auto for mep in meps}
+            dest_com_map = {c.pk: dest_auto for c in comisiones}
+
+        sin_credito = [c.materia_optativa.nombre for c in comisiones if not c.credito_horario]
+        if sin_credito:
+            messages.error(request, f'Completá el crédito horario de la comisión de: {", ".join(sin_credito)}.')
+            return render(request, 'planes/nueva_solicitud_servicio_carrera.html',
+                          _ctx(meps, sin_hs, dept_destino, dest_map, dest_com_map))
 
         errores_hs = []
         hs_map = {}
@@ -1801,7 +1875,7 @@ def nueva_solicitud_servicio_carrera(request):
         if errores_hs:
             messages.error(request, f'Falta la carga horaria de: {", ".join(errores_hs)}.')
             return render(request, 'planes/nueva_solicitud_servicio_carrera.html',
-                          _ctx(meps, sin_hs, dept_destino, dest_map))
+                          _ctx(meps, sin_hs, dept_destino, dest_map, dest_com_map))
 
         for mep_pk, hs in hs_map.items():
             MateriaEnPlan.objects.filter(pk=mep_pk, hs_totales__isnull=True).update(hs_totales=hs)
@@ -1827,6 +1901,13 @@ def nueva_solicitud_servicio_carrera(request):
                 materia_en_plan=mep,
                 hs_totales=hs_map.get(mep.pk, mep.hs_totales or 0),
                 destinatario=dest_map.get(mep.pk, ''),
+            )
+        for c in comisiones:
+            SolicitudServicioItem.objects.create(
+                solicitud=solicitud,
+                comision_optativa=c,
+                hs_totales=c.credito_horario,
+                destinatario=dest_com_map.get(c.pk, ''),
             )
 
         messages.success(request, 'Solicitud de servicio enviada correctamente.')
@@ -1888,3 +1969,223 @@ def convocar_solicitudes_servicio(request):
 
     messages.success(request, f'Convocatoria enviada a {count} director{"es" if count != 1 else ""}.')
     return redirect('planes:admin_lista_solicitudes_servicio')
+
+
+# ── admin: bolsa de materias optativas ────────────────────────────────────────
+
+@login_required
+@solo_admin_general
+def admin_lista_optativas(request):
+    q = request.GET.get('q', '').strip()
+    carrera_pk = request.GET.get('carrera', '')
+    estado = request.GET.get('estado', 'vigentes')
+
+    qs = MateriaOptativa.objects.prefetch_related('optativas__plan__carrera', 'optativas__materia')
+    if q:
+        qs = qs.filter(models.Q(nombre__unaccent__icontains=q) | models.Q(codigo__icontains=q))
+    if carrera_pk:
+        qs = qs.filter(optativas__plan__carrera__pk=carrera_pk).distinct()
+    if estado == 'vigentes':
+        qs = qs.filter(vigente=True)
+    elif estado == 'baja':
+        qs = qs.filter(vigente=False)
+
+    materias = list(qs.order_by('nombre'))
+    for m in materias:
+        m.hs_distintas = m.slots_con_hs_distintas()
+
+    return render(request, 'planes/admin_optativas.html', {
+        'materias': materias,
+        'q': q,
+        'carrera_pk': carrera_pk,
+        'estado': estado,
+        'carrera_opciones': Carrera.objects.values_list('pk', 'nombre').order_by('nombre'),
+    })
+
+
+@login_required
+@solo_admin_general
+def admin_editar_optativa(request, pk=None):
+    materia = get_object_or_404(MateriaOptativa, pk=pk) if pk else None
+    form = MateriaOptativaForm(request.POST or None, instance=materia)
+
+    if request.method == 'POST' and form.is_valid():
+        materia = form.save()
+        creados, _, conservados = materia.sincronizar_tribunales()
+        messages.success(request, f'«{materia.nombre}» guardada en la bolsa de optativas.')
+        if creados:
+            messages.info(request, f'Se crearon {creados} tribunal{"es" if creados != 1 else ""} (uno por carrera).')
+        if conservados:
+            messages.warning(
+                request,
+                f'{conservados} tribunal{"es" if conservados != 1 else ""} quedaron sin vínculo pero se '
+                'conservaron porque tienen datos o cambios propuestos.',
+            )
+        for aviso in advertencias_hs(materia):
+            messages.warning(request, aviso)
+        return redirect('planes:admin_lista_optativas')
+
+    # Opciones de vinculación agrupadas por carrera
+    seleccion = {str(v) for v in (form['optativas'].value() or [])}
+    grupos = []
+    for mep in form.fields['optativas'].queryset:
+        if not grupos or grupos[-1]['carrera'] != mep.plan.carrera:
+            grupos.append({'carrera': mep.plan.carrera, 'slots': []})
+        grupos[-1]['slots'].append((mep, str(mep.pk) in seleccion))
+
+    return render(request, 'planes/admin_optativa_form.html', {
+        'form': form,
+        'materia': materia,
+        'grupos': grupos,
+        'tribunales': (
+            materia.tribunales.select_related('carrera').order_by('carrera__nombre') if materia else []
+        ),
+    })
+
+
+# ── director de carrera: dictado de optativas ────────────────────────────────
+
+@login_required
+@solo_director_carrera
+def optativas_carrera(request):
+    carrera = request.user.carrera
+    if not carrera:
+        messages.error(request, 'No tenés una carrera asignada. Contactá a administración.')
+        return redirect('tramites:dashboard')
+
+    convocatoria = ConvocatoriaSolicitudServicio.objects.order_by('-anio', '-cuatrimestre').first()
+    materias = list(
+        materias_ofrecidas_en_carrera(carrera)
+        .prefetch_related('optativas__plan', 'optativas__materia')
+        .order_by('nombre')
+    )
+    for m in materias:
+        m.slots_carrera = [s for s in m.optativas.all() if s.plan.carrera_id == carrera.pk]
+
+    cuats = _cuatrimestres_validos(convocatoria.cuatrimestre) if convocatoria else []
+    habilitadas = [m for m in materias if m.cuatrimestre in cuats]
+    comisiones = {
+        c.materia_optativa_id: c
+        for c in ComisionOptativa.objects.filter(carrera=carrera, anio=convocatoria.anio)
+    } if convocatoria else {}
+    for m in habilitadas:
+        m.comision = comisiones.get(m.pk)
+
+    if request.method == 'POST':
+        if not convocatoria:
+            messages.error(request, 'No hay ninguna convocatoria activa. Esperá que administración habilite el período.')
+            return redirect('planes:optativas_carrera')
+        elegidas = {int(x) for x in request.POST.getlist('dictar') if x.isdigit()}
+        creadas, quitadas, bloqueadas, con_servicio = 0, 0, [], 0
+        for m in habilitadas:
+            if m.pk in elegidas and not m.comision:
+                comision, _ = crear_comision(m, carrera, convocatoria.anio, request.user)
+                creadas += 1
+                con_servicio += comision.requiere_servicio
+            elif m.pk not in elegidas and m.comision:
+                if m.comision.items_servicio.exists():
+                    bloqueadas.append(m.nombre)
+                else:
+                    m.comision.delete()
+                    quitadas += 1
+        if creadas or quitadas:
+            messages.success(
+                request,
+                f'Dictado actualizado: {creadas} comisión(es) creada(s), {quitadas} quitada(s).',
+            )
+        else:
+            messages.info(request, 'No hubo cambios.')
+        if con_servicio:
+            messages.info(
+                request,
+                'Las optativas que dicta otro departamento aparecen ahora en tus solicitudes de servicio.',
+            )
+        if bloqueadas:
+            messages.warning(
+                request,
+                f'No se quitó el dictado de {", ".join(bloqueadas)} porque ya figura en una solicitud de servicio enviada.',
+            )
+        return redirect('planes:optativas_carrera')
+
+    return render(request, 'planes/optativas_carrera.html', {
+        'carrera': carrera,
+        'convocatoria': convocatoria,
+        'habilitadas': habilitadas,
+        'otras': [m for m in materias if m.cuatrimestre and m not in habilitadas],
+        'sin_cuatrimestre': [m for m in materias if not m.cuatrimestre],
+    })
+
+
+# ── comisiones de optativas ──────────────────────────────────────────────────
+
+def _comisiones_visibles(user):
+    qs = ComisionOptativa.objects.select_related('materia_optativa', 'carrera', 'director')
+    if user.es_administrador:
+        return qs
+    if user.es_director_carrera and user.carrera_id:
+        return qs.filter(carrera_id=user.carrera_id)
+    if user.es_director_departamento:
+        dep = user.departamento
+        return qs.filter(
+            models.Q(materia_optativa__departamento=dep) | models.Q(carrera__departamento=dep)
+        )
+    return qs.none()
+
+
+@login_required
+def lista_comisiones(request):
+    user = request.user
+    if not (user.es_administrador or user.es_director_carrera or user.es_director_departamento):
+        messages.error(request, 'No tenés permisos para acceder a esta sección.')
+        return redirect('tramites:dashboard')
+
+    qs = _comisiones_visibles(user).prefetch_related('planes', 'equipo')
+    anios = sorted(set(qs.values_list('anio', flat=True)), reverse=True)
+    try:
+        anio = int(request.GET.get('anio') or (anios[0] if anios else timezone.now().year))
+    except ValueError:
+        anio = timezone.now().year
+
+    return render(request, 'planes/comisiones.html', {
+        'comisiones': qs.filter(anio=anio).order_by('cuatrimestre', 'materia_optativa__nombre', 'carrera__nombre'),
+        'anio': anio,
+        'anios': anios,
+    })
+
+
+@login_required
+def detalle_comision(request, pk):
+    comision = get_object_or_404(
+        _comisiones_visibles(request.user).prefetch_related('planes', 'equipo'), pk=pk,
+    )
+    return render(request, 'planes/comision_detalle.html', {
+        'comision': comision,
+        'puede_editar': request.user.es_director_carrera and comision.carrera_id == request.user.carrera_id,
+        'items_servicio': comision.items_servicio.select_related('solicitud'),
+    })
+
+
+@login_required
+@solo_director_carrera
+def editar_comision(request, pk):
+    comision = get_object_or_404(
+        ComisionOptativa.objects.select_related('materia_optativa', 'carrera'),
+        pk=pk, carrera_id=request.user.carrera_id,
+    )
+    form = ComisionOptativaForm(request.POST or None, instance=comision)
+    formset = MiembroComisionFormSet(request.POST or None, instance=comision, prefix='equipo')
+
+    if request.method == 'POST' and form.is_valid() and formset.is_valid():
+        form.save()
+        formset.save()
+        for i, f in enumerate(formset.forms):
+            if f.instance.pk and f not in formset.deleted_forms:
+                type(f.instance).objects.filter(pk=f.instance.pk).update(orden=i)
+        messages.success(request, 'Comisión guardada.')
+        return redirect('planes:detalle_comision', pk=comision.pk)
+
+    return render(request, 'planes/comision_form.html', {
+        'comision': comision,
+        'form': form,
+        'formset': formset,
+    })

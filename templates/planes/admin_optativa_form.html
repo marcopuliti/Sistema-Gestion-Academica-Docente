@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% block title %}{% if materia %}{{ materia.nombre }}{% else %}Nueva materia optativa{% endif %}{% endblock %}
+{% block nav_admin_optativas %}active{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+  <a href="{% url 'planes:admin_lista_optativas' %}" class="text-muted small text-decoration-none">
+    <i class="bi bi-arrow-left me-1"></i>Bolsa de optativas
+  </a>
+  <h2 class="mt-1"><i class="bi bi-collection me-2"></i>{% if materia %}{{ materia.nombre }}{% else %}Nueva materia optativa{% endif %}</h2>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+
+  <div class="card mb-3">
+    <div class="card-header"><i class="bi bi-card-text me-2"></i>Datos de la materia</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label fw-semibold small">{{ form.codigo.label }} <span class="text-danger">*</span></label>
+          {{ form.codigo }}
+          {% if form.codigo.errors %}<div class="text-danger small">{{ form.codigo.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-9">
+          <label class="form-label fw-semibold small">{{ form.nombre.label }} <span class="text-danger">*</span></label>
+          {{ form.nombre }}
+          {% if form.nombre.errors %}<div class="text-danger small">{{ form.nombre.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold small">{{ form.departamento.label }}</label>
+          {{ form.departamento }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold small">{{ form.cuatrimestre.label }}</label>
+          {{ form.cuatrimestre }}
+          <div class="form-text">Sin cuatrimestre no se puede pedir su dictado.</div>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label fw-semibold small">{{ form.hs_totales.label }}</label>
+          {{ form.hs_totales }}
+          {% if form.hs_totales.errors %}<div class="text-danger small">{{ form.hs_totales.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label fw-semibold small">{{ form.numero_resolucion.label }}</label>
+          {{ form.numero_resolucion }}
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <div class="form-check">
+            {{ form.vigente }}
+            <label class="form-check-label" for="{{ form.vigente.id_for_label }}">{{ form.vigente.label }}</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-diagram-3 me-2"></i>Optativas a las que pertenece</span>
+      <span class="text-muted small">Se crea un tribunal por cada carrera marcada</span>
+    </div>
+    <div class="card-body">
+      {% if form.optativas.errors %}<div class="text-danger small mb-2">{{ form.optativas.errors.0 }}</div>{% endif %}
+      <div id="avisoHs" class="alert alert-warning py-2 small d-none">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        <span></span>
+      </div>
+      {% for g in grupos %}
+      <div class="mb-3">
+        <div class="fw-semibold small mb-1">{{ g.carrera.nombre }}</div>
+        {% for mep, marcado in g.slots %}
+        <div class="form-check">
+          <input class="form-check-input slot-check" type="checkbox" name="optativas" value="{{ mep.pk }}"
+                 id="slot{{ mep.pk }}" data-hs="{{ mep.hs_totales|default:'' }}"
+                 data-label="{{ mep.materia.nombre }} — Plan {{ mep.plan.codigo }}" {% if marcado %}checked{% endif %}>
+          <label class="form-check-label small" for="slot{{ mep.pk }}">
+            Plan {{ mep.plan.codigo }} · {{ mep.materia.nombre }}
+            <span class="text-muted">({{ mep.ano }}° año, {{ mep.get_cuatrimestre_display }}{% if mep.hs_totales %}, {{ mep.hs_totales }} hs{% endif %})</span>
+            {% if not mep.plan.vigente and not mep.plan.activo %}<span class="badge bg-secondary ms-1">Plan no activo</span>{% endif %}
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+      {% empty %}
+      <p class="text-muted small mb-0">No hay materias marcadas como optativas en planes vigentes o activos.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if tribunales %}
+  <div class="card mb-3">
+    <div class="card-header"><i class="bi bi-people me-2"></i>Tribunales</div>
+    <ul class="list-group list-group-flush">
+      {% for t in tribunales %}
+      <li class="list-group-item small d-flex justify-content-between">
+        <span>{{ t.carrera.nombre }}</span>
+        <span class="text-muted">
+          {% if t.presidente_nombre %}{{ t.presidente_nombre }}{% if t.vocal_1_nombre %} / {{ t.vocal_1_nombre }}{% endif %}{% if t.vocal_2_nombre %} / {{ t.vocal_2_nombre }}{% endif %}
+          {% else %}<span class="fst-italic">Sin completar</span>{% endif %}
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Guardar</button>
+    <a href="{% url 'planes:admin_lista_optativas' %}" class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const hsInput = document.getElementById('{{ form.hs_totales.id_for_label }}');
+  const aviso = document.getElementById('avisoHs');
+  function revisar() {
+    const hs = parseInt(hsInput.value, 10);
+    const distintas = [];
+    document.querySelectorAll('.slot-check:checked').forEach(cb => {
+      const slotHs = parseInt(cb.dataset.hs, 10);
+      if (hs && slotHs && slotHs !== hs) distintas.push(`${cb.dataset.label} (${slotHs} hs)`);
+    });
+    aviso.classList.toggle('d-none', distintas.length === 0);
+    aviso.querySelector('span').textContent =
+      `La carga horaria de la materia (${hs} hs) es distinta a la de: ${distintas.join('; ')}.`;
+  }
+  hsInput.addEventListener('input', revisar);
+  document.querySelectorAll('.slot-check').forEach(cb => cb.addEventListener('change', revisar));
+  revisar();
+})();
+</script>
+{% endblock %}

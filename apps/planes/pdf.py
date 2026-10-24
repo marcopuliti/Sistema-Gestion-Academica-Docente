@@ -314,7 +314,7 @@ def generar_pdf_solicitud_servicio(solicitud, admin_user, items):
         # Agrupar por (carrera, plan) dentro de este destinatario
         grupos = defaultdict(list)
         for it in dest_items:
-            mep = it.materia_en_plan
+            mep = it.fila
             key = (mep.plan.carrera.nombre, mep.plan.codigo, mep.plan_id)
             grupos[key].append(it)
 
@@ -335,11 +335,12 @@ def generar_pdf_solicitud_servicio(solicitud, admin_user, items):
 
             for it in sorted(
                 grupo_items,
-                key=lambda x: (x.materia_en_plan.cuatrimestre, x.materia_en_plan.materia.nombre),
+                key=lambda x: (x.fila.cuatrimestre, x.fila.materia.nombre),
             ):
-                mep = it.materia_en_plan
+                mep = it.fila
                 cuat_label = _cuat_item.get(mep.cuatrimestre, '')
-                linea = f"{mep.materia.nombre} ({cuat_label}) – Crédito horario total: {it.hs_totales} hs"
+                optativa = ' — Optativa' if getattr(mep, 'es_optativa_bolsa', False) else ''
+                linea = f"{mep.materia.nombre}{optativa} ({cuat_label}) – Crédito horario total: {it.hs_totales} hs"
                 story.append(Paragraph(linea, ParagraphStyle(
                     'item_servicio', parent=s['cuerpo'],
                     firstLineIndent=0, leftIndent=2 * cm,

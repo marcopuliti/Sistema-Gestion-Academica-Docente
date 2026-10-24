@@ -132,7 +132,11 @@
           </td>
           <td class="text-center">
             {% if mep.es_optativa %}
-              <span class="text-muted small fst-italic">N/A</span>
+              <a href="{% url 'planes:admin_lista_optativas' %}?carrera={{ mep.plan.carrera.pk }}&estado=todas"
+                 class="small {% if not mep.n_bolsa %}text-danger{% endif %}"
+                 title="Los tribunales son de cada materia de la bolsa">
+                {{ mep.n_bolsa }} en la bolsa
+              </a>
             {% elif not mep.tribunal_obj %}
               <form method="post" action="{% url 'planes:admin_crear_tribunal' mep.pk %}" class="d-inline">
                 {% csrf_token %}

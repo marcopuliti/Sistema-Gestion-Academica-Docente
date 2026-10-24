@@ -50,8 +50,19 @@ urlpatterns = [
     path('planes/admin/solicitudes-servicio/', views.admin_lista_solicitudes_servicio, name='admin_lista_solicitudes_servicio'),
     path('planes/admin/solicitudes-servicio/convocar/', views.convocar_solicitudes_servicio, name='convocar_solicitudes_servicio'),
 
+    # Admin: bolsa de materias optativas
+    path('planes/admin/optativas/', views.admin_lista_optativas, name='admin_lista_optativas'),
+    path('planes/admin/optativas/nueva/', views.admin_editar_optativa, name='admin_crear_optativa'),
+    path('planes/admin/optativas/<int:pk>/', views.admin_editar_optativa, name='admin_editar_optativa'),
+
+    # Comisiones de optativas
+    path('planes/comisiones/', views.lista_comisiones, name='lista_comisiones'),
+    path('planes/comisiones/<int:pk>/', views.detalle_comision, name='detalle_comision'),
+    path('planes/comisiones/<int:pk>/editar/', views.editar_comision, name='editar_comision'),
+
     # Director de carrera
     path('planes/carrera/materias/', views.materias_carrera, name='materias_carrera'),
+    path('planes/carrera/optativas/', views.optativas_carrera, name='optativas_carrera'),
     path('planes/carrera/solicitudes-servicio/', views.lista_solicitudes_servicio_carrera, name='lista_solicitudes_servicio_carrera'),
     path('planes/carrera/solicitudes-servicio/nueva/', views.nueva_solicitud_servicio_carrera, name='nueva_solicitud_servicio_carrera'),
 ]

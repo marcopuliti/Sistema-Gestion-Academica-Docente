@@ -289,6 +289,13 @@ def revisar_solicitud(request, pk):
             notificar_cambio_estado(solicitud, 'Solicitud de Protocolización',
                                     url=reverse('solicitudes:detalle', args=[solicitud.pk]))
             messages.success(request, 'Revisión guardada.')
+            if accion == 'aprobado' and solicitud.tipificacion == 'optativa':
+                from apps.planes.optativas import agregar_a_bolsa
+                materia, avisos = agregar_a_bolsa(solicitud)
+                if materia:
+                    messages.success(request, f'«{materia.nombre}» quedó en la bolsa de optativas con el código {materia.codigo}.')
+                for aviso in avisos:
+                    messages.warning(request, aviso)
             return redirect('solicitudes:detalle', pk=pk)
     else:
         form = RevisionAdminForm()

@@ -129,21 +129,37 @@ def crear_comisiones_del_periodo(anio, cuatrimestres):
     for mep in meps_del_periodo(cuatrimestres):
         grupos[(mep.materia_id, mep.plan.carrera_id, mep.cuatrimestre)].append(mep)
 
-    creadas, departamentos = 0, set()
+    # En bloque: son cientos de comisiones y la base está lejos del servidor (una consulta
+    # por comisión supera el timeout del worker).
+    existentes = {
+        (materia_id, carrera_id, cuatrimestre): departamento
+        for materia_id, carrera_id, cuatrimestre, departamento in (
+            Comision.objects
+            .filter(anio=anio, cuatrimestre__in=cuatrimestres, materia__isnull=False)
+            .values_list('materia_id', 'carrera_id', 'cuatrimestre', 'departamento')
+        )
+    }
+    nuevas, planes_de_nuevas = [], []
+    for (materia_id, carrera_id, cuatrimestre), meps in grupos.items():
+        if (materia_id, carrera_id, cuatrimestre) in existentes:
+            continue
+        mep = meps[0]
+        dictante = mep.departamento_dictante if mep.es_servicio else ''
+        nuevas.append(Comision(
+            materia_id=materia_id, carrera_id=carrera_id, anio=anio, cuatrimestre=cuatrimestre,
+            departamento=Comision.departamento_responsable(dictante, mep.plan.carrera),
+            credito_horario=next((m.hs_totales for m in meps if m.hs_totales), None),
+        ))
+        planes_de_nuevas.append({m.plan_id for m in meps})
+
     with transaction.atomic():
-        for (materia_id, carrera_id, cuatrimestre), meps in grupos.items():
-            mep = meps[0]
-            dictante = mep.departamento_dictante if mep.es_servicio else ''
-            comision, creada = Comision.objects.get_or_create(
-                materia_id=materia_id, carrera_id=carrera_id, anio=anio, cuatrimestre=cuatrimestre,
-                defaults={
-                    'departamento': Comision.departamento_responsable(dictante, mep.plan.carrera),
-                    'credito_horario': next((m.hs_totales for m in meps if m.hs_totales), None),
-                },
-            )
-            if creada:
-                comision.planes.set({m.plan_id for m in meps})
-                creadas += 1
-            if comision.departamento:
-                departamentos.add(comision.departamento)
-    return creadas, departamentos
+        creadas = Comision.objects.bulk_create(nuevas)
+        PlanesComision = Comision.planes.through
+        PlanesComision.objects.bulk_create([
+            PlanesComision(comision_id=c.pk, planestudio_id=plan_id)
+            for c, planes in zip(creadas, planes_de_nuevas)
+            for plan_id in planes
+        ])
+
+    departamentos = (set(existentes.values()) | {c.departamento for c in creadas}) - {''}
+    return len(creadas), departamentos

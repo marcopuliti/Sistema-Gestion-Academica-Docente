@@ -2268,15 +2268,16 @@ def solicitar_informe_comisiones(request):
         messages.error(request, 'Cuatrimestre o año inválido.')
         return redirect('planes:admin_informes_comisiones')
 
-    solicitud, _ = SolicitudInformeComisiones.objects.get_or_create(
-        anio=anio, cuatrimestre=cuatrimestre, defaults={'solicitante': request.user},
-    )
-    SolicitudInformeComisiones.objects.exclude(pk=solicitud.pk).update(activa=False)
-    if not solicitud.activa:
-        solicitud.activa = True
-        solicitud.save(update_fields=['activa'])
-
-    creadas, departamentos = crear_comisiones_del_periodo(anio, solicitud.cuatrimestres)
+    from django.db import transaction
+    with transaction.atomic():
+        solicitud, _ = SolicitudInformeComisiones.objects.get_or_create(
+            anio=anio, cuatrimestre=cuatrimestre, defaults={'solicitante': request.user},
+        )
+        SolicitudInformeComisiones.objects.exclude(pk=solicitud.pk).update(activa=False)
+        if not solicitud.activa:
+            solicitud.activa = True
+            solicitud.save(update_fields=['activa'])
+        creadas, departamentos = crear_comisiones_del_periodo(anio, solicitud.cuatrimestres)
     departamentos |= set(
         Comision.objects
         .filter(anio=anio, cuatrimestre__in=solicitud.cuatrimestres)

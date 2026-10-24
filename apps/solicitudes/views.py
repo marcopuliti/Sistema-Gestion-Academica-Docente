@@ -504,6 +504,8 @@ def subir_actas_aval(request, pk):
     if request.method == 'POST':
         f = request.FILES.get('acta_consejo_departamental')
         if f:
+            if solicitud.acta_consejo_departamental:
+                solicitud.acta_consejo_departamental.delete(save=False)  # reemplaza el anterior
             solicitud.acta_consejo_departamental = f
             solicitud.save(update_fields=['acta_consejo_departamental'])
             messages.success(request, 'Acta del Consejo Departamental guardada correctamente.')
@@ -524,6 +526,8 @@ def subir_acta_comision_carrera(request, pk):
     if request.method == 'POST':
         f = request.FILES.get('acta_comision_carrera')
         if f:
+            if solicitud.acta_comision_carrera:
+                solicitud.acta_comision_carrera.delete(save=False)  # reemplaza el anterior
             solicitud.acta_comision_carrera = f
             solicitud.save(update_fields=['acta_comision_carrera'])
             messages.success(request, 'Acta de Comisión de Carrera guardada correctamente.')
@@ -750,6 +754,8 @@ def subir_acta_taller(request, pk):
         if form.is_valid():
             f = form.cleaned_data.get('acta_consejo_departamental')
             if f:
+                if taller.acta_consejo_departamental:
+                    taller.acta_consejo_departamental.delete(save=False)  # reemplaza el anterior
                 taller.acta_consejo_departamental = f
                 taller.save(update_fields=['acta_consejo_departamental'])
                 messages.success(request, 'Acta subida correctamente.')

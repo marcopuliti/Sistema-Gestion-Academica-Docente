@@ -136,3 +136,22 @@ class TramiteBase(models.Model):
             EstadoTramite.RECHAZADO:   'bg-secondary',
         }
         return clases.get(self.estado, 'bg-secondary')
+
+
+class ArchivoAlmacenado(models.Model):
+    """Contenido de los archivos subidos (actas, etc.). Se guardan en la base porque el
+    disco de Render es efímero: lo escrito en MEDIA_ROOT se pierde en cada despliegue.
+    Lo usa apps.tramites.storage.DatabaseStorage, el storage 'default'."""
+    nombre = models.CharField(max_length=255, unique=True, verbose_name='Nombre')
+    contenido = models.BinaryField(verbose_name='Contenido')
+    tipo = models.CharField(max_length=100, blank=True, verbose_name='Tipo de contenido')
+    tamanio = models.PositiveIntegerField(default=0, verbose_name='Tamaño (bytes)')
+    fecha = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de carga')
+
+    class Meta:
+        ordering = ['-fecha']
+        verbose_name = 'Archivo almacenado'
+        verbose_name_plural = 'Archivos almacenados'
+
+    def __str__(self):
+        return self.nombre

@@ -35,6 +35,7 @@ Two virtualenv dirs exist (`venv/` and `.venv/`), both gitignored. Exclude them 
 - `config/settings.py` reads **`DATABASE_URL`** via `dj_database_url.parse(config('DATABASE_URL'))` with no default — the app will not start without it. `.env.example` and the README still list the old `DB_NAME`/`DB_USER`/… variables, which are no longer used (the old `DATABASES` block is commented out).
 - **PostgreSQL is required**, not just preferred: `django.contrib.postgres` is installed and views use `__unaccent__icontains` lookups (migration `planes/0039` installs the extension). SQLite will fail on those queries.
 - `EMAIL_BACKEND` defaults to the console backend; set it in `.env` to actually send mail.
+- **Uploaded files (actas) are stored in the database**, not on disk: `STORAGES['default']` is `apps.tramites.storage.DatabaseStorage` (one `tramites.ArchivoAlmacenado` row per file), because Render's disk is wiped on every deploy. Files are served by the login-only view `tramites:archivo` (`/archivos/<name>`), which is what `FieldFile.url` returns. Never use `FieldFile.path`; read with `field.open('rb')`. When replacing a file, delete the old one (`field.delete(save=False)`) so rows don't pile up.
 - `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` are hardcoded to localhost + the Render deployment (`sistema-gestion-academica-docente.onrender.com`). Deployment uses gunicorn + WhiteNoise.
 - `apps/tramites/apps.py` monkeypatches `django.template.context.BaseContext.__copy__` in `ready()` for Python 3.14 compatibility. Don't remove it.
 

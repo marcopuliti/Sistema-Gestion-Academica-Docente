@@ -956,9 +956,9 @@ def generar_pdf_solicitud_completa(solicitud):
     # ── Agregar actas de aval si existen ───────────────────────────────────────
     actas = []
     if solicitud.acta_comision_carrera:
-        actas.append(solicitud.acta_comision_carrera.path)
+        actas.append(solicitud.acta_comision_carrera)
     if solicitud.acta_consejo_departamental:
-        actas.append(solicitud.acta_consejo_departamental.path)
+        actas.append(solicitud.acta_consejo_departamental)
 
     if not actas:
         return buffer
@@ -966,9 +966,11 @@ def generar_pdf_solicitud_completa(solicitud):
     writer = PdfWriter()
     for page in PdfReader(buffer).pages:
         writer.add_page(page)
-    for path in actas:
+    for acta in actas:
         try:
-            for page in PdfReader(path).pages:
+            with acta.open('rb') as f:
+                paginas = PdfReader(BytesIO(f.read())).pages
+            for page in paginas:
                 writer.add_page(page)
         except Exception:
             pass  # Si el archivo está corrupto se omite sin romper la descarga
@@ -1224,7 +1226,9 @@ def generar_pdf_taller(taller):
     for page in PdfReader(buffer).pages:
         writer.add_page(page)
     try:
-        for page in PdfReader(taller.acta_consejo_departamental.path).pages:
+        with taller.acta_consejo_departamental.open('rb') as f:
+            paginas = PdfReader(BytesIO(f.read())).pages
+        for page in paginas:
             writer.add_page(page)
     except Exception:
         return buffer

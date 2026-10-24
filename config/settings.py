@@ -107,9 +107,9 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STORAGES = {
-    # Al definir STORAGES hay que incluir 'default' (archivos subidos: actas, etc.)
+    # Archivos subidos (actas, etc.) en la base: el disco de Render se borra en cada despliegue
     'default': {
-        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'BACKEND': 'apps.tramites.storage.DatabaseStorage',
     },
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',

@@ -1,3 +1,4 @@
+from django.contrib.auth.decorators import login_required
 from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import render, redirect
 
@@ -201,3 +202,18 @@ def _dashboard_director_carrera(request, user):
         'notificaciones_no_leidas': notificaciones_no_leidas,
         'ultimas_notificaciones': Notificacion.objects.filter(destinatario=user).order_by('-fecha')[:5],
     })
+
+
+@login_required
+def servir_archivo(request, nombre):
+    """Descarga un archivo subido (guardado en la base por DatabaseStorage)."""
+    import os
+    from django.http import HttpResponse
+    from django.shortcuts import get_object_or_404
+    from .models import ArchivoAlmacenado
+
+    archivo = get_object_or_404(ArchivoAlmacenado, nombre=nombre)
+    response = HttpResponse(bytes(archivo.contenido), content_type=archivo.tipo or 'application/octet-stream')
+    response['Content-Disposition'] = f'inline; filename="{os.path.basename(nombre)}"'
+    response['Content-Length'] = archivo.tamanio
+    return response

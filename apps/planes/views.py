@@ -1707,7 +1707,7 @@ def _comisiones_servicio_para_carrera(carrera, departamento_dictante, anio, cuat
     return (
         Comision.objects
         .filter(
-            carrera=carrera, anio=anio, cuatrimestre__in=cuatrimestres,
+            carrera=carrera, anio=anio, cuatrimestre__in=cuatrimestres, se_dicta=True,
             materia_optativa__departamento=departamento_dictante,
         )
         .select_related('materia_optativa', 'carrera')
@@ -2053,7 +2053,8 @@ def optativas_carrera(request):
         messages.error(request, 'No tenés una carrera asignada. Contactá a administración.')
         return redirect('tramites:dashboard')
 
-    convocatoria = ConvocatoriaSolicitudServicio.objects.order_by('-anio', '-cuatrimestre').first()
+    # El período es el del informe de comisiones abierto por administración
+    informe = SolicitudInformeComisiones.objects.filter(activa=True).first()
     materias = list(
         materias_ofrecidas_en_carrera(carrera)
         .prefetch_related('optativas__plan', 'optativas__materia')
@@ -2062,43 +2063,49 @@ def optativas_carrera(request):
     for m in materias:
         m.slots_carrera = [s for s in m.optativas.all() if s.plan.carrera_id == carrera.pk]
 
-    cuats = _cuatrimestres_validos(convocatoria.cuatrimestre) if convocatoria else []
+    cuats = informe.cuatrimestres if informe else []
     habilitadas = [m for m in materias if m.cuatrimestre in cuats]
     comisiones = {
         c.materia_optativa_id: c
-        for c in Comision.objects.filter(carrera=carrera, anio=convocatoria.anio, materia_optativa__isnull=False)
-    } if convocatoria else {}
+        for c in Comision.objects.filter(carrera=carrera, anio=informe.anio, materia_optativa__isnull=False)
+    } if informe else {}
     for m in habilitadas:
         m.comision = comisiones.get(m.pk)
 
     if request.method == 'POST':
-        if not convocatoria:
-            messages.error(request, 'No hay ninguna convocatoria activa. Esperá que administración habilite el período.')
+        if not informe:
+            messages.error(request, 'No hay un informe de comisiones abierto. Esperá que administración lo solicite.')
             return redirect('planes:optativas_carrera')
         elegidas = {int(x) for x in request.POST.getlist('dictar') if x.isdigit()}
-        creadas, quitadas, bloqueadas, con_servicio = 0, 0, [], 0
+        activadas, quitadas, bloqueadas, con_servicio = 0, 0, [], 0
         for m in habilitadas:
-            if m.pk in elegidas and not m.comision:
-                comision, _ = crear_comision(m, carrera, convocatoria.anio, request.user)
-                creadas += 1
-                con_servicio += comision.requiere_servicio
-            elif m.pk not in elegidas and m.comision:
-                if m.comision.items_servicio.exists():
+            c = m.comision
+            if m.pk in elegidas and (c is None or not c.se_dicta):
+                if c is None:
+                    c, _ = crear_comision(m, carrera, informe.anio, request.user)
+                else:
+                    c.se_dicta = True
+                    c.save(update_fields=['se_dicta'])
+                activadas += 1
+                con_servicio += c.requiere_servicio
+            elif m.pk not in elegidas and c is not None and c.se_dicta:
+                if c.items_servicio.exists():
                     bloqueadas.append(m.nombre)
                 else:
-                    m.comision.delete()
+                    c.se_dicta = False
+                    c.save(update_fields=['se_dicta'])
                     quitadas += 1
-        if creadas or quitadas:
+        if activadas or quitadas:
             messages.success(
                 request,
-                f'Dictado actualizado: {creadas} comisión(es) creada(s), {quitadas} quitada(s).',
+                f'Dictado actualizado: {activadas} optativa(s) se dicta(n), {quitadas} quitada(s).',
             )
         else:
             messages.info(request, 'No hubo cambios.')
         if con_servicio:
             messages.info(
                 request,
-                'Las optativas que dicta otro departamento aparecen ahora en tus solicitudes de servicio.',
+                'Las optativas que dicta otro departamento aparecen en tus solicitudes de servicio.',
             )
         if bloqueadas:
             messages.warning(
@@ -2109,7 +2116,7 @@ def optativas_carrera(request):
 
     return render(request, 'planes/optativas_carrera.html', {
         'carrera': carrera,
-        'convocatoria': convocatoria,
+        'informe': informe,
         'habilitadas': habilitadas,
         'otras': [m for m in materias if m.cuatrimestre and m not in habilitadas],
         'sin_cuatrimestre': [m for m in materias if not m.cuatrimestre],
@@ -2176,9 +2183,9 @@ def lista_comisiones(request):
     comisiones = list(qs)
     for c in comisiones:
         c.editable = _puede_editar_comision(user, c)
-    incompletas = sum(1 for c in comisiones if not c.esta_completa)
+    incompletas = sum(1 for c in comisiones if c.se_dicta and not c.esta_completa)
     if estado == 'incompletas':
-        comisiones = [c for c in comisiones if not c.esta_completa]
+        comisiones = [c for c in comisiones if c.se_dicta and not c.esta_completa]
 
     informe = None
     if (user.es_director_departamento and activa
@@ -2246,7 +2253,7 @@ def editar_comision(request, pk):
 def _comisiones_del_informe(solicitud, departamento):
     return (
         Comision.objects
-        .filter(departamento=departamento, anio=solicitud.anio, cuatrimestre__in=solicitud.cuatrimestres)
+        .filter(departamento=departamento, anio=solicitud.anio, cuatrimestre__in=solicitud.cuatrimestres, se_dicta=True)
         .select_related('materia', 'materia_optativa', 'carrera')
         .prefetch_related('planes', 'equipo')
         .order_by('cuatrimestre', 'materia__nombre', 'materia_optativa__nombre', 'carrera__nombre')

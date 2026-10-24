@@ -143,7 +143,7 @@ def _dashboard_director(request, user):
         comisiones = list(
             Comision.objects
             .filter(departamento=departamento, anio=solicitud_comisiones.anio,
-                    cuatrimestre__in=solicitud_comisiones.cuatrimestres)
+                    cuatrimestre__in=solicitud_comisiones.cuatrimestres, se_dicta=True)
             .prefetch_related('equipo')
         )
         if comisiones:

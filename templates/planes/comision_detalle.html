@@ -13,7 +13,13 @@
   </div>
 </div>
 
-{% if not comision.esta_completa %}
+{% if not comision.se_dicta %}
+<div class="alert alert-secondary small">
+  <i class="bi bi-slash-circle me-1"></i>
+  El director de carrera indicó que esta optativa <strong>no se dicta</strong> en el período: no entra en el informe de comisiones.
+  Se puede volver a activar desde <a href="{% url 'planes:optativas_carrera' %}">Dictado de optativas</a>.
+</div>
+{% elif not comision.esta_completa %}
 <div class="alert alert-warning small">
   <i class="bi bi-exclamation-triangle me-1"></i>
   La comisión está incompleta: falta {% if not comision.condicion %}la condición de cursada{% endif %}{% if not comision.condicion and not comision.credito_horario %}, {% endif %}{% if not comision.credito_horario %}el crédito horario{% endif %}{% if not comision.equipo.all %}{% if not comision.condicion or not comision.credito_horario %} y {% endif %}el equipo docente{% endif %}.

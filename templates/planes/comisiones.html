@@ -105,7 +105,8 @@
           <td class="text-center small">{% if c.credito_horario %}{{ c.credito_horario }} hs{% else %}—{% endif %}</td>
           <td class="small">{{ c.equipo.all.0.nombre|default:"—" }}</td>
           <td class="text-center">
-            {% if c.esta_completa %}<span class="badge bg-success">Completa</span>
+            {% if not c.se_dicta %}<span class="badge bg-secondary" title="El director de carrera indicó que no se dicta; no entra en el informe">No se dicta</span>
+            {% elif c.esta_completa %}<span class="badge bg-success">Completa</span>
             {% else %}<span class="badge bg-warning text-dark">A completar</span>{% endif %}
           </td>
           <td class="text-end">

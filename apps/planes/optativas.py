@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
 
 from apps.tramites.models import DEPARTAMENTO_CHOICES, EstadoTramite
-from .models import AnioDictado, Comision, Materia, MateriaEnPlan, MateriaOptativa, MiembroComision, PlanEstudio
+from .models import AnioDictado, Carrera, Comision, Materia, MateriaEnPlan, MateriaOptativa, MiembroComision, PlanEstudio
 
 CUATRIMESTRE_DE_PERIODO = {'1c': 1, '2c': 2, 'anual': 3}
 _PLAN_EN_USO = Q(vigente=True) | Q(activo=True)
@@ -161,5 +161,22 @@ def crear_comisiones_del_periodo(anio, cuatrimestres):
             for plan_id in planes
         ])
 
-    departamentos = (set(existentes.values()) | {c.departamento for c in creadas}) - {''}
-    return len(creadas), departamentos
+    departamentos = set(existentes.values()) | {c.departamento for c in creadas}
+
+    # Optativas de la bolsa: una comisión por materia vigente del período y carrera donde
+    # está vinculada. Las que el director de carrera marcó "no se dicta" no se recrean.
+    vinculos = set(
+        MateriaOptativa.optativas.through.objects
+        .filter(materiaoptativa__vigente=True, materiaoptativa__cuatrimestre__in=cuatrimestres)
+        .filter(Q(materiaenplan__plan__vigente=True) | Q(materiaenplan__plan__activo=True))
+        .values_list('materiaoptativa_id', 'materiaenplan__plan__carrera_id')
+    )
+    materias = MateriaOptativa.objects.in_bulk({m for m, _ in vinculos})
+    carreras = Carrera.objects.in_bulk({c for _, c in vinculos})
+    creadas_optativas = 0
+    for materia_id, carrera_id in vinculos:
+        comision, creada = crear_comision(materias[materia_id], carreras[carrera_id], anio, director=None)
+        creadas_optativas += creada
+        departamentos.add(comision.departamento)
+
+    return len(creadas) + creadas_optativas, departamentos - {''}

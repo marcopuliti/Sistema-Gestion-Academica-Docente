@@ -694,6 +694,11 @@ class Comision(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='comisiones_solicitadas', verbose_name='Solicitada por',
     )
+    se_dicta = models.BooleanField(
+        default=True, verbose_name='Se dicta',
+        help_text='Optativas: el director de carrera la quita si no se dicta en el período. '
+                  'Queda registrada (no se vuelve a crear) pero no entra en el informe.',
+    )
     fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de creación')
 
     class Meta:

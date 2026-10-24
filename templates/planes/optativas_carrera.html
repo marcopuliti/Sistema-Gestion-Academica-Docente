@@ -8,18 +8,19 @@
   <p class="text-muted mb-0 small">{{ carrera.nombre }}</p>
 </div>
 
-{% if not convocatoria %}
+{% if not informe %}
 <div class="alert alert-info">
   <i class="bi bi-info-circle me-2"></i>
-  No hay ninguna convocatoria activa. Cuando administración habilite el período vas a poder marcar qué optativas se dictan.
+  No hay un informe de comisiones abierto. Cuando administración lo solicite vas a poder marcar qué optativas se dictan.
 </div>
 {% else %}
 <div class="alert alert-primary d-flex gap-2 align-items-start">
   <i class="bi bi-megaphone-fill fs-5"></i>
   <div class="small">
-    <strong>Convocatoria {{ convocatoria.get_cuatrimestre_display }} {{ convocatoria.anio }}.</strong>
-    Marcá las optativas que se dictan en este período{% if convocatoria.cuatrimestre == 1 %} (las anuales se piden junto con las del 1° cuatrimestre){% endif %}.
-    Al marcar una se crea su comisión, que completás vos; si la dicta otro departamento, aparece en tus
+    <strong>Informe de comisiones {{ informe.get_cuatrimestre_display }} {{ informe.anio }}.</strong>
+    Las optativas de la bolsa de este período ya tienen su comisión; destildá las que no se dictan{% if informe.cuatrimestre == 1 %} (las anuales van con el 1° cuatrimestre){% endif %}.
+    Las comisiones las completás vos en <a href="{% url 'planes:lista_comisiones' %}?anio={{ informe.anio }}&periodo={{ informe.cuatrimestre }}&tipo=optativas">Comisiones</a>;
+    si la dicta otro departamento, aparece en tus
     <a href="{% url 'planes:lista_solicitudes_servicio_carrera' %}">solicitudes de servicio</a>.
   </div>
 </div>
@@ -38,14 +39,14 @@
             <th>Período</th>
             <th class="text-center">Horas</th>
             <th>Dicta</th>
-            <th>Comisión {{ convocatoria.anio }}</th>
+            <th>Comisión {{ informe.anio }}</th>
           </tr>
         </thead>
         <tbody>
           {% for m in habilitadas %}
           <tr>
             <td class="text-center">
-              <input type="checkbox" class="form-check-input" name="dictar" value="{{ m.pk }}" {% if m.comision %}checked{% endif %}>
+              <input type="checkbox" class="form-check-input" name="dictar" value="{{ m.pk }}" {% if m.comision and m.comision.se_dicta %}checked{% endif %}>
             </td>
             <td>
               <div class="fw-semibold" style="font-size:.9rem">{{ m.nombre }}</div>
@@ -63,7 +64,9 @@
               {% endif %}
             </td>
             <td class="small">
-              {% if m.comision %}
+              {% if m.comision and not m.comision.se_dicta %}
+                <span class="badge bg-secondary">No se dicta</span>
+              {% elif m.comision %}
                 <a href="{% url 'planes:detalle_comision' m.comision.pk %}">Ver comisión</a>
                 {% if m.comision.esta_completa %}<span class="badge bg-success ms-1">Completa</span>
                 {% else %}<span class="badge bg-warning text-dark ms-1">A completar</span>{% endif %}

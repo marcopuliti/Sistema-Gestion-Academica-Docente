@@ -8,7 +8,7 @@
   <p class="text-muted mb-0 small">
     Una comisión por materia y carrera en cada período.
     {% if user.es_director_departamento %}Completá las de tu departamento y enviá el informe cuatrimestral.
-    {% elif user.es_director_carrera %}Las de optativas las completás vos; las demás las informa el departamento que las dicta.{% endif %}
+    {% elif user.es_director_carrera %}Podés completar todas las comisiones de tu carrera; las de materias de plan las informa el departamento responsable.{% endif %}
   </p>
 </div>
 
@@ -110,7 +110,7 @@
           </td>
           <td class="text-end">
             {% if c.editable %}
-            <a href="{% url 'planes:editar_comision' c.pk %}" class="btn btn-sm btn-outline-primary" title="Completar / editar"><i class="bi bi-pencil"></i></a>
+            <a href="{% url 'planes:detalle_comision' c.pk %}" class="btn btn-sm btn-outline-primary" title="Completar / editar"><i class="bi bi-pencil"></i></a>
             {% endif %}
           </td>
         </tr>

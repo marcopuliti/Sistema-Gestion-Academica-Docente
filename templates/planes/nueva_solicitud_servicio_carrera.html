@@ -102,7 +102,7 @@
                 {% if c.credito_horario %}
                   <span class="text-muted small">{{ c.credito_horario }} hs</span>
                 {% else %}
-                  <a href="{% url 'planes:editar_comision' c.pk %}" class="small">Completar en la comisión</a>
+                  <a href="{% url 'planes:detalle_comision' c.pk %}" class="small">Completar en la comisión</a>
                 {% endif %}
               </td>
               {% if dept_destino == 'Externo' %}

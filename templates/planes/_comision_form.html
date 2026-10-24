@@ -1,16 +1,4 @@
-{% extends 'base.html' %}
-{% block title %}Editar comisión — {{ comision.nombre_materia }}{% endblock %}
-{% block nav_comisiones %}active{% endblock %}
-
-{% block content %}
-<div class="page-header mb-4">
-  <a href="{% url 'planes:detalle_comision' comision.pk %}" class="text-muted small text-decoration-none">
-    <i class="bi bi-arrow-left me-1"></i>Volver a la comisión
-  </a>
-  <h2 class="mt-1"><i class="bi bi-person-video3 me-2"></i>{{ comision.nombre_materia }}</h2>
-  <p class="text-muted mb-0 small">{{ comision.codigo_materia }} · {{ comision.carrera.nombre }} · {{ comision.periodo_display }}</p>
-</div>
-
+{# Formulario de comisión (datos + equipo docente). Requiere form, formset y comision. #}
 <form method="post">
   {% csrf_token %}
   <div class="card mb-3">
@@ -84,12 +72,9 @@
 
   <div class="d-flex gap-2">
     <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Guardar</button>
-    <a href="{% url 'planes:detalle_comision' comision.pk %}" class="btn btn-outline-secondary">Cancelar</a>
+    <a href="{% url 'planes:detalle_comision' comision.pk %}" class="btn btn-outline-secondary">Descartar cambios</a>
   </div>
 </form>
-{% endblock %}
-
-{% block extra_js %}
 <script>
 document.getElementById('agregarMiembro').addEventListener('click', function () {
   const total = document.getElementById('id_equipo-TOTAL_FORMS');
@@ -98,4 +83,3 @@ document.getElementById('agregarMiembro').addEventListener('click', function () 
   total.value = parseInt(total.value, 10) + 1;
 });
 </script>
-{% endblock %}

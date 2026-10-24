@@ -2130,10 +2130,14 @@ def _comisiones_visibles(user):
 
 
 def _puede_editar_comision(user, comision):
-    """Optativas: el director de su carrera. Materias de plan: el director del departamento responsable."""
-    if comision.es_optativa_bolsa:
-        return user.es_director_carrera and comision.carrera_id == user.carrera_id
-    return user.es_director_departamento and comision.departamento == user.departamento
+    """El director de carrera, todas las de su carrera. El director de departamento, las de
+    materias de plan que informa su departamento (las optativas las completa la carrera)."""
+    if user.es_director_carrera and comision.carrera_id == user.carrera_id:
+        return True
+    return (
+        user.es_director_departamento and not comision.es_optativa_bolsa
+        and comision.departamento == user.departamento
+    )
 
 
 def _cuatrimestres_de_periodo(periodo):
@@ -2201,42 +2205,40 @@ def lista_comisiones(request):
 
 @login_required
 def detalle_comision(request, pk):
+    """Detalle de la comisión; quien puede editarla la completa en la misma página."""
     comision = get_object_or_404(
         _comisiones_visibles(request.user).prefetch_related('planes', 'equipo'), pk=pk,
     )
+    puede_editar = _puede_editar_comision(request.user, comision)
+    form = formset = None
+    if puede_editar:
+        datos = request.POST if request.method == 'POST' else None
+        form = ComisionForm(datos, instance=comision)
+        formset = MiembroComisionFormSet(datos, instance=comision, prefix='equipo')
+        if datos is not None and form.is_valid() and formset.is_valid():
+            form.save()
+            formset.save()
+            for i, f in enumerate(formset.forms):
+                if f.instance.pk and f not in formset.deleted_forms:
+                    type(f.instance).objects.filter(pk=f.instance.pk).update(orden=i)
+            messages.success(request, 'Comisión guardada.')
+            return redirect('planes:detalle_comision', pk=comision.pk)
+        if datos is not None:
+            messages.error(request, 'Corregí los errores marcados.')
+
     return render(request, 'planes/comision_detalle.html', {
         'comision': comision,
-        'puede_editar': _puede_editar_comision(request.user, comision),
+        'puede_editar': puede_editar,
+        'form': form,
+        'formset': formset,
         'items_servicio': comision.items_servicio.select_related('solicitud'),
     })
 
 
 @login_required
 def editar_comision(request, pk):
-    comision = get_object_or_404(
-        Comision.objects.select_related('materia', 'materia_optativa', 'carrera'), pk=pk,
-    )
-    if not _puede_editar_comision(request.user, comision):
-        messages.error(request, 'No podés editar esta comisión.')
-        return redirect('tramites:dashboard')
-
-    form = ComisionForm(request.POST or None, instance=comision)
-    formset = MiembroComisionFormSet(request.POST or None, instance=comision, prefix='equipo')
-
-    if request.method == 'POST' and form.is_valid() and formset.is_valid():
-        form.save()
-        formset.save()
-        for i, f in enumerate(formset.forms):
-            if f.instance.pk and f not in formset.deleted_forms:
-                type(f.instance).objects.filter(pk=f.instance.pk).update(orden=i)
-        messages.success(request, 'Comisión guardada.')
-        return redirect('planes:detalle_comision', pk=comision.pk)
-
-    return render(request, 'planes/comision_form.html', {
-        'comision': comision,
-        'form': form,
-        'formset': formset,
-    })
+    """Compatibilidad: la edición ahora se hace en el detalle."""
+    return redirect('planes:detalle_comision', pk=pk)
 
 
 # ── informe cuatrimestral de comisiones ──────────────────────────────────────

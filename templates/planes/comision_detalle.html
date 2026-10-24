@@ -11,17 +11,12 @@
     <h2 class="mt-1"><i class="bi bi-person-video3 me-2"></i>{{ comision.nombre_materia }}</h2>
     <p class="text-muted mb-0 small">{{ comision.carrera.nombre }} · {{ comision.periodo_display }}{% if comision.es_optativa_bolsa %} · <span class="badge bg-primary">Optativa</span>{% endif %} · Informa: Dpto. {{ comision.departamento|default:"—" }}</p>
   </div>
-  {% if puede_editar %}
-  <a href="{% url 'planes:editar_comision' comision.pk %}" class="btn btn-primary">
-    <i class="bi bi-pencil me-1"></i>Completar / editar
-  </a>
-  {% endif %}
 </div>
 
 {% if not comision.esta_completa %}
 <div class="alert alert-warning small">
   <i class="bi bi-exclamation-triangle me-1"></i>
-  La comisión está incompleta: falta {% if not comision.condicion %}la condición de cursada{% endif %}{% if not comision.condicion and not comision.credito_horario %}, {% endif %}{% if not comision.credito_horario %}el crédito horario{% endif %}{% if not comision.equipo.exists %}{% if not comision.condicion or not comision.credito_horario %} y {% endif %}el equipo docente{% endif %}.
+  La comisión está incompleta: falta {% if not comision.condicion %}la condición de cursada{% endif %}{% if not comision.condicion and not comision.credito_horario %}, {% endif %}{% if not comision.credito_horario %}el crédito horario{% endif %}{% if not comision.equipo.all %}{% if not comision.condicion or not comision.credito_horario %} y {% endif %}el equipo docente{% endif %}.
 </div>
 {% endif %}
 
@@ -33,6 +28,16 @@
       <div class="col-md-3"><div class="text-muted">Carrera</div><div class="fw-semibold">{{ comision.carrera.nombre }}</div></div>
       <div class="col-md-2"><div class="text-muted">Período</div><div class="fw-semibold">{{ comision.periodo_display }}</div></div>
       <div class="col-md-2"><div class="text-muted">Dicta</div><div class="fw-semibold">{{ comision.departamento_dictante }}</div></div>
+    </div>
+  </div>
+</div>
+
+{% if puede_editar %}
+{% include "planes/_comision_form.html" %}
+{% else %}
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-3 small">
       <div class="col-md-3"><div class="text-muted">Condición de cursada</div><div class="fw-semibold">{{ comision.get_condicion_display|default:"—" }}</div></div>
       <div class="col-md-2"><div class="text-muted">Crédito horario</div><div class="fw-semibold">{% if comision.credito_horario %}{{ comision.credito_horario }} hs{% else %}—{% endif %}</div></div>
       <div class="col-md-7"><div class="text-muted">Planes de estudio asociados</div><div class="fw-semibold">{% for p in comision.planes.all %}Plan {{ p.codigo }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</div></div>
@@ -60,6 +65,8 @@
   <div class="card-body text-muted small fst-italic">Sin equipo docente cargado.</div>
   {% endif %}
 </div>
+
+{% endif %}
 
 {% if comision.requiere_servicio %}
 <div class="card">

@@ -2195,6 +2195,7 @@ def lista_comisiones(request):
             'enviado': InformeComisionesEnviado.objects.filter(
                 solicitud=activa, departamento=user.departamento,
             ).first(),
+            'incompletas': _comisiones_incompletas(activa, user.departamento),
         }
 
     anios = sorted(set(_comisiones_visibles(user).values_list('anio', flat=True)) | {anio}, reverse=True)
@@ -2249,6 +2250,11 @@ def editar_comision(request, pk):
 
 
 # ── informe cuatrimestral de comisiones ──────────────────────────────────────
+
+def _comisiones_incompletas(solicitud, departamento):
+    """Comisiones del informe del departamento (solo las que se dictan) sin completar."""
+    return [c for c in _comisiones_del_informe(solicitud, departamento) if not c.esta_completa]
+
 
 def _comisiones_del_informe(solicitud, departamento):
     return (
@@ -2365,6 +2371,19 @@ def enviar_informe_comisiones(request):
         return redirect('planes:lista_comisiones')
 
     departamento = request.user.departamento
+    incompletas = _comisiones_incompletas(solicitud, departamento)
+    if incompletas:
+        nombres = ', '.join(f'{c.nombre_materia} ({c.carrera.nombre})' for c in incompletas[:5])
+        resto = f' y {len(incompletas) - 5} más' if len(incompletas) > 5 else ''
+        messages.error(
+            request,
+            f'No se puede enviar el informe: hay {len(incompletas)} comisión(es) de materias que se '
+            f'dictan sin completar ({nombres}{resto}). Completá condición, crédito horario y equipo docente.',
+        )
+        return redirect(
+            reverse('planes:lista_comisiones')
+            + f'?anio={solicitud.anio}&periodo={solicitud.cuatrimestre}&estado=incompletas'
+        )
     InformeComisionesEnviado.objects.update_or_create(
         solicitud=solicitud, departamento=departamento,
         defaults={'director': request.user, 'fecha_envio': timezone.now()},

@@ -22,7 +22,11 @@
     {% else %}
       Solicitado por administración.
     {% endif %}
-    {% if incompletas %}<span class="ms-1">Hay {{ incompletas }} comisión(es) incompleta(s).</span>{% endif %}
+    {% if informe.incompletas %}
+    <div class="mt-1"><i class="bi bi-exclamation-triangle me-1"></i>Para enviarlo tenés que completar las
+      <a href="?anio={{ informe.solicitud.anio }}&periodo={{ informe.solicitud.cuatrimestre }}&estado=incompletas">{{ informe.incompletas|length }} comisión(es) incompleta(s)</a>
+      de materias que se dictan (condición, crédito horario y equipo docente).</div>
+    {% endif %}
   </div>
   <div class="d-flex gap-2">
     <a href="{% url 'planes:descargar_informe_comisiones' informe.solicitud.pk %}" class="btn btn-sm btn-outline-danger">
@@ -31,10 +35,9 @@
     <a href="{% url 'planes:descargar_informe_comisiones' informe.solicitud.pk %}?formato=docx" class="btn btn-sm btn-outline-primary">
       <i class="bi bi-file-earmark-word me-1"></i>Word
     </a>
-    <form method="post" action="{% url 'planes:enviar_informe_comisiones' %}"
-          onsubmit="return {% if incompletas %}confirm('Hay {{ incompletas }} comisión(es) incompleta(s). ¿Enviar el informe igual?'){% else %}true{% endif %};">
+    <form method="post" action="{% url 'planes:enviar_informe_comisiones' %}">
       {% csrf_token %}
-      <button type="submit" class="btn btn-sm btn-success">
+      <button type="submit" class="btn btn-sm btn-success" {% if informe.incompletas %}disabled title="Completá todas las comisiones para poder enviarlo"{% endif %}>
         <i class="bi bi-send me-1"></i>{% if informe.enviado %}Reenviar informe{% else %}Enviar informe{% endif %}
       </button>
     </form>

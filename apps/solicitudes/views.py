@@ -13,7 +13,7 @@ from apps.tramites.models import EstadoTramite, CalendarioAcademico
 from .forms import (
     SolicitudProtocolizacionForm, EquipoDocenteFormSet,
     CorrelativaFormSet, ActasAvalForm,
-    RevisionDirectorForm, RevisionAdminForm,
+    RevisionDirectorForm, RevisionDirectorProtocolizacionForm, RevisionAdminForm,
     SolicitudTallerForm, ActaConsejoTallerForm, EquipoTallerFormSet,
     TIPIFICACIONES_CURRICULARES,
 )
@@ -243,7 +243,7 @@ def revisar_director(request, pk):
         return redirect('solicitudes:detalle', pk=pk)
 
     if request.method == 'POST':
-        form = RevisionDirectorForm(request.POST)
+        form = RevisionDirectorProtocolizacionForm(request.POST)
         if form.is_valid():
             accion = form.cleaned_data['accion']
             if accion == 'elevada':
@@ -258,11 +258,11 @@ def revisar_director(request, pk):
             from django.urls import reverse
             notificar_cambio_estado(solicitud, 'Solicitud de Protocolización',
                                     url=reverse('solicitudes:detalle', args=[solicitud.pk]))
-            label = 'elevada al Administrador' if accion == 'elevada' else 'devuelta al docente con observaciones'
+            label = 'elevada a Secretaría' if accion == 'elevada' else 'devuelta al director de carrera con observaciones'
             messages.success(request, f'Solicitud {label}.')
             return redirect('solicitudes:detalle', pk=pk)
     else:
-        form = RevisionDirectorForm()
+        form = RevisionDirectorProtocolizacionForm()
     return render(request, 'solicitudes/revision_director.html', {'solicitud': solicitud, 'form': form})
 
 

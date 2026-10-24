@@ -252,6 +252,21 @@ class RevisionDirectorForm(forms.Form):
     )
 
 
+class RevisionDirectorProtocolizacionForm(RevisionDirectorForm):
+    """Revisión del Director de Departamento para protocolizaciones: sin acción preseleccionada,
+    así el director tiene que elegir explícitamente."""
+    accion = forms.ChoiceField(
+        choices=[
+            ('',         '— Seleccioná una acción —'),
+            ('devuelta', 'Devolver al director de carrera con observaciones'),
+            ('elevada',  'Elevar a Secretaría'),
+        ],
+        label='Acción',
+        error_messages={'required': 'Elegí una acción.'},
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+
 class RevisionAdminForm(forms.Form):
     """Formulario de revisión para el Administrador (solicitud ya elevada)."""
     accion = forms.ChoiceField(

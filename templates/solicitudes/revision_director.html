@@ -112,12 +112,13 @@
           <div class="mb-3">
             <label class="form-label fw-semibold">{{ form.accion.label }}</label>
             {{ form.accion }}
+            {% if form.accion.errors %}<div class="text-danger small mt-1">{{ form.accion.errors.0 }}</div>{% endif %}
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">{{ form.comentarios.label }}</label>
             {{ form.comentarios }}
             <div class="form-text">
-              Al devolver: los comentarios se enviarán al docente.<br>
+              Al devolver: los comentarios se enviarán al director de carrera.<br>
               Al elevar: quedan registrados como nota interna.
             </div>
           </div>

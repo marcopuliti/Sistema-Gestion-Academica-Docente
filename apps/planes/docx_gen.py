@@ -87,74 +87,162 @@ def _diffs(t_dir, t_adm):
     }
 
 
-def _add_tribunal_table(doc, mep, t_dir, t_adm):
-    diff = _diffs(t_dir, t_adm)
-    dia_str      = DIAS.get(t_dir.dia_semana, '—') if t_dir.dia_semana else '—'
-    hora_str     = t_dir.hora.strftime('%H:%M') if t_dir.hora else '—'
-    modalidad    = 'Libres y regulares' if t_dir.permite_libres else 'Solo regulares'
-    hdr_text     = (
-        f"{mep.materia.nombre} ({mep.materia.codigo}) — "
-        f"Plan {mep.plan.codigo} — {mep.plan.carrera.nombre} — {mep.ano}° año"
-    )
+_ANCHOS_TURNO_CM = (7.25, 1.95, 7.2, 2.15, 3.55, 3.6)
+COLOR_RESALTADO = 'FFFF00'
 
-    # 3 columns: Campo | Nombre/Valor | DNI
-    tbl = doc.add_table(rows=0, cols=3)
-    tbl.style = 'Table Grid'
-    col_widths = [Cm(3), Cm(10.5), Cm(3)]
 
-    def set_widths(row):
-        for i, w in enumerate(col_widths):
-            row.cells[i].width = w
+def _bordes_celda(cell, **lados):
+    """Grosor de borde por lado (en octavos de punto), p. ej. top=12."""
+    tcPr = cell._tc.get_or_add_tcPr()
+    borders = tcPr.find(qn('w:tcBorders'))
+    if borders is None:
+        borders = OxmlElement('w:tcBorders')
+        tcPr.append(borders)
+    for lado, sz in lados.items():
+        el = borders.find(qn(f'w:{lado}'))
+        if el is None:
+            el = OxmlElement(f'w:{lado}')
+            borders.append(el)
+        el.set(qn('w:val'), 'single')
+        el.set(qn('w:sz'), str(sz))
+        el.set(qn('w:color'), '000000')
 
-    # ── Header row ──
-    hdr_row = tbl.add_row()
-    set_widths(hdr_row)
-    merged = hdr_row.cells[0].merge(hdr_row.cells[2])
-    _set_cell_bg(merged, COLOR_AZUL)
-    _write_cell(merged, hdr_text, bold=True, size=9, color='FFFFFF')
 
-    # ── Sub-header ──
-    sub_row = tbl.add_row()
-    set_widths(sub_row)
-    _set_cell_bg(sub_row.cells[0], COLOR_GRIS)
-    _set_cell_bg(sub_row.cells[1], COLOR_GRIS)
-    _set_cell_bg(sub_row.cells[2], COLOR_GRIS)
-    _write_cell(sub_row.cells[0], 'Campo',  bold=True, size=9)
-    _write_cell(sub_row.cells[1], 'Nombre', bold=True, size=9)
-    _write_cell(sub_row.cells[2], 'DNI',    bold=True, size=9)
+def _celda_turno(cell, partes, size=8, center=True, fondo=None):
+    """partes: lista de líneas; cada línea es una lista de (texto, {'bold':…, 'underline':…})."""
+    cell.text = ''
+    para = cell.paragraphs[0]
+    para.alignment = WD_ALIGN_PARAGRAPH.CENTER if center else WD_ALIGN_PARAGRAPH.LEFT
+    para.paragraph_format.space_after = Pt(0)
+    for i, linea in enumerate(partes):
+        if i:
+            para.add_run().add_break()
+        for texto, fmt in linea:
+            run = para.add_run(texto)
+            run.font.name = 'Arial'
+            run.font.size = Pt(size)
+            run.font.bold = fmt.get('bold', False)
+            run.font.underline = fmt.get('underline', False)
+    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    _cell_margins(cell, top=10, bottom=10, left=50, right=50)
+    if fondo:
+        _set_cell_bg(cell, fondo)
 
-    # ── Data rows ──
-    data = [
-        ('presidente', 'Presidente', t_dir.presidente_nombre, t_dir.presidente_dni),
-        ('vocal_1',    '1er. Vocal', t_dir.vocal_1_nombre,    t_dir.vocal_1_dni),
-        ('vocal_2',    '2do. Vocal', t_dir.vocal_2_nombre,    t_dir.vocal_2_dni),
-        ('dia',        'Día',        dia_str,                  ''),
-        ('hora',       'Hora',       hora_str,                 ''),
-        ('modalidad',  'Modalidad',  modalidad,                ''),
-    ]
-    for key, label, val1, val2 in data:
-        row = tbl.add_row()
-        set_widths(row)
-        bg = COLOR_AMARILLO if diff[key] else COLOR_BLANCO
-        for c in row.cells:
-            _set_cell_bg(c, bg)
-        _write_cell(row.cells[0], label, bold=True, size=9)
-        _write_cell(row.cells[1], val1, size=9)
-        if val2:
-            _write_cell(row.cells[2], val2, size=9)
+
+def _add_tabla_turno(doc, departamento, dia, bloques):
+    from .pdf import DIAS as _DIAS, lineas_asignatura, titulo_turno
+
+    filas = 2 + sum(len(b['miembros']) for b in bloques)
+    table = doc.add_table(rows=filas, cols=6)
+    table.style = 'Table Grid'
+    table.alignment = 1
+    for row in table.rows:
+        for cell, ancho in zip(row.cells, _ANCHOS_TURNO_CM):
+            cell.width = Cm(ancho)
+
+    _celda_turno(table.cell(0, 0).merge(table.cell(0, 5)), [[(titulo_turno(departamento, dia), {'bold': True})]], size=13)
+    _celda_turno(table.cell(1, 0), [[('ASIGNATURA', {'bold': True})]])
+    _celda_turno(table.cell(1, 1).merge(table.cell(1, 2)), [[('MESA EXAMINADORA', {'bold': True})]])
+    _celda_turno(table.cell(1, 3), [[('DIA Y', {'bold': True})], [('HORA', {'bold': True})]])
+    _celda_turno(table.cell(1, 4), [[('LIBRES', {})]])
+    _celda_turno(table.cell(1, 5), [[('PLAN DE', {})], [('ESTUDIOS', {})]])
+
+    r = 2
+    for b in bloques:
+        n = len(b['miembros'])
+        ultima = r + n - 1
+        asignatura = [
+            [(texto, {'bold': True}), (resto, {})] if negrita else [(texto, {})]
+            for negrita, texto, resto in lineas_asignatura(b)
+        ]
+        celda = table.cell(r, 0).merge(table.cell(ultima, 0))
+        _celda_turno(celda, asignatura, center=False)
+        celda.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+
+        if b['dia']:
+            dia_hora = [[(_DIAS.get(b['dia'], ''), {'underline': True})]]
+            if b['hora']:
+                dia_hora += [[('', {})], [(f"{b['hora']:%H:%M}hs", {})]]
         else:
-            merged_cell = row.cells[1].merge(row.cells[2])
-            _set_cell_bg(merged_cell, bg)
-            _write_cell(merged_cell, val1, size=9)
+            dia_hora = [[('—', {})]]
+        _celda_turno(table.cell(r, 3).merge(table.cell(ultima, 3)), dia_hora,
+                     fondo=COLOR_RESALTADO if b['cambio_dia'] else None)
+        _celda_turno(table.cell(r, 4).merge(table.cell(ultima, 4)), [[(b['libres'], {})]],
+                     fondo=COLOR_RESALTADO if b['cambio_libres'] else None)
+        _celda_turno(table.cell(r, 5).merge(table.cell(ultima, 5)), [[(pl, {})] for pl in b['planes']])
 
-    doc.add_paragraph()
+        for i, (rol, integrante, cambiado) in enumerate(b['miembros']):
+            fondo = COLOR_RESALTADO if cambiado else None
+            _celda_turno(table.cell(r + i, 1), [[(rol, {})]], fondo=fondo)
+            table.cell(r + i, 1).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            _celda_turno(table.cell(r + i, 2), [[(integrante, {})]], center=False, fondo=fondo)
+
+        for col in range(6):
+            _bordes_celda(table.cell(r, col), top=12)
+        r += n
+
+    # Borde exterior grueso a nivel tabla (los bordes de celda se pierden al combinar)
+    tblPr = table._tbl.tblPr
+    bordes = tblPr.find(qn('w:tblBorders'))
+    if bordes is None:
+        bordes = OxmlElement('w:tblBorders')
+        tblPr.append(bordes)
+    for lado, sz in (('top', 16), ('left', 16), ('bottom', 16), ('right', 16), ('insideH', 4), ('insideV', 4)):
+        el = bordes.find(qn(f'w:{lado}'))
+        if el is None:
+            el = OxmlElement(f'w:{lado}')
+            bordes.append(el)
+        el.set(qn('w:val'), 'single')
+        el.set(qn('w:sz'), str(sz))
+        el.set(qn('w:color'), '000000')
+
+    # Que el bloque título + encabezado no quede solo al final de una página
+    for row in table.rows[:2]:
+        for cell in row.cells:
+            for para in cell.paragraphs:
+                para.paragraph_format.keep_with_next = True
+
+
+def _encabezado_turno_docx(section):
+    """Escudo de la UNSL y 'SAN LUIS, MES AÑO' en el encabezado de las páginas de tablas."""
+    import os
+    from django.conf import settings
+
+    section.header.is_linked_to_previous = False
+    hoy = datetime.date.today()
+    tabla = section.header.add_table(rows=1, cols=2, width=section.page_width - section.left_margin - section.right_margin)
+    izq, der = tabla.rows[0].cells
+    izq.width, der.width = Cm(5), Cm(20)
+    escudo = os.path.join(settings.BASE_DIR, 'static', 'escudo.gif')
+    para = izq.paragraphs[0]
+    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if os.path.exists(escudo):
+        para.add_run().add_picture(escudo, height=Cm(1.5))
+    for linea in ('Universidad Nacional de San Luis', 'Facultad de Ciencias Físico', 'Matemáticas y Naturales'):
+        p = izq.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.space_after = Pt(0)
+        run = p.add_run(linea)
+        run.font.name = 'Arial'
+        run.font.size = Pt(6.5)
+    der.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    p = der.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run(f'SAN LUIS, {MESES[hoy.month - 1].upper()} {hoy.year}')
+    run.font.name = 'Arial'
+    run.font.size = Pt(8)
+    section.header.paragraphs[0].text = ''
 
 
 def generar_docx_solicitud_cambio(director, admin, meps, item_map, current_map):
+    from docx.enum.section import WD_ORIENT, WD_SECTION
+    from .pdf import bloques_tribunales
+
     doc = Document()
 
-    # Márgenes
+    # Márgenes y A4, como el PDF
     for section in doc.sections:
+        section.page_width, section.page_height = Cm(21), Cm(29.7)
         section.top_margin    = Cm(2.5)
         section.bottom_margin = Cm(2.5)
         section.left_margin   = Cm(2.5)
@@ -199,19 +287,19 @@ def generar_docx_solicitud_cambio(director, admin, meps, item_map, current_map):
     )
     _p(doc, firma)
 
-    # ── Salto de página + listado ──
-    doc.add_page_break()
+    # ── Listado por día, en páginas apaisadas ──
+    apaisada = doc.add_section(WD_SECTION.NEW_PAGE)
+    apaisada.orientation = WD_ORIENT.LANDSCAPE
+    apaisada.page_width, apaisada.page_height = Cm(29.7), Cm(21)
+    apaisada.left_margin = apaisada.right_margin = Cm(1.8)
+    apaisada.top_margin, apaisada.bottom_margin = Cm(1.2), Cm(1.2)
+    apaisada.header_distance = Cm(0.8)
+    _encabezado_turno_docx(apaisada)
 
-    titulo = f"Solicitud de Cambio de Tribunales — Dpto. {director.departamento} — {hoy.year}"
-    _p(doc, titulo, size=12, bold=True)
-    doc.add_paragraph()
-
-    for mep in meps:
-        t_dir = item_map.get(mep.id)
-        if not t_dir:
-            continue
-        t_adm = current_map.get(mep.id)
-        _add_tribunal_table(doc, mep, t_dir, t_adm)
+    for i, (dia, bloques) in enumerate(bloques_tribunales(meps, item_map, current_map)):
+        if i:
+            doc.add_page_break()
+        _add_tabla_turno(doc, director.departamento, dia, bloques)
 
     buffer = BytesIO()
     doc.save(buffer)

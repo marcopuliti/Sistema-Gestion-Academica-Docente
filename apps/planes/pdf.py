@@ -1,5 +1,7 @@
 import datetime
+from collections import defaultdict
 from io import BytesIO
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
@@ -83,110 +85,199 @@ def _diffs(t_dir, t_adm):
     }
 
 
-def _tribunal_table(mep, t_dir, t_adm, s):
-    diff = _diffs(t_dir, t_adm)
+# ── Listado de tribunales (formato "Turno examen" de los departamentos) ─────────
+# Una tabla por día: ASIGNATURA | MESA EXAMINADORA (rol + integrante) | DIA Y HORA |
+# LIBRES | PLAN DE ESTUDIOS. La misma materia con la misma mesa en varias carreras o
+# planes va en un solo bloque. En las solicitudes de cambio lo modificado va en amarillo.
 
-    dia_str = DIAS.get(t_dir.dia_semana, '—') if t_dir.dia_semana else '—'
-    hora_str = t_dir.hora.strftime('%H:%M') if t_dir.hora else '—'
-    modalidad_str = 'Libres y regulares' if t_dir.permite_libres else 'Solo regulares'
+ROLES_TRIBUNAL = (('presidente', 'Presidente'), ('vocal_1', '1er. Vocal'), ('vocal_2', '2do. Vocal'))
+RESALTADO = colors.HexColor('#FFFF00')
+_COLS_TURNO = (0.282, 0.075, 0.28, 0.084, 0.139, 0.14)
 
-    hdr_text = (
-        f"{mep.materia.nombre} ({mep.materia.codigo}) — "
-        f"Plan {mep.plan.codigo} — {mep.plan.carrera.nombre} — {mep.ano}° año"
-    )
 
-    C1 = 2.8 * cm
-    C2 = CONTENT_W - C1 - 2.8 * cm
-    C3 = 2.8 * cm
-    col_widths = [C1, C2, C3]
+def dni_con_puntos(dni):
+    dni = (dni or '').strip()
+    return f'{int(dni):,}'.replace(',', '.') if dni.isdigit() else dni
 
-    def p(text, style):
-        return Paragraph(text or '—', style)
+
+def _integrante(nombre, dni):
+    if not nombre:
+        return ''
+    return f'{nombre} (DNI {dni_con_puntos(dni)})' if dni else nombre
+
+
+def bloques_tribunales(filas, dir_map, adm_map):
+    """[(día 1-5 | None, [bloque, ...]), ...] ordenado por día y, dentro del día, por hora."""
+    bloques = {}
+    for f in filas:
+        t = dir_map.get(f.id)
+        if not t:
+            continue
+        diff = _diffs(t, adm_map.get(f.id))
+        miembros = tuple(
+            (rol, _integrante(getattr(t, f'{campo}_nombre'), getattr(t, f'{campo}_dni')), diff[campo])
+            for campo, rol in ROLES_TRIBUNAL
+        )
+        cambio_dia = diff['dia'] or diff['hora']
+        clave = (f.materia.nombre.strip().upper(), miembros, t.dia_semana, t.hora,
+                 t.permite_libres, cambio_dia, diff['modalidad'])
+        b = bloques.get(clave)
+        if b is None:
+            b = bloques[clave] = {
+                'nombre': f.materia.nombre.strip(),
+                'materias': [],
+                'planes': [],
+                'miembros': list(miembros) + [('Suplente', '', False)],
+                'dia': t.dia_semana,
+                'hora': t.hora,
+                'libres': 'SI' if t.permite_libres else 'NO',
+                'cambio_dia': cambio_dia,
+                'cambio_libres': diff['modalidad'],
+            }
+        par = (f.materia.codigo, f.plan.carrera.nombre)
+        if par not in b['materias']:
+            b['materias'].append(par)
+        for codigo in str(f.plan.codigo).split(', '):
+            if codigo not in b['planes']:
+                b['planes'].append(codigo)
+
+    por_dia = defaultdict(list)
+    for b in bloques.values():
+        por_dia[b['dia']].append(b)
+    return [
+        (dia, sorted(por_dia[dia], key=lambda b: (b['hora'] is None, b['hora'] or datetime.time(0), b['nombre'])))
+        for dia in sorted(por_dia, key=lambda d: (d is None, d or 0))
+    ]
+
+
+def lineas_asignatura(b):
+    """Primera línea: NOMBRE – (código); después las carreras (con su código si cambia)."""
+    codigo0 = b['materias'][0][0]
+    lineas = [(True, f"{b['nombre'].upper()}", f' – ({codigo0})')]
+    vistas = set()
+    for codigo, carrera in b['materias']:
+        texto = f'({carrera})' if codigo == codigo0 else f'({carrera}) - ({codigo})'
+        if texto not in vistas:
+            vistas.add(texto)
+            lineas.append((False, texto, ''))
+    return lineas
+
+
+def titulo_turno(departamento, dia):
+    sufijo = f'DIA {dia}' if dia else 'SIN DÍA ASIGNADO'
+    return f'TURNO EXAMEN  -  DEPARTAMENTO {departamento.upper()} – {sufijo}'
+
+
+def _tabla_turno(departamento, dia, bloques, ancho):
+    base = getSampleStyleSheet()['Normal']
+
+    def st(nombre, **kw):
+        return ParagraphStyle(nombre, parent=base, **{
+            'fontName': 'Helvetica', 'fontSize': 8, 'leading': 10, 'alignment': TA_CENTER, **kw,
+        })
+    s_titulo = st('t_tit', fontName='Helvetica-Bold', fontSize=13, leading=16)
+    s_hdr = st('t_hdr', fontName='Helvetica-Bold')
+    s_hdr2 = st('t_hdr2')
+    s_izq = st('t_izq', alignment=TA_LEFT, leading=11)
+    s_rol = st('t_rol', alignment=TA_RIGHT)
+    s_txt = st('t_txt')
+    p = lambda texto, estilo: Paragraph(texto or '&nbsp;', estilo)
 
     rows = [
-        # header spanning all cols
-        [p(hdr_text, s['mat_hdr']), '', ''],
-        # subheader
-        [p('Campo', s['subhdr']), p('Nombre', s['subhdr']), p('DNI', s['subhdr'])],
-        # data rows
-        [p('Presidente', s['campo']),
-         p(t_dir.presidente_nombre, s['valor']),
-         p(t_dir.presidente_dni, s['valor'])],
-        [p('1er. Vocal', s['campo']),
-         p(t_dir.vocal_1_nombre, s['valor']),
-         p(t_dir.vocal_1_dni, s['valor'])],
-        [p('2do. Vocal', s['campo']),
-         p(t_dir.vocal_2_nombre, s['valor']),
-         p(t_dir.vocal_2_dni, s['valor'])],
-        [p('Día', s['campo']),
-         p(dia_str, s['valor']),
-         ''],
-        [p('Hora', s['campo']),
-         p(hora_str, s['valor']),
-         ''],
-        [p('Modalidad', s['campo']),
-         p(modalidad_str, s['valor']),
-         ''],
+        [p(titulo_turno(departamento, dia), s_titulo), '', '', '', '', ''],
+        [p('ASIGNATURA', s_hdr), p('MESA EXAMINADORA', s_hdr), '', p('DIA Y<br/>HORA', s_hdr),
+         p('LIBRES', s_hdr2), p('PLAN DE<br/>ESTUDIOS', s_hdr2)],
     ]
-
-    style_cmds = [
-        # header row
-        ('SPAN', (0, 0), (2, 0)),
-        ('BACKGROUND', (0, 0), (2, 0), AZUL),
-        # subheader
-        ('BACKGROUND', (0, 1), (2, 1), GRIS),
-        # span value cells for día, hora and modalidad
-        ('SPAN', (1, 5), (2, 5)),
-        ('SPAN', (1, 6), (2, 6)),
-        ('SPAN', (1, 7), (2, 7)),
-        # borders
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#cccccc')),
-        # padding
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('LEFTPADDING', (0, 0), (-1, -1), 5),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+    estilo = [
+        ('SPAN', (0, 0), (5, 0)),
+        ('SPAN', (1, 1), (2, 1)),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('LINEBELOW', (0, 0), (-1, 0), 1.2, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
     ]
+    for b in bloques:
+        r = len(rows)
+        asignatura = '<br/>'.join(
+            f'<b>{escape(texto)}</b>{escape(resto)}' if negrita else escape(texto)
+            for negrita, texto, resto in lineas_asignatura(b)
+        )
+        if b['dia']:
+            dia_hora = f"<u>{DIAS.get(b['dia'], '')}</u>"
+            if b['hora']:
+                dia_hora += f"<br/><br/>{b['hora']:%H:%M}hs"
+        else:
+            dia_hora = '—'
+        for i, (rol, integrante, cambiado) in enumerate(b['miembros']):
+            rows.append([
+                p(asignatura, s_izq) if i == 0 else '',
+                p(rol, s_rol), p(escape(integrante), s_izq),
+                p(dia_hora, s_txt) if i == 0 else '',
+                p(b['libres'], s_txt) if i == 0 else '',
+                p('<br/>'.join(b['planes']), s_txt) if i == 0 else '',
+            ])
+            if cambiado:
+                estilo.append(('BACKGROUND', (1, r + i), (2, r + i), RESALTADO))
+        ultima = r + len(b['miembros']) - 1
+        estilo += [('SPAN', (col, r), (col, ultima)) for col in (0, 3, 4, 5)]
+        estilo.append(('VALIGN', (0, r), (0, ultima), 'TOP'))
+        estilo.append(('LINEABOVE', (0, r), (-1, r), 1.5, colors.black))
+        if b['cambio_dia']:
+            estilo.append(('BACKGROUND', (3, r), (3, ultima), RESALTADO))
+        if b['cambio_libres']:
+            estilo.append(('BACKGROUND', (4, r), (4, ultima), RESALTADO))
+    estilo.append(('BOX', (0, 0), (-1, -1), 2, colors.black))
 
-    # Yellow for changed rows (rows 2–7 = data rows)
-    row_map = [
-        ('presidente', 2),
-        ('vocal_1', 3),
-        ('vocal_2', 4),
-        ('dia', 5),
-        ('hora', 6),
-        ('modalidad', 7),
-    ]
-    for key, row_idx in row_map:
-        if diff[key]:
-            style_cmds.append(('BACKGROUND', (0, row_idx), (2, row_idx), AMARILLO))
-
-    tbl = Table(rows, colWidths=col_widths, repeatRows=0)
-    tbl.setStyle(TableStyle(style_cmds))
+    tbl = Table(rows, colWidths=[ancho * f for f in _COLS_TURNO], repeatRows=2)
+    tbl.setStyle(TableStyle(estilo))
     return tbl
 
 
-def _build_pdf(director, admin, meps, dir_map, adm_map, cuerpo_carta, titulo_listado):
+def _encabezado_turno(canvas, doc):
+    """Escudo de la UNSL y 'SAN LUIS, MES AÑO' arriba de cada página de tablas."""
+    import os
+    from django.conf import settings
+    ancho, alto = canvas._pagesize  # la página apaisada, no el tamaño por defecto del documento
+    hoy = datetime.date.today()
+    canvas.saveState()
+    escudo = os.path.join(settings.BASE_DIR, 'static', 'escudo.gif')
+    x, y = 2.2 * cm, alto - 2.9 * cm
+    if os.path.exists(escudo):
+        canvas.drawImage(escudo, x + 1.15 * cm, y, width=1.4 * cm, height=1.6 * cm,
+                         preserveAspectRatio=True, mask='auto')
+    canvas.setFont('Helvetica', 6.5)
+    for i, linea in enumerate(('Universidad Nacional de San Luis', 'Facultad de Ciencias Físico',
+                               'Matemáticas y Naturales')):
+        canvas.drawCentredString(x + 1.85 * cm, y - 0.35 * cm - i * 0.27 * cm, linea)
+    canvas.setFont('Helvetica', 8)
+    canvas.drawCentredString(ancho / 2, alto - 2.4 * cm, f'SAN LUIS, {MESES[hoy.month - 1].upper()} {hoy.year}')
+    canvas.restoreState()
+
+
+def _build_pdf(director, admin, meps, dir_map, adm_map, cuerpo_carta):
+    from reportlab.lib.pagesizes import landscape
+    from reportlab.platypus import BaseDocTemplate, Frame, NextPageTemplate, PageTemplate
+
     buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        leftMargin=MARGIN_H,
-        rightMargin=MARGIN_H,
-        topMargin=MARGIN_V,
-        bottomMargin=MARGIN_V,
-    )
+    apaisada = landscape(A4)
+    doc = BaseDocTemplate(buffer, pagesize=A4)
+    doc.addPageTemplates([
+        PageTemplate(id='carta', pagesize=A4, frames=[
+            Frame(MARGIN_H, MARGIN_V, PAGE_W - 2 * MARGIN_H, PAGE_H - 2 * MARGIN_V, id='f_carta'),
+        ]),
+        PageTemplate(id='tablas', pagesize=apaisada, onPage=_encabezado_turno, frames=[
+            Frame(1.8 * cm, 1.2 * cm, apaisada[0] - 3.6 * cm, apaisada[1] - 5.2 * cm, id='f_tablas'),
+        ]),
+    ])
     s = _styles()
     story = []
 
     hoy = datetime.date.today()
-    fecha_str = f"San Luis, {hoy.day} de {MESES[hoy.month - 1]} de {hoy.year}"
-
-    story.append(Paragraph(fecha_str, s['fecha']))
+    story.append(Paragraph(f"San Luis, {hoy.day} de {MESES[hoy.month - 1]} de {hoy.year}", s['fecha']))
     story.append(Spacer(1, 0.9 * cm))
-
     admin_nombre = admin.get_full_name() if admin else 'Secretario Académico'
     story.append(Paragraph(
         f"Sr. Secretario Académico de la FCFMyN<br/>{admin_nombre}<br/>S / D:",
@@ -205,17 +296,11 @@ def _build_pdf(director, admin, meps, dir_map, adm_map, cuerpo_carta, titulo_lis
         s['firma'],
     ))
 
-    story.append(PageBreak())
-    story.append(Paragraph(titulo_listado, s['titulo_seccion']))
-    story.append(Spacer(1, 0.3 * cm))
-
-    for mep in meps:
-        t_dir = dir_map.get(mep.id)
-        if not t_dir:
-            continue
-        t_adm = adm_map.get(mep.id)
-        story.append(_tribunal_table(mep, t_dir, t_adm, s))
-        story.append(Spacer(1, 0.35 * cm))
+    story.append(NextPageTemplate('tablas'))
+    ancho = apaisada[0] - 3.6 * cm
+    for dia, bloques in bloques_tribunales(meps, dir_map, adm_map):
+        story.append(PageBreak())
+        story.append(_tabla_turno(director.departamento, dia, bloques, ancho))
 
     doc.build(story)
     buffer.seek(0)
@@ -231,8 +316,7 @@ def generar_pdf_informe_tribunales(director, admin, meps, dir_map, adm_map):
         f"{director.departamento}, informando los cambios y agregados realizados "
         f"a los mismos."
     )
-    titulo = f"Listado de Tribunales Examinadores — Dpto. {director.departamento} — Ciclo {hoy.year}"
-    return _build_pdf(director, admin, meps, dir_map, adm_map, cuerpo, titulo)
+    return _build_pdf(director, admin, meps, dir_map, adm_map, cuerpo)
 
 
 def generar_pdf_solicitud_cambio(director, admin, meps, item_map, current_map):
@@ -248,8 +332,7 @@ def generar_pdf_solicitud_cambio(director, admin, meps, item_map, current_map):
         f"Las celdas resaltadas en amarillo indican los campos propuestos a modificar "
         f"respecto a los valores actuales."
     )
-    titulo = f"Solicitud de Cambio de Tribunales — Dpto. {director.departamento} — {hoy.year}"
-    return _build_pdf(director, admin, meps, item_map, current_map, cuerpo, titulo)
+    return _build_pdf(director, admin, meps, item_map, current_map, cuerpo)
 
 
 def generar_pdf_solicitud_servicio(solicitud, admin_user, items):

@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}Comisiones{% endblock %}
-{% block nav_comisiones %}active{% endblock %}
+{% block nav_comisiones %}{% if request.GET.seccion != 'informe' or not user.es_director_departamento %}active{% endif %}{% endblock %}
+{% block nav_informe_comisiones %}{% if request.GET.seccion == 'informe' %}active{% endif %}{% endblock %}
 
 {% block content %}
 <div class="page-header mb-3">

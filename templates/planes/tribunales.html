@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
 {% block title %}Tribunales — {{ departamento }}{% endblock %}
-{% block nav_tribunales %}active{% endblock %}
+{% block nav_tribunales %}{% if user.es_director_departamento and request.GET.seccion == 'informe' or user.es_director_carrera and filtro == 'con_propuesta' %}{% else %}active{% endif %}{% endblock %}
+{% block nav_informe_tribunales %}{% if request.GET.seccion == 'informe' %}active{% endif %}{% endblock %}
+{% block nav_propuestas_tribunal %}{% if filtro == 'con_propuesta' %}active{% endif %}{% endblock %}
 
 {% block extra_css %}
 <style>

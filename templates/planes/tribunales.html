@@ -702,8 +702,21 @@
 
     newBtn.addEventListener('click', (e) => { e.stopPropagation(); showCreateForm(); });
 
+    // Nombre y DNI viajan con el form: un miembro precargado del tribunal actual no tiene id
+    const campo = idField.name.replace(/_id$/, '');
+    const hidden = sufijo => {
+      const inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = `${campo}_${sufijo}`;
+      picker.appendChild(inp);
+      return inp;
+    };
+    const nombreField = hidden('nombre');
+    const dniField    = hidden('dni');
+
     function selectDocente(id, nombre, dni) {
       idField.value = id;
+      nombreField.value = nombre;
+      dniField.value = dni;
       nomEl.textContent = nombre;
       dniEl.textContent = dni;
       selDiv.classList.remove('d-none');
@@ -714,6 +727,8 @@
 
     function reset() {
       idField.value = '';
+      nombreField.value = '';
+      dniField.value = '';
       selDiv.classList.add('d-none');
       searchWrap.classList.remove('d-none');
       dropdown.classList.add('d-none');

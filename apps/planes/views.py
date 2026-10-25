@@ -525,17 +525,9 @@ def proponer_cambio_agrupacion(request, pk):
     departamento = request.user.departamento
     ag = get_object_or_404(AgrupacionTribunal, pk=pk, director=request.user)
 
-    def _docente_by_id(raw):
-        if raw:
-            try:
-                return Docente.objects.get(pk=int(raw))
-            except (Docente.DoesNotExist, ValueError):
-                pass
-        return None
-
-    pres = _docente_by_id(request.POST.get('presidente_id'))
-    voc1 = _docente_by_id(request.POST.get('vocal_1_id'))
-    voc2 = _docente_by_id(request.POST.get('vocal_2_id'))
+    pres = _miembro_del_post(request.POST, 'presidente')
+    voc1 = _miembro_del_post(request.POST, 'vocal_1')
+    voc2 = _miembro_del_post(request.POST, 'vocal_2')
 
     form = TribunalForm(request.POST)
     if not form.is_valid():
@@ -676,6 +668,22 @@ def crear_docente_ajax(request):
 
 # ── director: proponer y enviar cambios de tribunal ──────────────────────────
 
+def _miembro_del_post(post, campo):
+    """Miembro de tribunal enviado por el selector de docentes: el Docente elegido (`<campo>_id`)
+    o, si no hay id (miembro precargado del tribunal actual), el nombre y DNI que trae el form."""
+    import types
+    raw = post.get(f'{campo}_id')
+    if raw:
+        try:
+            return Docente.objects.get(pk=int(raw))
+        except (Docente.DoesNotExist, ValueError):
+            pass
+    nombre = post.get(f'{campo}_nombre', '').strip()
+    if not nombre:
+        return None
+    return types.SimpleNamespace(nombre=nombre, dni=post.get(f'{campo}_dni', '').strip())
+
+
 @login_required
 @solo_director_departamento_o_carrera
 def proponer_cambio_tribunal(request, pk):
@@ -701,17 +709,9 @@ def proponer_cambio_tribunal(request, pk):
             messages.error(request, f'El Departamento de {departamento} no tiene director asignado; no se puede enviar la propuesta.')
             return redirect('planes:lista_tribunales')
 
-    def _docente_by_id(raw):
-        if raw:
-            try:
-                return Docente.objects.get(pk=int(raw))
-            except (Docente.DoesNotExist, ValueError):
-                pass
-        return None
-
-    pres = _docente_by_id(request.POST.get('presidente_id'))
-    voc1 = _docente_by_id(request.POST.get('vocal_1_id'))
-    voc2 = _docente_by_id(request.POST.get('vocal_2_id'))
+    pres = _miembro_del_post(request.POST, 'presidente')
+    voc1 = _miembro_del_post(request.POST, 'vocal_1')
+    voc2 = _miembro_del_post(request.POST, 'vocal_2')
 
     form = TribunalForm(request.POST)
     if form.is_valid():

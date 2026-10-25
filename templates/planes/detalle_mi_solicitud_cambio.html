@@ -33,6 +33,7 @@
     <p class="text-muted mb-0 small">
       {{ solicitud.fecha_creacion|date:"d/m/Y H:i" }}
       &middot; {{ items|length }} tribunal{{ items|length|pluralize:"es" }}
+      {% if solicitud.numero_sudocu %}&middot; SUDOCU: <strong>{{ solicitud.numero_sudocu }}</strong>{% endif %}
       &middot;
       {% if solicitud.estado == 'borrador' %}
       <span class="badge bg-secondary">Borrador</span>
@@ -48,10 +49,16 @@
        download class="btn btn-outline-danger">
       <i class="bi bi-file-earmark-pdf me-1"></i>PDF
     </a>
+    {% if solicitud.documento %}
+    <a href="{{ solicitud.documento.url }}" class="btn btn-outline-primary" title="Documento enviado a administración">
+      <i class="bi bi-file-earmark-word me-1"></i>Word enviado
+    </a>
+    {% else %}
     <a href="{% url 'planes:descargar_solicitud_cambio_docx' solicitud.pk %}"
        download class="btn btn-outline-primary">
       <i class="bi bi-file-earmark-word me-1"></i>Word
     </a>
+    {% endif %}
     {% if solicitud.estado != 'aplicada' %}
     <form method="post" action="{% url 'planes:reabrir_solicitud_cambio' solicitud.pk %}"
           onsubmit="return confirm('¿Retractás esta solicitud para poder modificarla?')">
@@ -77,6 +84,7 @@
     <span>
       <strong>{{ mep.materia.nombre }}</strong>
       <span class="ms-2 opacity-75 small">{{ mep.materia.codigo }}</span>
+      {% if item.propuesto_por %}<span class="badge bg-light text-dark ms-2" style="font-size:.7rem"><i class="bi bi-person me-1"></i>Propuesto por {{ item.propuesto_por.get_full_name|default:item.propuesto_por.username }}</span>{% endif %}
     </span>
     <span class="small opacity-75">
       Plan {{ mep.plan.codigo }} &middot; {{ mep.plan.carrera.nombre }} &middot; {{ mep.ano }}° año

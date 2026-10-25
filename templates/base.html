@@ -108,7 +108,7 @@
           </a>
         </li>
         {% endif %}
-        {% if user.es_director_departamento or user.es_administrador %}
+        {% if user.es_director_departamento or user.es_director_carrera or user.es_administrador %}
         <li class="nav-item">
           <a class="nav-link {% block nav_tribunales %}{% endblock %}" href="{% url 'planes:lista_tribunales' %}">
             <i class="bi bi-people me-2"></i>Tribunales Examinadores

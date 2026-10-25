@@ -40,6 +40,7 @@
           <th>Fecha</th>
           <th>Departamento</th>
           <th>Director</th>
+          <th>N° SUDOCU</th>
           <th class="text-center">Estado</th>
           <th class="text-center">Tribunales</th>
           <th class="text-center">Acciones</th>
@@ -54,6 +55,7 @@
           </td>
           <td>{{ s.departamento }}</td>
           <td>{{ s.director.get_full_name|default:"—" }}</td>
+          <td class="fw-semibold">{{ s.numero_sudocu|default:"—" }}</td>
           <td class="text-center">
             {% if s.estado == 'borrador' %}
             <span class="badge bg-secondary">Borrador</span>
@@ -76,6 +78,11 @@
                  download class="btn btn-sm btn-outline-secondary" title="Descargar PDF">
                 <i class="bi bi-file-earmark-pdf"></i>
               </a>
+              {% if s.documento %}
+              <a href="{{ s.documento.url }}" class="btn btn-sm btn-outline-primary" title="Documento Word enviado por el director">
+                <i class="bi bi-file-earmark-word"></i>
+              </a>
+              {% endif %}
             </div>
           </td>
         </tr>
@@ -116,5 +123,49 @@
   <i class="bi bi-file-earmark-diff fs-1 d-block mb-2"></i>
   No hay solicitudes de cambio{% if dept_filtro %} para <strong>{{ dept_filtro }}</strong>{% endif %}.
 </div>
+{% endif %}
+
+{# ── Informes de tribunales enviados ───────────────────────────────────────── #}
+<h5 class="mt-4 mb-2"><i class="bi bi-megaphone me-2"></i>Informes de tribunales enviados</h5>
+{% if informes_enviados %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Fecha de envío</th>
+          <th>Departamento</th>
+          <th>Director</th>
+          <th>Período</th>
+          <th>N° SUDOCU</th>
+          <th class="text-center">Documento</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in informes_enviados %}
+        <tr>
+          <td>
+            <div class="fw-semibold">{{ i.fecha_envio|date:"d/m/Y" }}</div>
+            <div class="text-muted small">{{ i.fecha_envio|date:"H:i" }}</div>
+          </td>
+          <td>{{ i.departamento }}</td>
+          <td>{{ i.director.get_full_name|default:"—" }}</td>
+          <td class="small">{{ i.solicitud.get_cuatrimestre_display }} {{ i.solicitud.anio }}</td>
+          <td class="fw-semibold">{{ i.numero_sudocu|default:"—" }}</td>
+          <td class="text-center">
+            {% if i.documento %}
+            <a href="{{ i.documento.url }}" class="btn btn-sm btn-outline-primary" title="Documento Word enviado">
+              <i class="bi bi-file-earmark-word me-1"></i>Word
+            </a>
+            {% else %}<span class="text-muted small">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<p class="text-muted small">Todavía no se envió ningún informe de tribunales{% if dept_filtro %} de {{ dept_filtro }}{% endif %}.</p>
 {% endif %}
 {% endblock %}

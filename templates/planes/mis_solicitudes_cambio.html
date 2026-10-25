@@ -25,7 +25,7 @@
         <tr>
           <td>
             <div class="fw-semibold">{{ s.fecha_creacion|date:"d/m/Y" }}</div>
-            <div class="text-muted small">{{ s.fecha_creacion|date:"H:i" }}</div>
+            <div class="text-muted small">{{ s.fecha_creacion|date:"H:i" }}{% if s.numero_sudocu %} · SUDOCU {{ s.numero_sudocu }}{% endif %}</div>
           </td>
           <td class="text-center">
             {% if s.estado == 'borrador' %}
@@ -49,8 +49,8 @@
                  download class="btn btn-sm btn-outline-danger" title="Descargar PDF">
                 <i class="bi bi-file-earmark-pdf"></i>
               </a>
-              <a href="{% url 'planes:descargar_solicitud_cambio_docx' s.pk %}"
-                 download class="btn btn-sm btn-outline-primary" title="Descargar Word">
+              <a href="{% if s.documento %}{{ s.documento.url }}{% else %}{% url 'planes:descargar_solicitud_cambio_docx' s.pk %}{% endif %}"
+                 class="btn btn-sm btn-outline-primary" title="{% if s.documento %}Word enviado{% else %}Descargar Word{% endif %}">
                 <i class="bi bi-file-earmark-word"></i>
               </a>
               {% if s.estado == 'borrador' %}

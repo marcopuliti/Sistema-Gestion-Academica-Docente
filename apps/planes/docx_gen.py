@@ -235,6 +235,33 @@ def _encabezado_turno_docx(section):
 
 
 def generar_docx_solicitud_cambio(director, admin, meps, item_map, current_map):
+    hoy = datetime.date.today()
+    n = len([m for m in meps if item_map.get(m.id)])
+    cuerpo = (
+        f"Me dirijo a Ud., y por su intermedio a quien corresponda, para solicitar "
+        f"la modificación de {n} Tribunal{'es' if n != 1 else ''} "
+        f"Examinador{'es' if n != 1 else ''} para mesas de examen del Ciclo Lectivo "
+        f"{hoy.year} de las materias del Departamento de {director.departamento}. "
+        f"Las celdas resaltadas en amarillo indican los campos propuestos a modificar "
+        f"respecto a los valores actuales."
+    )
+    return _docx_tribunales(director, admin, meps, item_map, current_map, cuerpo)
+
+
+def generar_docx_informe_tribunales(director, admin, meps, tribunal_map):
+    """Informe completo de tribunales del departamento (sin resaltados)."""
+    hoy = datetime.date.today()
+    cuerpo = (
+        f"Me dirijo a Ud., y por su intermedio a quien corresponda, para elevar "
+        f"el listado de Tribunales Examinadores para mesas de examen del Ciclo "
+        f"Lectivo {hoy.year} de las materias del Departamento de "
+        f"{director.departamento}, informando los cambios y agregados realizados "
+        f"a los mismos."
+    )
+    return _docx_tribunales(director, admin, meps, tribunal_map, tribunal_map, cuerpo)
+
+
+def _docx_tribunales(director, admin, meps, item_map, current_map, cuerpo):
     from docx.enum.section import WD_ORIENT, WD_SECTION
     from .pdf import bloques_tribunales
 
@@ -263,15 +290,6 @@ def generar_docx_solicitud_cambio(director, admin, meps, item_map, current_map):
     _p(doc, "S / D:")
     doc.add_paragraph()
 
-    n = len([m for m in meps if item_map.get(m.id)])
-    cuerpo = (
-        f"Me dirijo a Ud., y por su intermedio a quien corresponda, para solicitar "
-        f"la modificación de {n} Tribunal{'es' if n != 1 else ''} "
-        f"Examinador{'es' if n != 1 else ''} para mesas de examen del Ciclo Lectivo "
-        f"{hoy.year} de las materias del Departamento de {director.departamento}. "
-        f"Las celdas resaltadas en amarillo indican los campos propuestos a modificar "
-        f"respecto a los valores actuales."
-    )
     p_cuerpo = _p(doc, cuerpo)
     p_cuerpo.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 

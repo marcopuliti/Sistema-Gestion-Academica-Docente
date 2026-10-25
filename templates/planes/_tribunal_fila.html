@@ -3,7 +3,7 @@
 <div class="tribunal-row px-3 py-3 {% if not mep.se_dicta %}no-dictado-row{% elif not t %}sin-tribunal-row{% elif mep.tribunal_tiene_propuesta %}con-propuesta-row{% endif %}">
   <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
     <div class="d-flex align-items-start gap-2">
-    {% if not es_solo_consulta and t %}
+    {% if not es_solo_consulta and not modo_carrera and t %}
     <input type="checkbox" class="form-check-input mt-1 tribunal-check flex-shrink-0"
            value="{{ t.pk }}" aria-label="Seleccionar tribunal">
     {% endif %}
@@ -31,7 +31,7 @@
       {% else %}
         {% if mep.tribunal_tiene_propuesta %}
         <span class="badge bg-info text-dark">
-          <i class="bi bi-pencil me-1"></i>Cambio propuesto
+          <i class="bi bi-pencil me-1"></i>Cambio propuesto{% if mep.propuesta_item.propuesto_por %} por {{ mep.propuesta_item.propuesto_por.get_full_name|default:mep.propuesta_item.propuesto_por.username }}{% endif %}
         </span>
         {% endif %}
         {% if not es_solo_consulta %}

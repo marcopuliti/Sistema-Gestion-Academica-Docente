@@ -255,6 +255,17 @@ class Docente(models.Model):
         return f'{self.nombre} (DNI {self.dni})'
 
 
+CAMPOS_TRIBUNAL_COMPLETO = (
+    'presidente_nombre', 'presidente_dni', 'vocal_1_nombre', 'vocal_1_dni',
+    'vocal_2_nombre', 'vocal_2_dni', 'dia_semana', 'hora',
+)
+
+
+def tribunal_completo(obj):
+    """Tribunal o item de cambio con los 3 integrantes (nombre y DNI), día y hora."""
+    return all(getattr(obj, campo) for campo in CAMPOS_TRIBUNAL_COMPLETO)
+
+
 class TribunalExaminadorQuerySet(models.QuerySet):
     def de_materias_en_plan(self):
         return self.filter(materia_en_plan__isnull=False)
@@ -353,6 +364,18 @@ class TribunalExaminador(models.Model):
         if self.materia_en_plan_id:
             return self.materia_en_plan
         return FilaOptativa(self.materia_optativa, self.carrera, clave=self.fila_id)
+
+    @property
+    def departamento_responsable(self):
+        """Departamento que informa el tribunal: el que dicta la materia, o el de la carrera
+        si es propia o la dicta un externo (mismo criterio que _tribunales_del_depto)."""
+        if self.materia_optativa_id:
+            dictante, carrera = self.materia_optativa.departamento, self.carrera
+        else:
+            mep = self.materia_en_plan
+            dictante = mep.departamento_dictante if mep.es_servicio else ''
+            carrera = mep.plan.carrera
+        return carrera.departamento if dictante in ('', 'Externo') else dictante
 
     def esta_vacio(self):
         return not any([
@@ -455,6 +478,11 @@ class InformeTribunalesEnviado(models.Model):
         verbose_name='Director',
     )
     fecha_envio = models.DateTimeField(verbose_name='Fecha de envío')
+    numero_sudocu = models.CharField(max_length=50, blank=True, verbose_name='N° de trámite SUDOCU')
+    documento = models.FileField(
+        upload_to='tribunales/informes/', blank=True, null=True,
+        verbose_name='Documento enviado (DOCX)',
+    )
 
     class Meta:
         unique_together = [('solicitud', 'departamento')]
@@ -490,6 +518,11 @@ class SolicitudCambioTribunal(models.Model):
     estado = models.CharField(
         max_length=20, choices=ESTADO_CHOICES, default='borrador', verbose_name='Estado',
     )
+    numero_sudocu = models.CharField(max_length=50, blank=True, verbose_name='N° de trámite SUDOCU')
+    documento = models.FileField(
+        upload_to='tribunales/solicitudes/', blank=True, null=True,
+        verbose_name='Documento enviado (DOCX)',
+    )
 
     class Meta:
         ordering = ['-fecha_creacion']
@@ -522,6 +555,11 @@ class SolicitudCambioItem(models.Model):
     permite_libres = models.BooleanField(default=True, verbose_name='Pueden rendir libres')
     # Snapshot of tribunal state at the moment this item was first proposed
     snapshot_tribunal = models.JSONField(null=True, blank=True)
+    # Director de carrera que propuso el cambio (vacío si lo cargó el director de departamento)
+    propuesto_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='propuestas_tribunal', verbose_name='Propuesto por',
+    )
 
     class Meta:
         unique_together = [('solicitud', 'tribunal')]

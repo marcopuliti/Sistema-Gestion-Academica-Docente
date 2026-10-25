@@ -33,6 +33,7 @@
     <p class="text-muted mb-0 small">
       {{ solicitud.fecha_creacion|date:"d/m/Y H:i" }}
       &middot; Director: <strong>{{ solicitud.director.get_full_name|default:"—" }}</strong>
+      {% if solicitud.numero_sudocu %}&middot; SUDOCU: <strong>{{ solicitud.numero_sudocu }}</strong>{% endif %}
       &middot; {{ items|length }} tribunal{{ items|length|pluralize:"es" }}
       &middot;
       {% if solicitud.estado == 'enviada' %}
@@ -49,6 +50,11 @@
        download class="btn btn-outline-secondary">
       <i class="bi bi-file-earmark-pdf me-1"></i>Descargar PDF
     </a>
+    {% if solicitud.documento %}
+    <a href="{{ solicitud.documento.url }}" class="btn btn-outline-primary">
+      <i class="bi bi-file-earmark-word me-1"></i>Word enviado
+    </a>
+    {% endif %}
     {% if solicitud.estado == 'enviada' %}
       {% if bloqueada_por %}
       <button type="button" class="btn btn-success" disabled
@@ -90,6 +96,7 @@
     <span>
       <strong>{{ mep.materia.nombre }}</strong>
       <span class="ms-2 opacity-75 small">{{ mep.materia.codigo }}</span>
+      {% if item.propuesto_por %}<span class="badge bg-light text-dark ms-2" style="font-size:.7rem"><i class="bi bi-person me-1"></i>Propuesto por {{ item.propuesto_por.get_full_name|default:item.propuesto_por.username }}</span>{% endif %}
     </span>
     <span class="small opacity-75">
       Plan {{ mep.plan.codigo }} &middot; {{ mep.plan.carrera.nombre }} &middot; {{ mep.ano }}° año

@@ -48,8 +48,13 @@
   <div class="flex-grow-1">
     <strong>Informe de comisiones — {{ informe_comisiones.solicitud.get_cuatrimestre_display }} {{ informe_comisiones.solicitud.anio }}.</strong><br>
     <span class="small">
+      {% if informe_comisiones.cerrado %}
+      El informe está cerrado: descargá el Word, iniciá el trámite en SUDOCU y envialo con el número de trámite.
+      {% else %}
       Completá las {{ informe_comisiones.total }} comisiones de tu departamento
-      ({{ informe_comisiones.incompletas }} incompleta{{ informe_comisiones.incompletas|pluralize }}) y enviá el informe.
+      ({{ informe_comisiones.incompletas }} incompleta{{ informe_comisiones.incompletas|pluralize }}{% if informe_comisiones.propuestas %}, {{ informe_comisiones.propuestas }} propuesta{{ informe_comisiones.propuestas|pluralize }} de directores de carrera para revisar{% endif %}),
+      cerrá el informe y envialo.
+      {% endif %}
     </span>
   </div>
   <a href="{% url 'planes:lista_comisiones' %}?anio={{ informe_comisiones.solicitud.anio }}&periodo={{ informe_comisiones.solicitud.cuatrimestre }}" class="btn btn-warning btn-sm text-nowrap">

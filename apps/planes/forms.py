@@ -66,18 +66,22 @@ class ComisionForm(forms.ModelForm):
         self.fields['planes'].label_from_instance = lambda p: f'Plan {p.codigo}'
 
 
-MiembroComisionFormSet = forms.inlineformset_factory(
-    Comision, MiembroComision,
-    fields=['nombre', 'dni', 'funcion', 'cargo', 'dedicacion'],
-    widgets={
-        'nombre': forms.TextInput(attrs=_txt),
-        'dni': forms.TextInput(attrs=_txt),
-        'funcion': forms.Select(attrs=_sel),
-        'cargo': forms.Select(attrs=_sel),
-        'dedicacion': forms.Select(attrs=_sel),
-    },
-    extra=1, can_delete=True,
-)
+class MiembroComisionForm(forms.ModelForm):
+    """Fila del equipo docente. No se guarda directamente: la vista reemplaza el equipo de la
+    comisión (o lo guarda en la propuesta del director de carrera)."""
+    class Meta:
+        model = MiembroComision
+        fields = ['nombre', 'dni', 'funcion', 'cargo', 'dedicacion']
+        widgets = {
+            'nombre': forms.TextInput(attrs=_txt),
+            'dni': forms.TextInput(attrs=_txt),
+            'funcion': forms.Select(attrs=_sel),
+            'cargo': forms.Select(attrs=_sel),
+            'dedicacion': forms.Select(attrs=_sel),
+        }
+
+
+EquipoComisionFormSet = forms.formset_factory(MiembroComisionForm, extra=1, can_delete=True)
 
 
 class TribunalForm(forms.Form):

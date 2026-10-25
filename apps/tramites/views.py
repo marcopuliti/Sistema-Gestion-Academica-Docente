@@ -150,11 +150,15 @@ def _dashboard_director(request, user):
             .prefetch_related('equipo')
         )
         if comisiones:
+            from apps.planes.models import PropuestaComision
+            registro = solicitud_comisiones.informes_enviados.filter(departamento=departamento).first()
             informe_comisiones = {
                 'solicitud': solicitud_comisiones,
                 'total': len(comisiones),
                 'incompletas': sum(1 for c in comisiones if not c.esta_completa),
-                'enviado': solicitud_comisiones.informes_enviados.filter(departamento=departamento).exists(),
+                'propuestas': PropuestaComision.objects.filter(estado='pendiente', comision__in=comisiones).count(),
+                'cerrado': registro is not None and registro.estado == 'cerrado',
+                'enviado': registro is not None and registro.estado == 'enviado',
             }
 
     return render(request, 'tramites/dashboard_director.html', {

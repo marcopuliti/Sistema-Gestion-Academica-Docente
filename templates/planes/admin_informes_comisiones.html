@@ -74,9 +74,13 @@
             {% else %}—{% endif %}
           </td>
           <td class="small">
-            {% if f.enviado %}
+            {% if f.enviado.estado == 'enviado' %}
               <span class="text-success"><i class="bi bi-check-circle me-1"></i>Enviado el {{ f.enviado.fecha_envio|date:"d/m/Y H:i" }}</span>
               {% if f.enviado.director %}<span class="text-muted">· {{ f.enviado.director.get_full_name }}</span>{% endif %}
+              <div>SUDOCU <strong>{{ f.enviado.numero_sudocu|default:"—" }}</strong>
+              {% if f.enviado.documento %}· <a href="{{ f.enviado.documento.url }}"><i class="bi bi-file-earmark-word me-1"></i>Word enviado</a>{% endif %}</div>
+            {% elif f.enviado %}
+              <span class="text-muted"><i class="bi bi-lock me-1"></i>Cerrado el {{ f.enviado.fecha_cierre|date:"d/m/Y H:i" }} — falta enviar</span>
             {% else %}<span class="text-muted">Pendiente</span>{% endif %}
           </td>
           <td class="text-end">

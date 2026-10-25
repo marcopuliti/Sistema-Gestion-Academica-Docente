@@ -12,8 +12,8 @@ from django.utils import timezone
 from apps.tramites.decorators import solo_administrador, solo_admin_general, solo_director_carrera, solo_director_departamento, solo_director_departamento_o_carrera
 from apps.tramites.models import DEPARTAMENTO_CHOICES
 from apps.notifications.utils import _crear_notificacion
-from .forms import ComisionForm, MateriaOptativaForm, MiembroComisionFormSet, TribunalForm
-from .models import CAMPOS_TRIBUNAL_COMPLETO, tribunal_completo, AgrupacionTribunal, AnioDictado, Carrera, Comision, ConvocatoriaSolicitudServicio, Docente, InformeComisionesEnviado, InformeTribunalesEnviado, MateriaEnPlan, MateriaOptativa, SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeComisiones, SolicitudInformeTribunal, SolicitudServicio, SolicitudServicioItem, TribunalExaminador
+from .forms import ComisionForm, EquipoComisionFormSet, MateriaOptativaForm, TribunalForm
+from .models import CAMPOS_TRIBUNAL_COMPLETO, tribunal_completo, AgrupacionTribunal, AnioDictado, Carrera, Comision, ConvocatoriaSolicitudServicio, Docente, InformeComisionesEnviado, InformeTribunalesEnviado, MateriaEnPlan, MateriaOptativa, MiembroComision, PlanEstudio, PropuestaComision, SolicitudCambioItem, SolicitudCambioTribunal, SolicitudInformeComisiones, SolicitudInformeTribunal, SolicitudServicio, SolicitudServicioItem, TribunalExaminador
 from .optativas import advertencias_hs, crear_comision, crear_comisiones_del_periodo, materias_ofrecidas_en_carrera
 from .pdf import generar_pdf_informe_comisiones, generar_pdf_informe_tribunales, generar_pdf_solicitud_cambio, generar_pdf_solicitud_servicio
 from .docx_gen import generar_docx_informe_comisiones, generar_docx_informe_tribunales, generar_docx_solicitud_cambio
@@ -2266,8 +2266,14 @@ def optativas_carrera(request):
             return redirect('planes:optativas_carrera')
         elegidas = {int(x) for x in request.POST.getlist('dictar') if x.isdigit()}
         activadas, quitadas, bloqueadas, con_servicio = 0, 0, [], 0
+        cerrados, en_informe_cerrado = _informes_comisiones_cerrados(), []
         for m in habilitadas:
             c = m.comision
+            cambia = (m.pk in elegidas) != bool(c and c.se_dicta)
+            departamento = c.departamento if c else Comision.departamento_responsable(m.departamento, carrera)
+            if cambia and (informe.anio, informe.cuatrimestre, departamento) in cerrados:
+                en_informe_cerrado.append(m.nombre)
+                continue
             if m.pk in elegidas and (c is None or not c.se_dicta):
                 if c is None:
                     c, _ = crear_comision(m, carrera, informe.anio, request.user)
@@ -2300,6 +2306,12 @@ def optativas_carrera(request):
                 request,
                 f'No se quitó el dictado de {", ".join(bloqueadas)} porque ya figura en una solicitud de servicio enviada.',
             )
+        if en_informe_cerrado:
+            messages.warning(
+                request,
+                f'No se cambió el dictado de {", ".join(en_informe_cerrado)}: el departamento que la informa ya '
+                'cerró su informe de comisiones. Pedile que lo reabra.',
+            )
         return redirect('planes:optativas_carrera')
 
     return render(request, 'planes/optativas_carrera.html', {
@@ -2324,20 +2336,120 @@ def _comisiones_visibles(user):
     return qs.none()
 
 
-def _puede_editar_comision(user, comision):
-    """El director de carrera, todas las de su carrera. El director de departamento, las de
-    materias de plan que informa su departamento (las optativas las completa la carrera)."""
-    if user.es_director_carrera and comision.carrera_id == user.carrera_id:
-        return True
-    return (
-        user.es_director_departamento and not comision.es_optativa_bolsa
-        and comision.departamento == user.departamento
-    )
-
-
 def _cuatrimestres_de_periodo(periodo):
     """Período del informe ('1' = 1° cuatrimestre + anuales, '2' = 2° cuatrimestre)."""
     return [1, 3] if periodo == '1' else [2]
+
+
+def _periodo_informe(cuatrimestre):
+    """Período del informe de comisiones que abarca un cuatrimestre (el 1° incluye las anuales)."""
+    return 2 if cuatrimestre == 2 else 1
+
+
+def _informes_comisiones_cerrados():
+    """(año, período, departamento) de los informes de comisiones cerrados o enviados."""
+    return set(
+        InformeComisionesEnviado.objects
+        .values_list('solicitud__anio', 'solicitud__cuatrimestre', 'departamento')
+    )
+
+
+def _comision_bloqueada(comision, cerrados=None):
+    """La comisión está en un informe cerrado o enviado: no se edita hasta reabrirlo."""
+    if cerrados is None:
+        cerrados = _informes_comisiones_cerrados()
+    return (comision.anio, _periodo_informe(comision.cuatrimestre), comision.departamento) in cerrados
+
+
+def _puede_editar_comision(user, comision):
+    """El director del departamento que informa la comisión (de plan u optativa) la completa y edita."""
+    return user.es_director_departamento and comision.departamento == user.departamento
+
+
+def _puede_proponer_comision(user, comision):
+    """El director de carrera propone cambios en todas las comisiones de su carrera."""
+    return user.es_director_carrera and comision.carrera_id == user.carrera_id
+
+
+_CAMPOS_MIEMBRO = ('nombre', 'dni', 'funcion', 'cargo', 'dedicacion')
+
+
+def _datos_comision(obj):
+    """Valores editables de una comisión o de una propuesta, en un formato comparable."""
+    if isinstance(obj, PropuestaComision):
+        equipo = [{c: m.get(c, '') for c in _CAMPOS_MIEMBRO} for m in obj.equipo]
+    else:
+        equipo = [{c: getattr(m, c) for c in _CAMPOS_MIEMBRO} for m in obj.equipo.all()]
+    return {
+        'condicion': obj.condicion,
+        'credito_horario': obj.credito_horario,
+        'planes': sorted(p.pk for p in obj.planes.all()),
+        'equipo': equipo,
+    }
+
+
+def _datos_del_form(form, formset):
+    return {
+        'condicion': form.cleaned_data['condicion'],
+        'credito_horario': form.cleaned_data['credito_horario'],
+        'planes': sorted(p.pk for p in form.cleaned_data['planes']),
+        'equipo': [
+            {c: f.cleaned_data.get(c) or '' for c in _CAMPOS_MIEMBRO}
+            for f in formset.forms
+            if f.cleaned_data and not f.cleaned_data.get('DELETE')
+        ],
+    }
+
+
+def _guardar_comision(comision, datos):
+    comision.condicion = datos['condicion']
+    comision.credito_horario = datos['credito_horario']
+    comision.save(update_fields=['condicion', 'credito_horario'])
+    comision.planes.set(datos['planes'])
+    comision.equipo.all().delete()
+    MiembroComision.objects.bulk_create([
+        MiembroComision(comision=comision, orden=i, **m) for i, m in enumerate(datos['equipo'])
+    ])
+
+
+def _diff_propuesta(actual, propuesta):
+    """Filas actual / propuesto para mostrar la propuesta al director de departamento."""
+    from apps.tramites.models import CARGO_CHOICES, CONDICION_CHOICES, DEDICACION_CHOICES, FUNCION_CHOICES
+    condiciones, funciones = dict(CONDICION_CHOICES), dict(FUNCION_CHOICES)
+    cargos, dedicaciones = dict(CARGO_CHOICES), dict(DEDICACION_CHOICES)
+    codigos = dict(
+        PlanEstudio.objects
+        .filter(pk__in=set(actual['planes']) | set(propuesta['planes']))
+        .values_list('pk', 'codigo')
+    )
+
+    def miembro(m):
+        detalle = ', '.join(x for x in (cargos.get(m['cargo'], ''), dedicaciones.get(m['dedicacion'], '')) if x)
+        dni = f' (DNI {m["dni"]})' if m['dni'] else ''
+        return f'{m["nombre"]}{dni} — {funciones.get(m["funcion"], m["funcion"])}' + (f' · {detalle}' if detalle else '')
+
+    def fmt(campo, d):
+        if campo == 'condicion':
+            return [condiciones.get(d['condicion'], '')] if d['condicion'] else []
+        if campo == 'credito_horario':
+            return [f'{d["credito_horario"]} hs'] if d['credito_horario'] else []
+        if campo == 'planes':
+            return [', '.join(f'Plan {codigos.get(pk, pk)}' for pk in d['planes'])] if d['planes'] else []
+        return [miembro(m) for m in d['equipo']]
+
+    etiquetas = [
+        ('condicion', 'Condición de cursada'), ('credito_horario', 'Crédito horario'),
+        ('planes', 'Planes de estudio'), ('equipo', 'Equipo docente'),
+    ]
+    return [
+        {'campo': etiqueta, 'actual': fmt(c, actual), 'propuesto': fmt(c, propuesta), 'cambia': actual[c] != propuesta[c]}
+        for c, etiqueta in etiquetas
+    ]
+
+
+def _directores_del_departamento(departamento):
+    from django.contrib.auth import get_user_model
+    return get_user_model().objects.filter(rol='director_departamento', departamento=departamento, is_active=True)
 
 
 @login_required
@@ -2369,21 +2481,34 @@ def lista_comisiones(request):
     elif tipo == 'optativas':
         qs = qs.filter(materia_optativa__isnull=False)
     comisiones = list(qs)
+    cerrados = _informes_comisiones_cerrados()
+    con_propuesta = dict(
+        PropuestaComision.objects
+        .filter(estado='pendiente', comision__in=comisiones)
+        .values_list('comision_id', 'propuesto_por_id')
+    )
     for c in comisiones:
-        c.editable = _puede_editar_comision(user, c)
+        c.bloqueada = _comision_bloqueada(c, cerrados)
+        c.editable = not c.bloqueada and _puede_editar_comision(user, c)
+        c.proponible = not c.bloqueada and _puede_proponer_comision(user, c)
+        c.tiene_propuesta = c.pk in con_propuesta
     incompletas = sum(1 for c in comisiones if c.se_dicta and not c.esta_completa)
+    propuestas_count = sum(1 for c in comisiones if c.tiene_propuesta)
     if estado == 'incompletas':
         comisiones = [c for c in comisiones if c.se_dicta and not c.esta_completa]
+    elif estado == 'con_propuesta':
+        comisiones = [c for c in comisiones if c.tiene_propuesta]
 
     informe = None
     if (user.es_director_departamento and activa
             and activa.anio == anio and str(activa.cuatrimestre) == periodo):
         informe = {
             'solicitud': activa,
-            'enviado': InformeComisionesEnviado.objects.filter(
+            'registro': InformeComisionesEnviado.objects.filter(
                 solicitud=activa, departamento=user.departamento,
             ).first(),
             'incompletas': _comisiones_incompletas(activa, user.departamento),
+            'propuestas': _propuestas_pendientes_del_informe(activa, user.departamento),
         }
 
     anios = sorted(set(_comisiones_visibles(user).values_list('anio', flat=True)) | {anio}, reverse=True)
@@ -2395,36 +2520,116 @@ def lista_comisiones(request):
         'tipo': tipo,
         'estado': estado,
         'incompletas': incompletas,
+        'propuestas_count': propuestas_count,
         'informe': informe,
     })
 
 
 @login_required
 def detalle_comision(request, pk):
-    """Detalle de la comisión; quien puede editarla la completa en la misma página."""
+    """Detalle de la comisión. El director de departamento la completa en la misma página
+    (si hay una propuesta del director de carrera, el formulario viene cargado con ella y al
+    guardar queda aplicada); el director de carrera, con el mismo formulario, propone cambios."""
+    user = request.user
     comision = get_object_or_404(
-        _comisiones_visibles(request.user).prefetch_related('planes', 'equipo'), pk=pk,
+        _comisiones_visibles(user).prefetch_related('planes', 'equipo'), pk=pk,
     )
-    puede_editar = _puede_editar_comision(request.user, comision)
+    bloqueada = _comision_bloqueada(comision)
+    puede_editar = not bloqueada and _puede_editar_comision(user, comision)
+    puede_proponer = not bloqueada and _puede_proponer_comision(user, comision)
+    propuesta = (
+        comision.propuestas.filter(estado='pendiente')
+        .select_related('propuesto_por').prefetch_related('planes')
+        .first()
+    )
+    actual = _datos_comision(comision)
+    datos_propuesta = _datos_comision(propuesta) if propuesta else None
+    url_detalle = reverse('planes:detalle_comision', args=[comision.pk])
+    nombre_usuario = user.get_full_name() or user.username
+
+    if request.method == 'POST' and request.POST.get('accion') == 'descartar_propuesta' and propuesta:
+        if puede_editar:
+            propuesta.estado = 'descartada'
+            propuesta.revisada_por = user
+            propuesta.fecha_revision = timezone.now()
+            propuesta.save(update_fields=['estado', 'revisada_por', 'fecha_revision'])
+            if propuesta.propuesto_por:
+                _crear_notificacion(
+                    propuesta.propuesto_por, 'cambio_estado',
+                    f'Propuesta descartada — {comision.nombre_materia}',
+                    f'{nombre_usuario} (director del Departamento de {comision.departamento}) descartó tu '
+                    f'propuesta de cambio en la comisión de {comision.nombre_materia} ({comision.periodo_display}).',
+                    url=url_detalle,
+                )
+            messages.success(request, 'Propuesta descartada.')
+        elif puede_proponer:
+            propuesta.delete()
+            messages.success(request, 'Propuesta retirada.')
+        return redirect(url_detalle)
+
     form = formset = None
-    if puede_editar:
+    if puede_editar or puede_proponer:
         datos = request.POST if request.method == 'POST' else None
-        form = ComisionForm(datos, instance=comision)
-        formset = MiembroComisionFormSet(datos, instance=comision, prefix='equipo')
+        inicial = datos_propuesta or actual
+        form = ComisionForm(datos, instance=comision, initial={
+            'condicion': inicial['condicion'],
+            'credito_horario': inicial['credito_horario'],
+            'planes': inicial['planes'],
+        })
+        formset = EquipoComisionFormSet(datos, initial=inicial['equipo'], prefix='equipo')
         if datos is not None and form.is_valid() and formset.is_valid():
-            form.save()
-            formset.save()
-            for i, f in enumerate(formset.forms):
-                if f.instance.pk and f not in formset.deleted_forms:
-                    type(f.instance).objects.filter(pk=f.instance.pk).update(orden=i)
-            messages.success(request, 'Comisión guardada.')
-            return redirect('planes:detalle_comision', pk=comision.pk)
+            nuevo = _datos_del_form(form, formset)
+            if puede_editar:
+                _guardar_comision(comision, nuevo)
+                if propuesta:
+                    propuesta.estado = 'aplicada'
+                    propuesta.revisada_por = user
+                    propuesta.fecha_revision = timezone.now()
+                    propuesta.save(update_fields=['estado', 'revisada_por', 'fecha_revision'])
+                    if propuesta.propuesto_por:
+                        _crear_notificacion(
+                            propuesta.propuesto_por, 'cambio_estado',
+                            f'Propuesta aplicada — {comision.nombre_materia}',
+                            f'{nombre_usuario} (director del Departamento de {comision.departamento}) revisó y '
+                            f'aplicó tu propuesta en la comisión de {comision.nombre_materia} ({comision.periodo_display}).',
+                            url=url_detalle,
+                        )
+                    messages.success(request, 'Comisión guardada. La propuesta del director de carrera quedó aplicada.')
+                else:
+                    messages.success(request, 'Comisión guardada.')
+            elif nuevo == actual:
+                if propuesta:
+                    propuesta.delete()
+                messages.info(request, 'La propuesta no tiene cambios respecto de la comisión actual; no se guardó.')
+            else:
+                p = propuesta or PropuestaComision(comision=comision)
+                p.propuesto_por = user
+                p.condicion = nuevo['condicion']
+                p.credito_horario = nuevo['credito_horario']
+                p.equipo = nuevo['equipo']
+                p.save()
+                p.planes.set(nuevo['planes'])
+                for director in _directores_del_departamento(comision.departamento):
+                    _crear_notificacion(
+                        director, 'nuevo_tramite',
+                        f'Propuesta de cambio de comisión — {comision.nombre_materia}',
+                        f'{nombre_usuario} (director de {comision.carrera.nombre}) propuso cambios en la comisión '
+                        f'de {comision.nombre_materia} ({comision.periodo_display}). Revisala, completala si hace '
+                        'falta y guardala para aplicarla.',
+                        url=url_detalle,
+                    )
+                messages.success(request, f'Propuesta enviada al director del Departamento de {comision.departamento}.')
+            return redirect(url_detalle)
         if datos is not None:
             messages.error(request, 'Corregí los errores marcados.')
 
     return render(request, 'planes/comision_detalle.html', {
         'comision': comision,
+        'bloqueada': bloqueada,
         'puede_editar': puede_editar,
+        'puede_proponer': puede_proponer,
+        'propuesta': propuesta,
+        'diff': _diff_propuesta(actual, datos_propuesta) if propuesta else None,
         'form': form,
         'formset': formset,
         'items_servicio': comision.items_servicio.select_related('solicitud'),
@@ -2442,6 +2647,14 @@ def editar_comision(request, pk):
 def _comisiones_incompletas(solicitud, departamento):
     """Comisiones del informe del departamento (solo las que se dictan) sin completar."""
     return [c for c in _comisiones_del_informe(solicitud, departamento) if not c.esta_completa]
+
+
+def _propuestas_pendientes_del_informe(solicitud, departamento):
+    return (
+        PropuestaComision.objects
+        .filter(estado='pendiente', comision__in=_comisiones_del_informe(solicitud, departamento))
+        .select_related('comision__materia', 'comision__materia_optativa', 'comision__carrera')
+    )
 
 
 def _comisiones_del_informe(solicitud, departamento):
@@ -2545,47 +2758,144 @@ def admin_informes_comisiones(request):
     })
 
 
+def _url_comisiones_del_informe(solicitud, extra=''):
+    return reverse('planes:lista_comisiones') + f'?anio={solicitud.anio}&periodo={solicitud.cuatrimestre}{extra}'
+
+
+def _notificar_admins_informe_comisiones(titulo, mensaje, solicitud):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    for admin_user in User.objects.filter(rol__in=['secretario', 'direccion_academica'], is_active=True):
+        _crear_notificacion(
+            admin_user, 'nuevo_tramite', titulo, mensaje,
+            url=reverse('planes:admin_informes_comisiones') + f'?solicitud={solicitud.pk}',
+        )
+
+
 @login_required
 @solo_director_departamento
-def enviar_informe_comisiones(request):
+def cerrar_informe_comisiones(request):
+    """Cierra el informe: valida que todo esté completo y revisado, genera el docx y bloquea
+    la edición de las comisiones del informe."""
     if request.method != 'POST':
         return redirect('planes:lista_comisiones')
     from django.contrib.auth import get_user_model
+    from django.core.files.base import ContentFile
     User = get_user_model()
 
     solicitud = SolicitudInformeComisiones.objects.filter(activa=True).first()
     if not solicitud:
         messages.error(request, 'No hay un informe de comisiones solicitado.')
         return redirect('planes:lista_comisiones')
-
     departamento = request.user.departamento
+    if InformeComisionesEnviado.objects.filter(solicitud=solicitud, departamento=departamento).exists():
+        messages.info(request, 'El informe ya está cerrado.')
+        return redirect(_url_comisiones_del_informe(solicitud))
+
     incompletas = _comisiones_incompletas(solicitud, departamento)
     if incompletas:
         nombres = ', '.join(f'{c.nombre_materia} ({c.carrera.nombre})' for c in incompletas[:5])
         resto = f' y {len(incompletas) - 5} más' if len(incompletas) > 5 else ''
         messages.error(
             request,
-            f'No se puede enviar el informe: hay {len(incompletas)} comisión(es) de materias que se '
+            f'No se puede cerrar el informe: hay {len(incompletas)} comisión(es) de materias que se '
             f'dictan sin completar ({nombres}{resto}). Completá condición, crédito horario y equipo docente.',
         )
-        return redirect(
-            reverse('planes:lista_comisiones')
-            + f'?anio={solicitud.anio}&periodo={solicitud.cuatrimestre}&estado=incompletas'
+        return redirect(_url_comisiones_del_informe(solicitud, '&estado=incompletas'))
+    pendientes = list(_propuestas_pendientes_del_informe(solicitud, departamento))
+    if pendientes:
+        nombres = ', '.join(f'{p.comision.nombre_materia} ({p.comision.carrera.nombre})' for p in pendientes[:5])
+        resto = f' y {len(pendientes) - 5} más' if len(pendientes) > 5 else ''
+        messages.error(
+            request,
+            f'No se puede cerrar el informe: hay {len(pendientes)} propuesta(s) de directores de carrera '
+            f'sin revisar ({nombres}{resto}). Aplicalas o descartalas.',
         )
-    InformeComisionesEnviado.objects.update_or_create(
-        solicitud=solicitud, departamento=departamento,
-        defaults={'director': request.user, 'fecha_envio': timezone.now()},
+        return redirect(_url_comisiones_del_informe(solicitud, '&estado=con_propuesta'))
+
+    comisiones = list(_comisiones_del_informe(solicitud, departamento))
+    admin_user = User.objects.filter(rol='secretario', is_active=True).first()
+    docx = generar_docx_informe_comisiones(departamento, request.user, admin_user, solicitud, comisiones)
+    informe = InformeComisionesEnviado(
+        solicitud=solicitud, departamento=departamento, director=request.user,
+        estado='cerrado', fecha_cierre=timezone.now(),
     )
-    for admin_user in User.objects.filter(rol__in=['secretario', 'direccion_academica'], is_active=True):
-        _crear_notificacion(
-            admin_user, 'nuevo_tramite',
-            f'Informe de comisiones enviado — Dpto. {departamento}',
-            f'{request.user.get_full_name()} envió el informe de comisiones del '
-            f'{solicitud.get_cuatrimestre_display().lower()} {solicitud.anio} del Departamento de {departamento}.',
-            url=reverse('planes:admin_informes_comisiones') + f'?solicitud={solicitud.pk}',
+    nombre = f'informe_comisiones_{departamento.lower().replace(" ", "_")}_{solicitud.anio}_c{solicitud.cuatrimestre}.docx'
+    informe.documento.save(nombre, ContentFile(docx.read()), save=False)
+    informe.save()
+    messages.success(
+        request,
+        'Informe cerrado: se generó el Word con la nota y las tablas de todas las comisiones. '
+        'Descargalo, iniciá el trámite en SUDOCU y enviá el informe con el número de trámite.',
+    )
+    return redirect(_url_comisiones_del_informe(solicitud))
+
+
+@login_required
+@solo_director_departamento
+def enviar_informe_comisiones(request):
+    """Envía a administración el informe cerrado, con su número de trámite SUDOCU."""
+    if request.method != 'POST':
+        return redirect('planes:lista_comisiones')
+    solicitud = SolicitudInformeComisiones.objects.filter(activa=True).first()
+    departamento = request.user.departamento
+    informe = InformeComisionesEnviado.objects.filter(
+        solicitud=solicitud, departamento=departamento, estado='cerrado',
+    ).first() if solicitud else None
+    if not informe:
+        messages.error(request, 'Primero tenés que cerrar el informe de comisiones.')
+        return redirect('planes:lista_comisiones')
+
+    numero_sudocu = request.POST.get('numero_sudocu', '').strip()
+    if not numero_sudocu:
+        messages.error(request, 'Ingresá el número de trámite SUDOCU.')
+        return redirect(_url_comisiones_del_informe(solicitud))
+
+    informe.numero_sudocu = numero_sudocu
+    informe.estado = 'enviado'
+    informe.fecha_envio = timezone.now()
+    informe.director = request.user
+    informe.save(update_fields=['numero_sudocu', 'estado', 'fecha_envio', 'director'])
+    periodo = f'{solicitud.get_cuatrimestre_display().lower()} {solicitud.anio}'
+    _notificar_admins_informe_comisiones(
+        f'Informe de comisiones enviado — Dpto. {departamento} — SUDOCU {numero_sudocu}',
+        f'{request.user.get_full_name()} envió el informe de comisiones del {periodo} del '
+        f'Departamento de {departamento}.\nTrámite SUDOCU: {numero_sudocu}.',
+        solicitud,
+    )
+    messages.success(request, f'Informe de comisiones enviado a administración con el trámite SUDOCU {numero_sudocu}.')
+    return redirect(_url_comisiones_del_informe(solicitud))
+
+
+@login_required
+@solo_director_departamento
+def reabrir_informe_comisiones(request):
+    """Vuelve a habilitar la edición de las comisiones del informe; el Word se regenera al cerrarlo."""
+    if request.method != 'POST':
+        return redirect('planes:lista_comisiones')
+    solicitud = SolicitudInformeComisiones.objects.filter(activa=True).first()
+    departamento = request.user.departamento
+    informe = InformeComisionesEnviado.objects.filter(
+        solicitud=solicitud, departamento=departamento,
+    ).first() if solicitud else None
+    if not informe:
+        messages.error(request, 'No hay un informe cerrado para reabrir.')
+        return redirect('planes:lista_comisiones')
+
+    if informe.estado == 'enviado':
+        _notificar_admins_informe_comisiones(
+            f'Informe de comisiones reabierto — Dpto. {departamento}',
+            f'{request.user.get_full_name()} reabrió para modificarlo el informe de comisiones del '
+            f'{solicitud.get_cuatrimestre_display().lower()} {solicitud.anio} del Departamento de {departamento}'
+            + (f' (trámite SUDOCU {informe.numero_sudocu})' if informe.numero_sudocu else '') + '. '
+            'Lo va a volver a enviar.',
+            solicitud,
         )
-    messages.success(request, 'Informe de comisiones enviado.')
-    return redirect(reverse('planes:lista_comisiones') + f'?anio={solicitud.anio}&periodo={solicitud.cuatrimestre}')
+    if informe.documento:
+        informe.documento.delete(save=False)
+    informe.delete()
+    messages.success(request, 'Informe reabierto: ya podés modificar las comisiones. Volvé a cerrarlo y enviarlo.')
+    return redirect(_url_comisiones_del_informe(solicitud))
 
 
 @login_required

@@ -861,8 +861,64 @@ class SolicitudInformeComisiones(models.Model):
         return [1, 3] if self.cuatrimestre == 1 else [2]
 
 
+class PropuestaComision(models.Model):
+    """Cambio que un director de carrera propone en una comisión de su carrera. Lo revisa el
+    director del departamento que la informa: lo aplica (con o sin ajustes) o lo descarta."""
+    ESTADO_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('aplicada', 'Aplicada'),
+        ('descartada', 'Descartada'),
+    ]
+    comision = models.ForeignKey(
+        Comision, on_delete=models.CASCADE,
+        related_name='propuestas', verbose_name='Comisión',
+    )
+    propuesto_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='propuestas_comision', verbose_name='Propuesto por',
+    )
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', verbose_name='Estado')
+    condicion = models.CharField(
+        max_length=20, blank=True,
+        choices=CONDICION_CHOICES, verbose_name='Condición de cursada',
+    )
+    credito_horario = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='Crédito horario (hs)')
+    planes = models.ManyToManyField(
+        PlanEstudio, blank=True,
+        related_name='propuestas_comision', verbose_name='Planes de estudio asociados',
+    )
+    # [{nombre, dni, funcion, cargo, dedicacion}, ...] en el orden del equipo
+    equipo = models.JSONField(default=list, blank=True, verbose_name='Equipo docente')
+    fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de creación')
+    fecha_actualizacion = models.DateTimeField(auto_now=True, verbose_name='Última modificación')
+    revisada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='propuestas_comision_revisadas', verbose_name='Revisada por',
+    )
+    fecha_revision = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de revisión')
+
+    class Meta:
+        ordering = ['-fecha_actualizacion']
+        verbose_name = 'Propuesta de cambio de comisión'
+        verbose_name_plural = 'Propuestas de cambio de comisión'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['comision'], condition=Q(estado='pendiente'),
+                name='propuesta_comision_pendiente_unica',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Propuesta — {self.comision} ({self.get_estado_display()})'
+
+
 class InformeComisionesEnviado(models.Model):
-    """Registra que un departamento envió su informe de comisiones para una solicitud."""
+    """Informe de comisiones de un departamento para una solicitud: se cierra (se genera el docx
+    y se bloquea la edición de sus comisiones) y después se envía con el N° de trámite SUDOCU."""
+    ESTADO_CHOICES = [
+        ('cerrado', 'Cerrado — falta enviar'),
+        ('enviado', 'Enviado'),
+    ]
     solicitud = models.ForeignKey(
         SolicitudInformeComisiones, on_delete=models.CASCADE,
         related_name='informes_enviados', verbose_name='Solicitud',
@@ -872,7 +928,14 @@ class InformeComisionesEnviado(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='informes_comisiones_enviados', verbose_name='Director',
     )
-    fecha_envio = models.DateTimeField(verbose_name='Fecha de envío')
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='cerrado', verbose_name='Estado')
+    fecha_cierre = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de cierre')
+    fecha_envio = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de envío')
+    numero_sudocu = models.CharField(max_length=50, blank=True, verbose_name='N° de trámite SUDOCU')
+    documento = models.FileField(
+        upload_to='comisiones/informes/', blank=True, null=True,
+        verbose_name='Documento del informe (DOCX)',
+    )
 
     class Meta:
         unique_together = [('solicitud', 'departamento')]

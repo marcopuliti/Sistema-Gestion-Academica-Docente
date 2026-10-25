@@ -38,7 +38,65 @@
   </div>
 </div>
 
-{% if puede_editar %}
+{% if bloqueada %}
+<div class="alert alert-secondary small">
+  <i class="bi bi-lock me-1"></i>
+  El Departamento de {{ comision.departamento }} ya cerró su informe de comisiones de este período: la comisión no se puede modificar
+  {% if user.es_director_departamento %}hasta que reabras el informe desde <a href="{% url 'planes:lista_comisiones' %}?anio={{ comision.anio }}&periodo={% if comision.cuatrimestre == 2 %}2{% else %}1{% endif %}">Comisiones</a>{% else %}salvo que el director del departamento lo reabra{% endif %}.
+</div>
+{% elif puede_proponer and not propuesta %}
+<div class="alert alert-info small">
+  <i class="bi bi-info-circle me-1"></i>
+  Los cambios que hagas llegan como <strong>propuesta</strong> al director del Departamento de {{ comision.departamento }},
+  que los revisa, completa lo que falte y los aplica.
+</div>
+{% endif %}
+
+{% if propuesta %}
+<div class="card mb-3 border-info">
+  <div class="card-header bg-info text-dark d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span>
+      <i class="bi bi-pencil-square me-2"></i><strong>Propuesta de cambio</strong>
+      de {{ propuesta.propuesto_por.get_full_name|default:propuesta.propuesto_por.username|default:"un director de carrera" }}
+      <span class="small ms-1">· {{ propuesta.fecha_actualizacion|date:"d/m/Y H:i" }}</span>
+    </span>
+    {% if puede_editar or puede_proponer %}
+    <form method="post" onsubmit="return confirm('{% if puede_editar %}¿Descartás la propuesta? Se le avisa al director de carrera.{% else %}¿Retirás tu propuesta?{% endif %}')">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="descartar_propuesta">
+      <button type="submit" class="btn btn-sm btn-outline-dark">
+        <i class="bi bi-x-lg me-1"></i>{% if puede_editar %}Descartar propuesta{% else %}Retirar propuesta{% endif %}
+      </button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 small">
+      <thead><tr><th style="width:170px">Campo</th><th>Actual</th><th>Propuesto</th></tr></thead>
+      <tbody>
+        {% for fila in diff %}
+        <tr {% if fila.cambia %}style="--bs-table-bg:#fff3cd"{% endif %}>
+          <td class="fw-semibold">{{ fila.campo }}</td>
+          <td>{% for v in fila.actual %}<div>{{ v }}</div>{% empty %}<span class="text-muted fst-italic">Sin cargar</span>{% endfor %}</td>
+          <td>{% for v in fila.propuesto %}<div>{{ v }}</div>{% empty %}<span class="text-muted fst-italic">Sin cargar</span>{% endfor %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-body py-2 small text-muted">
+    {% if puede_editar %}
+    El formulario de abajo está cargado con la propuesta: ajustala o completá lo que falte y guardá para aplicarla.
+    {% elif puede_proponer %}
+    Pendiente de revisión por el director del Departamento de {{ comision.departamento }}. Podés modificarla abajo.
+    {% else %}
+    Pendiente de revisión por el director del Departamento de {{ comision.departamento }}.
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if form %}
 {% include "planes/_comision_form.html" %}
 {% else %}
 <div class="card mb-3">

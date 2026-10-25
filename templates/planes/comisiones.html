@@ -7,42 +7,99 @@
   <h2><i class="bi bi-person-video3 me-2"></i>Comisiones</h2>
   <p class="text-muted mb-0 small">
     Una comisión por materia y carrera en cada período.
-    {% if user.es_director_departamento %}Completá las de tu departamento y enviá el informe cuatrimestral.
-    {% elif user.es_director_carrera %}Podés completar todas las comisiones de tu carrera; las de materias de plan las informa el departamento responsable.{% endif %}
+    {% if user.es_director_departamento %}Completá las de tu departamento (revisando las propuestas de los directores de carrera) y enviá el informe cuatrimestral.
+    {% elif user.es_director_carrera %}Podés proponer cambios en todas las comisiones de tu carrera: le llegan al director del departamento que informa cada una, que los revisa y completa.{% endif %}
   </p>
 </div>
 
 {% if informe %}
-<div class="alert {% if informe.enviado %}alert-success{% else %}alert-warning{% endif %} d-flex justify-content-between align-items-center flex-wrap gap-2">
+{% with reg=informe.registro %}
+<div class="alert {% if reg.estado == 'enviado' %}alert-success{% elif reg %}alert-info{% else %}alert-warning{% endif %} d-flex justify-content-between align-items-center flex-wrap gap-2">
   <div class="small">
     <i class="bi bi-megaphone-fill me-1"></i>
     <strong>Informe de comisiones — {{ informe.solicitud.get_cuatrimestre_display }} {{ informe.solicitud.anio }}.</strong>
-    {% if informe.enviado %}
-      Enviado el {{ informe.enviado.fecha_envio|date:"d/m/Y H:i" }}. Si hacés cambios, podés volver a enviarlo.
+    {% if reg.estado == 'enviado' %}
+      Enviado el {{ reg.fecha_envio|date:"d/m/Y H:i" }} · SUDOCU <strong>{{ reg.numero_sudocu }}</strong>.
+      Si tenés que corregirlo, reabrilo, modificá las comisiones y volvé a cerrarlo y enviarlo.
+    {% elif reg %}
+      <strong>Cerrado</strong> el {{ reg.fecha_cierre|date:"d/m/Y H:i" }}: las comisiones ya no se pueden modificar.
+      Descargá el Word, iniciá el trámite en SUDOCU y enviá el informe con el número de trámite.
     {% else %}
-      Solicitado por administración.
-    {% endif %}
-    {% if informe.incompletas %}
-    <div class="mt-1"><i class="bi bi-exclamation-triangle me-1"></i>Para enviarlo tenés que completar las
-      <a href="?anio={{ informe.solicitud.anio }}&periodo={{ informe.solicitud.cuatrimestre }}&estado=incompletas">{{ informe.incompletas|length }} comisión(es) incompleta(s)</a>
-      de materias que se dictan (condición, crédito horario y equipo docente).</div>
+      Solicitado por administración. Cuando esté todo completo, cerralo para generar el Word y después envialo con el N° SUDOCU.
+      {% if informe.incompletas %}
+      <div class="mt-1"><i class="bi bi-exclamation-triangle me-1"></i>Para cerrarlo tenés que completar las
+        <a href="?anio={{ informe.solicitud.anio }}&periodo={{ informe.solicitud.cuatrimestre }}&estado=incompletas">{{ informe.incompletas|length }} comisión(es) incompleta(s)</a>
+        de materias que se dictan (condición, crédito horario y equipo docente).</div>
+      {% endif %}
+      {% if informe.propuestas %}
+      <div class="mt-1"><i class="bi bi-pencil-square me-1"></i>Tenés
+        <a href="?anio={{ informe.solicitud.anio }}&periodo={{ informe.solicitud.cuatrimestre }}&estado=con_propuesta">{{ informe.propuestas|length }} propuesta{{ informe.propuestas|length|pluralize }} de directores de carrera</a>
+        para revisar (aplicalas o descartalas antes de cerrar el informe).</div>
+      {% endif %}
     {% endif %}
   </div>
-  <div class="d-flex gap-2">
+  <div class="d-flex gap-2 flex-wrap">
+    {% if reg.documento %}
+    <a href="{{ reg.documento.url }}" class="btn btn-sm btn-outline-primary" title="Word generado al cerrar el informe">
+      <i class="bi bi-file-earmark-word me-1"></i>Word
+    </a>
+    {% else %}
+    <a href="{% url 'planes:descargar_informe_comisiones' informe.solicitud.pk %}?formato=docx" class="btn btn-sm btn-outline-primary" title="Vista previa">
+      <i class="bi bi-file-earmark-word me-1"></i>Word
+    </a>
+    {% endif %}
     <a href="{% url 'planes:descargar_informe_comisiones' informe.solicitud.pk %}" class="btn btn-sm btn-outline-danger">
       <i class="bi bi-file-earmark-pdf me-1"></i>PDF
     </a>
-    <a href="{% url 'planes:descargar_informe_comisiones' informe.solicitud.pk %}?formato=docx" class="btn btn-sm btn-outline-primary">
-      <i class="bi bi-file-earmark-word me-1"></i>Word
-    </a>
-    <form method="post" action="{% url 'planes:enviar_informe_comisiones' %}">
+    {% if not reg %}
+    <form method="post" action="{% url 'planes:cerrar_informe_comisiones' %}"
+          onsubmit="return confirm('¿Cerrás el informe? Se genera el Word y las comisiones quedan bloqueadas hasta que lo reabras.')">
       {% csrf_token %}
-      <button type="submit" class="btn btn-sm btn-success" {% if informe.incompletas %}disabled title="Completá todas las comisiones para poder enviarlo"{% endif %}>
-        <i class="bi bi-send me-1"></i>{% if informe.enviado %}Reenviar informe{% else %}Enviar informe{% endif %}
+      <button type="submit" class="btn btn-sm btn-primary" {% if informe.incompletas or informe.propuestas %}disabled title="Completá todas las comisiones y revisá las propuestas para poder cerrarlo"{% endif %}>
+        <i class="bi bi-lock me-1"></i>Cerrar informe
       </button>
     </form>
+    {% else %}
+    {% if reg.estado == 'cerrado' %}
+    <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalEnviarInformeComisiones">
+      <i class="bi bi-send me-1"></i>Enviar informe
+    </button>
+    {% endif %}
+    <form method="post" action="{% url 'planes:reabrir_informe_comisiones' %}"
+          onsubmit="return confirm('¿Reabrís el informe para modificar las comisiones? Se descarta el Word{% if reg.estado == 'enviado' %} y se avisa a administración{% endif %}; vas a tener que cerrarlo y enviarlo de nuevo.')">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-outline-warning"><i class="bi bi-unlock me-1"></i>Reabrir</button>
+    </form>
+    {% endif %}
   </div>
 </div>
+
+{% if reg.estado == 'cerrado' %}
+<div class="modal fade" id="modalEnviarInformeComisiones" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-send me-2"></i>Enviar informe de comisiones</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{% url 'planes:enviar_informe_comisiones' %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          <p>Se envía a administración el informe de comisiones del {{ informe.solicitud.get_cuatrimestre_display|lower }} {{ informe.solicitud.anio }} con el Word generado al cerrarlo.</p>
+          <p class="small"><a href="{{ reg.documento.url }}"><i class="bi bi-file-earmark-word me-1"></i>Descargar el Word</a> para adjuntarlo al trámite en SUDOCU.</p>
+          <label class="form-label fw-semibold small" for="sudocuComisiones">N° de trámite SUDOCU <span class="text-danger">*</span></label>
+          <input type="text" name="numero_sudocu" id="sudocuComisiones" class="form-control" placeholder="Ej: 9628/2026" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-send me-1"></i>Enviar a administración</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endwith %}
 {% endif %}
 
 <div class="card mb-3">
@@ -70,6 +127,7 @@
         <select name="estado" class="form-select form-select-sm" onchange="this.form.submit()">
           <option value="">Completas e incompletas</option>
           <option value="incompletas" {% if estado == 'incompletas' %}selected{% endif %}>Solo incompletas ({{ incompletas }})</option>
+          <option value="con_propuesta" {% if estado == 'con_propuesta' %}selected{% endif %}>Con propuesta pendiente ({{ propuestas_count }})</option>
         </select>
       </div>
     </form>
@@ -111,10 +169,14 @@
             {% if not c.se_dicta %}<span class="badge bg-secondary" title="El director de carrera indicó que no se dicta; no entra en el informe">No se dicta</span>
             {% elif c.esta_completa %}<span class="badge bg-success">Completa</span>
             {% else %}<span class="badge bg-warning text-dark">A completar</span>{% endif %}
+            {% if c.tiene_propuesta %}<div><span class="badge bg-info text-dark mt-1" style="font-size:.65rem"><i class="bi bi-pencil-square me-1"></i>Propuesta</span></div>{% endif %}
+            {% if c.bloqueada %}<div><span class="badge bg-light text-dark border mt-1" style="font-size:.65rem" title="El informe del departamento está cerrado"><i class="bi bi-lock me-1"></i>Informe cerrado</span></div>{% endif %}
           </td>
           <td class="text-end">
             {% if c.editable %}
-            <a href="{% url 'planes:detalle_comision' c.pk %}" class="btn btn-sm btn-outline-primary" title="Completar / editar"><i class="bi bi-pencil"></i></a>
+            <a href="{% url 'planes:detalle_comision' c.pk %}" class="btn btn-sm btn-outline-primary" title="{% if c.tiene_propuesta %}Revisar propuesta{% else %}Completar / editar{% endif %}"><i class="bi bi-pencil"></i></a>
+            {% elif c.proponible %}
+            <a href="{% url 'planes:detalle_comision' c.pk %}" class="btn btn-sm btn-outline-primary" title="Proponer cambio"><i class="bi bi-pencil-square"></i></a>
             {% endif %}
           </td>
         </tr>

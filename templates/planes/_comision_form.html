@@ -1,4 +1,4 @@
-{# Formulario de comisión (datos + equipo docente). Requiere form, formset y comision. #}
+{# Formulario de comisión (datos + equipo docente). Requiere form, formset y comision; con puede_proponer se envía como propuesta. #}
 <form method="post">
   {% csrf_token %}
   <div class="card mb-3">
@@ -46,12 +46,12 @@
         <tbody id="equipoFilas">
           {% for f in formset %}
           <tr>
-            <td>{{ f.id }}{{ f.nombre }}{% if f.nombre.errors %}<div class="text-danger small">{{ f.nombre.errors.0 }}</div>{% endif %}</td>
+            <td>{{ f.nombre }}{% if f.nombre.errors %}<div class="text-danger small">{{ f.nombre.errors.0 }}</div>{% endif %}</td>
             <td>{{ f.dni }}</td>
             <td>{{ f.funcion }}{% if f.funcion.errors %}<div class="text-danger small">{{ f.funcion.errors.0 }}</div>{% endif %}</td>
             <td>{{ f.cargo }}</td>
             <td>{{ f.dedicacion }}</td>
-            <td class="text-center">{% if f.instance.pk %}{{ f.DELETE }}{% endif %}</td>
+            <td class="text-center">{% if forloop.counter0 < formset.initial_form_count %}{{ f.DELETE }}{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -61,7 +61,7 @@
 
   <template id="filaVacia">
     <tr>
-      <td>{{ formset.empty_form.id }}{{ formset.empty_form.nombre }}</td>
+      <td>{{ formset.empty_form.nombre }}</td>
       <td>{{ formset.empty_form.dni }}</td>
       <td>{{ formset.empty_form.funcion }}</td>
       <td>{{ formset.empty_form.cargo }}</td>
@@ -71,8 +71,12 @@
   </template>
 
   <div class="d-flex gap-2">
-    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Guardar</button>
-    <a href="{% url 'planes:detalle_comision' comision.pk %}" class="btn btn-outline-secondary">Descartar cambios</a>
+    {% if puede_proponer %}
+    <button type="submit" class="btn btn-primary"><i class="bi bi-send me-1"></i>{% if propuesta %}Actualizar propuesta{% else %}Enviar propuesta{% endif %}</button>
+    {% else %}
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>{% if propuesta %}Guardar y aplicar la propuesta{% else %}Guardar{% endif %}</button>
+    {% endif %}
+    <a href="{% url 'planes:detalle_comision' comision.pk %}" class="btn btn-outline-secondary">Deshacer cambios</a>
   </div>
 </form>
 <script>

@@ -4,7 +4,7 @@ from io import BytesIO
 from django.conf import settings
 from pypdf import PdfWriter, PdfReader
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
@@ -634,9 +634,74 @@ def generar_pdf_nota_elevacion(solicitud):
     return buffer
 
 
+# ── Notas del circuito: acta de la Comisión de Carrera y aval del Consejo ────
+
+def _flowables_nota(nota):
+    """Nota institucional (escudo, fecha, destinatario, cuerpo y firma) a partir de notas.py."""
+    from xml.sax.saxutils import escape
+    from .notas import fecha_larga
+    base = getSampleStyleSheet()
+    estilo = ParagraphStyle('NotaN', parent=base['Normal'], fontName='Times-Roman', fontSize=12, leading=18)
+    cuerpo = ParagraphStyle('NotaNJ', parent=estilo, alignment=TA_JUSTIFY, firstLineIndent=1.5 * cm)
+    derecha = ParagraphStyle('NotaNR', parent=estilo, alignment=TA_RIGHT)
+    centro = ParagraphStyle('NotaNC', parent=estilo, alignment=TA_CENTER)
+
+    E = []
+    logo_path = os.path.join(settings.BASE_DIR, 'static', 'escudo.gif')
+    if os.path.exists(logo_path):
+        logo = Image(logo_path, width=2.2 * cm, height=2.2 * cm)
+        logo.hAlign = 'CENTER'
+        E.append(logo)
+        E.append(Spacer(1, 0.2 * cm))
+    for linea in ['Universidad Nacional de San Luis', 'Facultad de Ciencias Físico Matemáticas y Naturales']:
+        E.append(Paragraph(linea, centro))
+    E.append(Spacer(1, 0.8 * cm))
+    E.append(Paragraph(f'San Luis, {fecha_larga(nota["fecha"])}', derecha))
+    E.append(Spacer(1, 0.8 * cm))
+    for linea in nota['destinatario']:
+        E.append(Paragraph(escape(linea), estilo))
+    E.append(Spacer(1, 0.8 * cm))
+    for partes in nota['parrafos']:
+        texto = ''.join(f'<b>{escape(t)}</b>' if negrita else escape(t) for t, negrita in partes)
+        E.append(Paragraph(texto, cuerpo))
+        E.append(Spacer(1, 0.4 * cm))
+    E.append(Spacer(1, 1.6 * cm))
+    linea_firma = Table([['']], colWidths=[8 * cm])
+    linea_firma.setStyle(TableStyle([('LINEABOVE', (0, 0), (0, 0), 0.5, NEGRO)]))
+    linea_firma.hAlign = 'LEFT'
+    E.append(linea_firma)
+    for linea in nota['firma']:
+        if linea:
+            E.append(Paragraph(escape(linea), estilo))
+    return E
+
+
+def _pdf_nota(nota):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        rightMargin=3 * cm, leftMargin=3 * cm,
+        topMargin=2.5 * cm, bottomMargin=2.5 * cm,
+    )
+    doc.build(_flowables_nota(nota))
+    buffer.seek(0)
+    return buffer
+
+
+def generar_pdf_acta_comision_carrera(solicitud):
+    from .notas import acta_comision_carrera
+    return _pdf_nota(acta_comision_carrera(solicitud))
+
+
+def generar_pdf_nota_aval_consejo(solicitud):
+    from .notas import nota_aval_consejo
+    return _pdf_nota(nota_aval_consejo(solicitud))
+
+
 # ── Documento completo: Nota de Elevación + Programa ──────────────────────────
-def generar_pdf_solicitud_completa(solicitud):
-    """Nota de elevación (página 1) seguida del programa completo."""
+def generar_pdf_solicitud_completa(solicitud, con_acta=False):
+    """Nota de elevación (página 1) seguida del programa completo. Con `con_acta` (director de
+    carrera / administración) se agrega al final el acta de la Comisión de Carrera generada."""
     COMB_MARGIN = 3 * cm
     cw = PAGE_W - 2 * COMB_MARGIN
 
@@ -953,9 +1018,11 @@ def generar_pdf_solicitud_completa(solicitud):
     doc.build(E, onFirstPage=_pie_pagina, onLaterPages=_pie_pagina)
     buffer.seek(0)
 
-    # ── Agregar actas de aval si existen ───────────────────────────────────────
+    # ── Agregar actas de aval: la generada o, en solicitudes anteriores, las subidas ──
     actas = []
-    if solicitud.acta_comision_carrera:
+    if con_acta:
+        actas.append(generar_pdf_acta_comision_carrera(solicitud))
+    elif solicitud.acta_comision_carrera:
         actas.append(solicitud.acta_comision_carrera)
     if solicitud.acta_consejo_departamental:
         actas.append(solicitud.acta_consejo_departamental)
@@ -968,8 +1035,11 @@ def generar_pdf_solicitud_completa(solicitud):
         writer.add_page(page)
     for acta in actas:
         try:
-            with acta.open('rb') as f:
-                paginas = PdfReader(BytesIO(f.read())).pages
+            if isinstance(acta, BytesIO):
+                paginas = PdfReader(acta).pages
+            else:
+                with acta.open('rb') as f:
+                    paginas = PdfReader(BytesIO(f.read())).pages
             for page in paginas:
                 writer.add_page(page)
         except Exception:

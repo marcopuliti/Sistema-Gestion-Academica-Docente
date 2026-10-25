@@ -40,6 +40,9 @@
               {% if user.puede_revisar and sol.estado == 'elevada' %}
               <a href="{% url 'solicitudes:revisar' sol.pk %}" class="btn btn-sm btn-outline-warning me-1" title="Revisar"><i class="bi bi-pencil-square"></i></a>
               {% endif %}
+              {% if user.es_director_carrera and sol.estado == 'en_carrera' or user.es_director_carrera and sol.estado == 'devuelta_carrera' %}
+              <a href="{% url 'solicitudes:revisar_carrera' sol.pk %}" class="btn btn-sm btn-outline-warning me-1" title="{% if sol.usuario == user %}Enviar al departamento{% else %}Revisar{% endif %}"><i class="bi bi-send-check"></i></a>
+              {% endif %}
               {% if user.puede_revisar %}
               <a href="{% url 'solicitudes:solicitud_completa_pdf' sol.pk %}" class="btn btn-sm btn-outline-danger" title="PDF completo"><i class="bi bi-file-pdf"></i></a>
               {% else %}

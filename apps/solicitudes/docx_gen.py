@@ -600,10 +600,78 @@ def generar_docx_nota_elevacion(solicitud):
     return buffer
 
 
+# ── Notas del circuito: acta de la Comisión de Carrera y aval del Consejo ────
+
+def _agregar_nota(doc, nota):
+    """Agrega al documento una nota institucional armada en notas.py."""
+    from .notas import fecha_larga
+    logo_path = os.path.join(settings.BASE_DIR, 'static', 'escudo.gif')
+    if os.path.exists(logo_path):
+        p_logo = doc.add_paragraph()
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_logo.paragraph_format.space_after = Pt(4)
+        p_logo.add_run().add_picture(logo_path, width=Cm(2.2))
+    _nota_parrafo(doc, 'Universidad Nacional de San Luis', bold=True, center=True, space_after=2)
+    _nota_parrafo(doc, 'Facultad de Ciencias Físico Matemáticas y Naturales', bold=True, center=True, space_after=16)
+    _nota_parrafo_mixed(doc, [(f'San Luis, {fecha_larga(nota["fecha"])}', False)], space_after=16, align_right=True)
+    for linea in nota['destinatario']:
+        _nota_parrafo(doc, linea, space_after=2)
+    doc.add_paragraph().paragraph_format.space_after = Pt(12)
+    for partes in nota['parrafos']:
+        p = _nota_parrafo_mixed(doc, partes, space_after=10)
+        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.paragraph_format.first_line_indent = Cm(1.5)
+    doc.add_paragraph().paragraph_format.space_after = Pt(30)
+
+    t_firma = doc.add_table(rows=1, cols=1)
+    t_firma.style = 'Table Grid'
+    tcPr = t_firma.cell(0, 0)._tc.get_or_add_tcPr()
+    tcBorders = OxmlElement('w:tcBorders')
+    for side in ('bottom', 'left', 'right', 'insideH', 'insideV'):
+        border = OxmlElement(f'w:{side}')
+        border.set(qn('w:val'), 'none')
+        tcBorders.append(border)
+    top_border = OxmlElement('w:top')
+    top_border.set(qn('w:val'), 'single')
+    top_border.set(qn('w:sz'), '6')
+    top_border.set(qn('w:color'), '000000')
+    tcBorders.append(top_border)
+    tcPr.append(tcBorders)
+    _set_col_widths(t_firma, [8.0])
+    lineas = [l for l in nota['firma'] if l]
+    for i, linea in enumerate(lineas):
+        _nota_parrafo(doc, linea, space_before=4 if i == 0 else 0, space_after=2)
+
+
+def _docx_nota(nota):
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin = Cm(2.5)
+        section.bottom_margin = Cm(2.5)
+        section.left_margin = Cm(3)
+        section.right_margin = Cm(3)
+    _agregar_nota(doc, nota)
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+def generar_docx_acta_comision_carrera(solicitud):
+    from .notas import acta_comision_carrera
+    return _docx_nota(acta_comision_carrera(solicitud))
+
+
+def generar_docx_nota_aval_consejo(solicitud):
+    from .notas import nota_aval_consejo
+    return _docx_nota(nota_aval_consejo(solicitud))
+
+
 # ── Documento completo: Nota de Elevación + Programa ──────────────────────────
 
-def generar_docx_solicitud_completa(solicitud):
-    """Nota de elevación (página 1) seguida del programa completo."""
+def generar_docx_solicitud_completa(solicitud, con_acta=False):
+    """Nota de elevación (página 1) seguida del programa completo. Con `con_acta` (director de
+    carrera / administración) se agrega al final el acta de la Comisión de Carrera."""
     doc = Document()
 
     for section in doc.sections:
@@ -904,6 +972,11 @@ def generar_docx_solicitud_completa(solicitud):
         trHeight.set(qn('w:val'), '500')
         trPr.append(trHeight)
     _set_col_widths(t_firma, [4.8, 11.2])
+
+    if con_acta:
+        from .notas import acta_comision_carrera
+        doc.add_page_break()
+        _agregar_nota(doc, acta_comision_carrera(solicitud))
 
     buffer = BytesIO()
     doc.save(buffer)

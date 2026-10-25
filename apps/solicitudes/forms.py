@@ -254,17 +254,84 @@ class RevisionDirectorForm(forms.Form):
 
 class RevisionDirectorProtocolizacionForm(RevisionDirectorForm):
     """Revisión del Director de Departamento para protocolizaciones: sin acción preseleccionada,
-    así el director tiene que elegir explícitamente."""
+    así el director tiene que elegir explícitamente. Para elevar carga la fecha y hora de la
+    reunión del Consejo Departamental que avaló el dictado (van en la nota de aval)."""
     accion = forms.ChoiceField(
         choices=[
-            ('',         '— Seleccioná una acción —'),
-            ('devuelta', 'Devolver al director de carrera con observaciones'),
-            ('elevada',  'Elevar a Secretaría'),
+            ('',                 '— Seleccioná una acción —'),
+            ('devuelta_carrera', 'Devolver al director de carrera con observaciones'),
+            ('elevada',          'Elevar a Secretaría'),
         ],
         label='Acción',
         error_messages={'required': 'Elegí una acción.'},
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
+    fecha_reunion_consejo = forms.DateField(
+        label='Fecha de la reunión del Consejo Departamental', required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}, format='%Y-%m-%d'),
+    )
+    hora_reunion_consejo = forms.TimeField(
+        label='Hora de la reunión', required=False,
+        widget=forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}, format='%H:%M'),
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        accion = cleaned.get('accion')
+        if accion == 'elevada':
+            if not cleaned.get('fecha_reunion_consejo'):
+                self.add_error('fecha_reunion_consejo', 'Indicá la fecha de la reunión del Consejo Departamental.')
+            if not cleaned.get('hora_reunion_consejo'):
+                self.add_error('hora_reunion_consejo', 'Indicá la hora de la reunión.')
+        if accion == 'devuelta_carrera' and not cleaned.get('comentarios', '').strip():
+            self.add_error('comentarios', 'Indicá las observaciones para el director de carrera.')
+        return cleaned
+
+
+class RevisionCarreraForm(forms.Form):
+    """Revisión del Director de Carrera: envía la solicitud al departamento (con el N° de trámite
+    SUDOCU y la fecha del acta de la Comisión de Carrera) o la devuelve al docente."""
+    accion = forms.ChoiceField(
+        choices=[
+            ('',          '— Seleccioná una acción —'),
+            ('enviar',    'Aceptar y enviar al director de departamento'),
+            ('devolver',  'Devolver al docente con observaciones'),
+        ],
+        label='Acción',
+        error_messages={'required': 'Elegí una acción.'},
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    numero_sudocu = forms.CharField(
+        label='N° de trámite SUDOCU', max_length=50, required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 9628/2026'}),
+    )
+    fecha_acta_comision_carrera = forms.DateField(
+        label='Fecha del acta de la Comisión de Carrera', required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}, format='%Y-%m-%d'),
+    )
+    comentarios = forms.CharField(
+        label='Observaciones / Comentarios',
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+        required=False,
+    )
+
+    def __init__(self, *args, puede_devolver=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not puede_devolver:  # la inició el propio director de carrera
+            self.fields['accion'].choices = [('enviar', 'Enviar al director de departamento')]
+
+    def clean(self):
+        cleaned = super().clean()
+        accion = cleaned.get('accion')
+        if accion == 'enviar':
+            cleaned['numero_sudocu'] = (cleaned.get('numero_sudocu') or '').strip()
+            if not cleaned['numero_sudocu']:
+                self.add_error('numero_sudocu', 'Ingresá el número de trámite SUDOCU.')
+            if not cleaned.get('fecha_acta_comision_carrera'):
+                self.add_error('fecha_acta_comision_carrera', 'Indicá la fecha del acta.')
+        if accion == 'devolver' and not cleaned.get('comentarios', '').strip():
+            self.add_error('comentarios', 'Indicá las observaciones para el docente.')
+        return cleaned
 
 
 class RevisionAdminForm(forms.Form):

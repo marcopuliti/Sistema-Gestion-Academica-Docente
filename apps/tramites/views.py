@@ -47,7 +47,7 @@ def _dashboard_admin(request, user):
     completo = total_meps - sin_tribunal - incompleto
 
     solicitudes_prot = SolicitudProtocolizacion.objects.all()
-    pendientes_prot = solicitudes_prot.filter(estado=EstadoTramite.PENDIENTE).count()
+    pendientes_prot = solicitudes_prot.filter(estado=EstadoTramite.ELEVADA).count()  # esperan a Secretaría
 
     cambios_enviados = SolicitudCambioTribunal.objects.filter(estado='enviada').count()
     ultimos_cambios = (
@@ -80,7 +80,7 @@ def _dashboard_director(request, user):
     estados_revision = [EstadoTramite.PENDIENTE, EstadoTramite.OBSERVADA]
 
     por_revisar = (
-        SolicitudProtocolizacion.objects.filter(dep_q, estado__in=estados_revision).count() +
+        SolicitudProtocolizacion.objects.filter(dep_q | Q(carrera__departamento=departamento), estado__in=estados_revision).count() +
         SolicitudTaller.objects.filter(dep_q, estado__in=estados_revision).count()
     )
 
@@ -201,9 +201,13 @@ def _dashboard_director_carrera(request, user):
     notificaciones_no_leidas = Notificacion.objects.filter(
         destinatario=user, leida=False,
     ).count()
+    protocolizaciones_por_revisar = SolicitudProtocolizacion.objects.filter(
+        carrera=carrera, estado__in=[EstadoTramite.EN_CARRERA, EstadoTramite.DEVUELTA_CARRERA],
+    ).count()
 
     return render(request, 'tramites/dashboard_director_carrera.html', {
         'carrera': carrera,
+        'protocolizaciones_por_revisar': protocolizaciones_por_revisar,
         'total_materias': total_materias,
         'materias_servicio_count': materias_servicio_count,
         'solicitudes_enviadas': solicitudes_enviadas,

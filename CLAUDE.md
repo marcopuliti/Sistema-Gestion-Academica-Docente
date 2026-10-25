@@ -108,15 +108,24 @@ Directors: `director_departamento` users are scoped by `user.departamento` (a st
 
 ## Workflows (state machines)
 
-**Protocolización / Taller** (`TramiteBase` subclasses, states in `EstadoTramite`):
+**Protocolización** (`SolicitudProtocolizacion`, states in `EstadoTramite`):
 
 ```
-PENDIENTE ──director──▶ ELEVADA ──admin──▶ APROBADO (sets numero_resolucion)
-    ▲         └─▶ DEVUELTA            └─▶ RECHAZADO / OBSERVADA
-    └── docente edits a DEVUELTA/RECHAZADO/OBSERVADA request → back to PENDIENTE
+docente ─▶ EN_CARRERA ──director de carrera──▶ PENDIENTE ──director depto──▶ ELEVADA ──admin──▶ APROBADO (numero_resolucion)
+              │  └─▶ DEVUELTA_DOCENTE (docente edits → EN_CARRERA)  └─▶ DEVUELTA_CARRERA (carrera resends)  └─▶ RECHAZADO / OBSERVADA
+              └─ a career director's own request also starts in EN_CARRERA (he edits it and sends it himself)
 ```
 
-The director can only elevate after uploading `acta_consejo_departamental`. `EN_REVISION` is legacy, kept for compatibility. Approving a protocolización with `tipificacion='optativa'` calls `optativas.agregar_a_bolsa()`: it creates/updates the `MateriaOptativa` with the director-assigned `codigo_materia`, links it to `optativa_vinculada` and creates its tribunals (warns if the hours differ from the slot's). Each transition sets `revisor`, `comentarios_revision`, and calls `notificar_cambio_estado`. `TramiteBase.usuario` is nullable: anonymous submissions use the `*_docente` text fields, so use `get_nombre_docente` / `get_legajo_docente` and handle `usuario is None`.
+- `_enviar_a_revision()` in `solicitudes/views.py` sets the state on create, duplicate and edit. If the career has no active director, the request goes straight to `PENDIENTE` (the old circuit).
+- `revisar_carrera`: the career director sends the request with `numero_sudocu` and `fecha_acta_comision_carrera` (fills `director_carrera` / `fecha_envio_carrera`), or returns it to the docente. Their "solicitud completa" (`_con_acta`, also for admins) appends the generated *acta de la Comisión de Carrera*; the docente's is nota + programa.
+- `revisar_director`: to elevate, the department director enters `fecha_reunion_consejo` / `hora_reunion_consejo`. These feed the *nota de aval del Consejo Departamental* (`nota_aval_consejo` view, PDF/DOCX). Nothing is uploaded any more; `acta_*` FileFields and their upload views are kept only for old requests.
+- The department director doesn't download the solicitud completa. Formal documents travel through SUDOCU; DELTA only generates the notes.
+- The SUDOCU number appears in the notifications to the department director (on send) and to admins (on elevation). On approval the career and department directors also get the resolución number.
+- Note texts live in `solicitudes/notas.py` (shared by `pdf.py` and `docx_gen.py`). The receiving department is `solicitud.departamento_destino` (the career's).
+
+**Taller** keeps the old circuit: `PENDIENTE ──director──▶ ELEVADA ──admin──▶ APROBADO`, `DEVUELTA` to the docente, and the director uploads `acta_consejo_departamental` before elevating.
+
+`EN_REVISION` is legacy, kept for compatibility. Approving a protocolización with `tipificacion='optativa'` calls `optativas.agregar_a_bolsa()`: it creates/updates the `MateriaOptativa` with the director-assigned `codigo_materia`, links it to `optativa_vinculada` and creates its tribunals (warns if the hours differ from the slot's). Each transition sets `revisor`, `comentarios_revision`, and calls `notificar_cambio_estado`. `TramiteBase.usuario` is nullable: anonymous submissions use the `*_docente` text fields, so use `get_nombre_docente` / `get_legajo_docente` and handle `usuario is None`.
 
 **Tribunal change requests** (`SolicitudCambioTribunal`: `borrador → cerrada → enviada → aplicada`):
 - A director has at most one `borrador` per department (`get_or_create`). Each proposal is a `SolicitudCambioItem`; on first creation it stores `snapshot_tribunal` (JSON of the tribunal's prior state). If a proposal ends up identical to the snapshot, the item is deleted.
@@ -127,7 +136,8 @@ The director can only elevate after uploading `acta_consejo_departamental`. `EN_
   - `reabrir_solicitud_cambio` (cerrada/enviada → borrador) deletes the DOCX and merges any newer borrador into the reopened one; for the same tribunal, the newer proposal wins.
 - The annual report (`enviar_informe_tribunales`) is a single AJAX step: SUDOCU + all of the department's tribunals complete → DOCX in `InformeTribunalesEnviado.documento`. Errors come back as `{'ok': False, 'error': …}` and are shown inside the modal.
 - Admins see SUDOCU + Word in `lista_solicitudes_cambio`, which also lists `InformeTribunalesEnviado`. `aplicar_solicitud` copies `_CAMPOS_TRIBUNAL` onto each tribunal, re-resolves `Docente` FKs **by DNI**, and refuses to apply if an older `enviada` request from the same department is still pending (requests apply in order).
-- Annual reports: admins open a `SolicitudInformeTribunal` (cuatrimestre 1 = all departments; cuatrimestre 2 = only those in `departamentos_notificados`); directors respond, recorded as `InformeTribunalesEnviado` (unique per solicitud × departamento).
+- Annual reports: admins open a `SolicitudInformeTribunal` from `admin_informes_tribunales` (cuatrimestre 1 = all departments; cuatrimestre 2 = only those in `departamentos_notificados`). That page also shows each department's status, SUDOCU number and Word. Directors respond, recorded as `InformeTribunalesEnviado` (unique per solicitud × departamento).
+- Admin sidebar categories: *Solicitudes de informes* (comisiones, tribunales, `admin_convocatorias_servicio`), *Materias*, *Trámites*, *Gestión de usuarios*. Django forbids repeating a `{% block nav_* %}`, so `base.html` has one menu with per-role conditionals, not one menu per role.
 
 **Service requests** (`SolicitudServicio`): admins issue a `ConvocatoriaSolicitudServicio` (unique per cuatrimestre × año; cuatrimestre 1 includes anuales). Department directors and career directors create requests toward a dictating department; for `'Externo'` the receiver name goes in `dictante_externo_nombre`.
 

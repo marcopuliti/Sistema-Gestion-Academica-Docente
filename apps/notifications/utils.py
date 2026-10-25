@@ -8,7 +8,13 @@ from .models import Notificacion
 User = get_user_model()
 
 ESTADOS_DISPLAY = {
+    'en_carrera': 'En revisión de la carrera',
+    'devuelta_docente': 'Devuelta al docente con observaciones',
+    'devuelta_carrera': 'Devuelta al director de carrera con observaciones',
     'pendiente': 'Pendiente',
+    'observada': 'Con observaciones de Secretaría',
+    'devuelta': 'Devuelta con observaciones',
+    'elevada': 'Elevada a Secretaría',
     'en_revision': 'En Revisión',
     'aprobado': 'Aprobado',
     'rechazado': 'Rechazado',

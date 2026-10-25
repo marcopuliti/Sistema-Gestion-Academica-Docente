@@ -52,6 +52,19 @@
 </div>
 {% else %}
 
+{% if protocolizaciones_por_revisar %}
+<div class="alert alert-warning d-flex align-items-start gap-3 mb-4" role="alert">
+  <i class="bi bi-journal-plus fs-4 mt-1 flex-shrink-0"></i>
+  <div class="flex-grow-1">
+    <strong>{{ protocolizaciones_por_revisar }} solicitud{{ protocolizaciones_por_revisar|pluralize:"es" }} de protocolización para revisar.</strong><br>
+    <span class="small">Aceptalas y envialas al director de departamento con el N° de trámite SUDOCU, o devolvelas al docente con observaciones.</span>
+  </div>
+  <a href="{% url 'solicitudes:lista' %}" class="btn btn-warning btn-sm text-nowrap">
+    <i class="bi bi-journal-plus me-1"></i>Ver solicitudes
+  </a>
+</div>
+{% endif %}
+
 {# ── Estadísticas ─────────────────────────────────────────────────────────── #}
 <div class="row g-3 mb-4">
 

@@ -61,40 +61,25 @@
       </ul>
     </div>
 
-    <!-- Actas de aval -->
+    {% if solicitud.numero_sudocu or solicitud.director_carrera %}
     <div class="card mb-3">
-      <div class="card-header"><h6 class="mb-0"><i class="bi bi-file-earmark-check me-2"></i>Actas de Aval</h6></div>
+      <div class="card-header"><h6 class="mb-0"><i class="bi bi-send-check me-2"></i>Enviada por la carrera</h6></div>
       <ul class="list-group list-group-flush">
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <span class="small">Acta Comisión de Carrera</span>
-          {% if solicitud.acta_comision_carrera %}
-            <a href="{{ solicitud.acta_comision_carrera.url }}" target="_blank" class="btn btn-sm btn-outline-danger py-0">
-              <i class="bi bi-file-pdf me-1"></i>Ver
-            </a>
-          {% else %}
-            <span class="badge bg-danger">Falta</span>
-          {% endif %}
+        {% if solicitud.director_carrera %}
+        <li class="list-group-item">
+          <small class="text-muted d-block">Director de carrera</small>
+          {{ solicitud.director_carrera.get_full_name }}{% if solicitud.fecha_envio_carrera %} · {{ solicitud.fecha_envio_carrera|date:"d/m/Y" }}{% endif %}
         </li>
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <span class="small">Acta Consejo Departamental</span>
-          {% if solicitud.acta_consejo_departamental %}
-            <a href="{{ solicitud.acta_consejo_departamental.url }}" target="_blank" class="btn btn-sm btn-outline-danger py-0">
-              <i class="bi bi-file-pdf me-1"></i>Ver
-            </a>
-          {% else %}
-            <span class="badge bg-danger">Falta</span>
-          {% endif %}
+        {% endif %}
+        {% if solicitud.numero_sudocu %}
+        <li class="list-group-item">
+          <small class="text-muted d-block">N° de trámite SUDOCU</small>
+          <strong>{{ solicitud.numero_sudocu }}</strong>
         </li>
+        {% endif %}
       </ul>
-      {% if not solicitud.acta_comision_carrera or not solicitud.acta_consejo_departamental %}
-      <div class="card-footer text-muted small">
-        <i class="bi bi-exclamation-triangle me-1"></i>
-        Necesitás subir ambas actas desde el
-        <a href="{% url 'solicitudes:detalle' solicitud.pk %}">detalle de la solicitud</a>
-        antes de elevar.
-      </div>
-      {% endif %}
     </div>
+    {% endif %}
 
     <a href="{% url 'solicitudes:detalle' solicitud.pk %}" class="btn btn-outline-secondary w-100 mb-3">
       <i class="bi bi-eye me-2"></i>Ver solicitud completa
@@ -114,9 +99,34 @@
             {{ form.accion }}
             {% if form.accion.errors %}<div class="text-danger small mt-1">{{ form.accion.errors.0 }}</div>{% endif %}
           </div>
+          <div class="border rounded p-3 mb-3 bg-light">
+            <div class="fw-semibold small mb-2"><i class="bi bi-patch-check me-1"></i>Nota de aval del Consejo Departamental</div>
+            <div class="row g-2">
+              <div class="col-sm-7">
+                <label class="form-label small">{{ form.fecha_reunion_consejo.label }}</label>
+                {{ form.fecha_reunion_consejo }}
+                {% if form.fecha_reunion_consejo.errors %}<div class="text-danger small mt-1">{{ form.fecha_reunion_consejo.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-sm-5">
+                <label class="form-label small">{{ form.hora_reunion_consejo.label }}</label>
+                {{ form.hora_reunion_consejo }}
+                {% if form.hora_reunion_consejo.errors %}<div class="text-danger small mt-1">{{ form.hora_reunion_consejo.errors.0 }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="d-flex gap-2 mt-2">
+              <button type="submit" formaction="{% url 'solicitudes:nota_aval' solicitud.pk 'pdf' %}" formnovalidate class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-file-pdf me-1"></i>Descargar nota (PDF)
+              </button>
+              <button type="submit" formaction="{% url 'solicitudes:nota_aval' solicitud.pk 'docx' %}" formnovalidate class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-file-word me-1"></i>Descargar nota (Word)
+              </button>
+            </div>
+            <div class="form-text">Es obligatoria para elevar. La nota se sube al sistema de expedientes; las solicitudes formales se envían por SUDOCU.</div>
+          </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">{{ form.comentarios.label }}</label>
             {{ form.comentarios }}
+            {% if form.comentarios.errors %}<div class="text-danger small mt-1">{{ form.comentarios.errors.0 }}</div>{% endif %}
             <div class="form-text">
               Al devolver: los comentarios se enviarán al director de carrera.<br>
               Al elevar: quedan registrados como nota interna.

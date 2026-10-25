@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from apps.tramites.models import (
     TramiteBase, FUNCION_CHOICES, CARGO_CHOICES, DEDICACION_CHOICES, CONDICION_CHOICES,
@@ -172,7 +173,24 @@ class SolicitudProtocolizacion(TramiteBase):
         verbose_name='Materia de la bolsa de optativas',
     )
 
-    # ── Actas de aval (sube el Director de Departamento) ─────────────────────
+    # ── Circuito carrera → departamento ──────────────────────────────────────
+    numero_sudocu = models.CharField(max_length=50, blank=True, verbose_name='N° de trámite SUDOCU')
+    director_carrera = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='protocolizaciones_enviadas',
+        verbose_name='Enviada por (director de carrera)',
+    )
+    fecha_envio_carrera = models.DateTimeField(null=True, blank=True, verbose_name='Enviada al departamento')
+    fecha_acta_comision_carrera = models.DateField(null=True, blank=True, verbose_name='Fecha del acta de la Comisión de Carrera')
+    # Nota de aval del Consejo Departamental (la genera el director de departamento)
+    fecha_reunion_consejo = models.DateField(null=True, blank=True, verbose_name='Fecha de la reunión del Consejo Departamental')
+    hora_reunion_consejo = models.TimeField(null=True, blank=True, verbose_name='Hora de la reunión del Consejo Departamental')
+    fecha_nota_aval = models.DateField(null=True, blank=True, verbose_name='Fecha de la nota de aval')
+
+    # ── Actas de aval subidas (circuito anterior; ahora se generan las notas) ─
     acta_comision_carrera = models.FileField(
         upload_to='solicitudes/actas/',
         blank=True,
@@ -200,6 +218,13 @@ class SolicitudProtocolizacion(TramiteBase):
     @property
     def total_horas(self):
         return self.cantidad_semanas * self.total_horas_semanales
+
+    @property
+    def departamento_destino(self):
+        """Departamento que avala la solicitud: el de la carrera (o el del docente si no hay carrera)."""
+        if self.carrera_id and self.carrera.departamento:
+            return self.carrera.departamento
+        return (self.usuario.departamento if self.usuario_id else '') or self.departamento_docente
 
 
 class CorrelativaRequerida(models.Model):

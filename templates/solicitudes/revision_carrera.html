@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Revisar Solicitud — Director de Carrera{% endblock %}
+{% block nav_solicitudes %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-send-check me-2"></i>{% if puede_devolver %}Revisión — Director de Carrera{% else %}Enviar al director de departamento{% endif %}</h2>
+  <p class="text-muted mb-0">{{ solicitud.nombre_curso }} · {{ solicitud.carrera|default:"—" }}</p>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-5">
+    <div class="card mb-3">
+      <div class="card-header"><h6 class="mb-0"><i class="bi bi-journal-text me-2"></i>Resumen</h6></div>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item">
+          <small class="text-muted d-block">Docente</small>
+          <strong>{{ solicitud.get_nombre_docente|default:"—" }}</strong>
+        </li>
+        <li class="list-group-item">
+          <small class="text-muted d-block">Estado actual</small>
+          <span class="badge {{ solicitud.estado_badge }}">{{ solicitud.get_estado_display }}</span>
+        </li>
+        <li class="list-group-item">
+          <small class="text-muted d-block">Tipificación · Plan</small>
+          {{ solicitud.get_tipificacion_display|default:"—" }} · {{ solicitud.plan_estudio|default:"—" }}
+        </li>
+        <li class="list-group-item">
+          <small class="text-muted d-block">Se envía al</small>
+          Director del Departamento de {{ solicitud.departamento_destino|default:"—" }}
+        </li>
+      </ul>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><h6 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Solicitud completa</h6></div>
+      <div class="card-body small">
+        <p class="mb-2">Nota del docente responsable, programa y acta de la Comisión de Carrera. Descargala para iniciar el trámite en SUDOCU.</p>
+        <div class="d-flex gap-2">
+          <a href="{% url 'solicitudes:solicitud_completa_pdf' solicitud.pk %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-file-pdf me-1"></i>PDF</a>
+          <a href="{% url 'solicitudes:solicitud_completa_docx' solicitud.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-file-word me-1"></i>Word</a>
+        </div>
+        <div class="form-text">El acta lleva la fecha que elijas acá; si la cambiás, volvé a descargarla después de enviar.</div>
+      </div>
+    </div>
+
+    <a href="{% url 'solicitudes:detalle' solicitud.pk %}" class="btn btn-outline-secondary w-100 mb-3">
+      <i class="bi bi-eye me-2"></i>Ver solicitud
+    </a>
+  </div>
+
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header"><h6 class="mb-0">Acción del Director de Carrera</h6></div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          {% if puede_devolver %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.accion.label }}</label>
+            {{ form.accion }}
+            {% if form.accion.errors %}<div class="text-danger small mt-1">{{ form.accion.errors.0 }}</div>{% endif %}
+          </div>
+          {% else %}
+          <input type="hidden" name="accion" value="enviar">
+          {% endif %}
+          <div class="row g-2 mb-3" id="camposEnvio">
+            <div class="col-sm-6">
+              <label class="form-label fw-semibold">{{ form.numero_sudocu.label }} <span class="text-danger">*</span></label>
+              {{ form.numero_sudocu }}
+              {% if form.numero_sudocu.errors %}<div class="text-danger small mt-1">{{ form.numero_sudocu.errors.0 }}</div>{% endif %}
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label fw-semibold">{{ form.fecha_acta_comision_carrera.label }}</label>
+              {{ form.fecha_acta_comision_carrera }}
+              {% if form.fecha_acta_comision_carrera.errors %}<div class="text-danger small mt-1">{{ form.fecha_acta_comision_carrera.errors.0 }}</div>{% endif %}
+            </div>
+            <div class="col-12 form-text">Al enviar, el director de departamento recibe la solicitud con el número de trámite SUDOCU, que después llega a Secretaría.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.comentarios.label }}</label>
+            {{ form.comentarios }}
+            {% if form.comentarios.errors %}<div class="text-danger small mt-1">{{ form.comentarios.errors.0 }}</div>{% endif %}
+            {% if puede_devolver %}<div class="form-text">Al devolver: los comentarios se envían al docente.</div>{% endif %}
+          </div>
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger py-2">{{ form.non_field_errors.0 }}</div>
+          {% endif %}
+          <div class="d-flex gap-2 justify-content-end">
+            <a href="{% url 'solicitudes:detalle' solicitud.pk %}" class="btn btn-outline-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-circle me-2"></i>Confirmar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% if puede_devolver %}
+<script>
+(function () {
+  const accion = document.querySelector('select[name="accion"]');
+  const envio = document.getElementById('camposEnvio');
+  const actualizar = () => envio.classList.toggle('d-none', accion.value === 'devolver');
+  accion.addEventListener('change', actualizar);
+  actualizar();
+})();
+</script>
+{% endif %}
+{% endblock %}

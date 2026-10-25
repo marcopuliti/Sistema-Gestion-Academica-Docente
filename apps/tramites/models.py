@@ -64,6 +64,10 @@ class CalendarioAcademico(models.Model):
 
 
 class EstadoTramite(models.TextChoices):
+    # Protocolización: docente → director de carrera (EN_CARRERA) → director de departamento (PENDIENTE) → admin
+    EN_CARRERA = 'en_carrera', 'En revisión de la carrera'             # con el director de carrera
+    DEVUELTA_DOCENTE = 'devuelta_docente', 'Devuelta al docente'        # el director de carrera la devolvió
+    DEVUELTA_CARRERA = 'devuelta_carrera', 'Devuelta al director de carrera'  # el depto la devolvió a la carrera
     PENDIENTE  = 'pendiente',  'Pendiente'          # con el director, esperando revisión
     OBSERVADA  = 'observada',  'Con Observaciones'  # admin la devolvió al director
     DEVUELTA   = 'devuelta',   'Devuelta al Docente' # director la devolvió al docente para editar
@@ -127,6 +131,9 @@ class TramiteBase(models.Model):
     @property
     def estado_badge(self):
         clases = {
+            EstadoTramite.EN_CARRERA:       'bg-warning text-dark',
+            EstadoTramite.DEVUELTA_DOCENTE: 'bg-danger',
+            EstadoTramite.DEVUELTA_CARRERA: 'bg-danger',
             EstadoTramite.PENDIENTE:   'bg-warning text-dark',
             EstadoTramite.OBSERVADA:   'bg-danger',
             EstadoTramite.DEVUELTA:    'bg-danger',

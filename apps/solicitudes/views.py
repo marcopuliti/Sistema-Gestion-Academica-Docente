@@ -13,7 +13,7 @@ from apps.tramites.models import EstadoTramite, CalendarioAcademico
 from .forms import (
     SolicitudProtocolizacionForm, EquipoDocenteFormSet,
     CorrelativaFormSet, ActasAvalForm,
-    RevisionDirectorForm, RevisionDirectorProtocolizacionForm, RevisionAdminForm,
+    RevisionCarreraForm, RevisionDirectorForm, RevisionDirectorProtocolizacionForm, RevisionAdminForm,
     SolicitudTallerForm, ActaConsejoTallerForm, EquipoTallerFormSet,
     TIPIFICACIONES_CURRICULARES,
 )
@@ -61,6 +61,106 @@ def _calendario_json():
         })
     except CalendarioAcademico.DoesNotExist:
         return 'null'
+
+
+# ── circuito docente → carrera → departamento → administración ─────────────
+
+def _usuarios(**filtros):
+    from django.contrib.auth import get_user_model
+    return get_user_model().objects.filter(is_active=True, **filtros)
+
+
+def _directores_carrera(solicitud):
+    if not solicitud.carrera_id:
+        return _usuarios(pk__in=[])
+    return _usuarios(rol='director_carrera', carrera_id=solicitud.carrera_id)
+
+
+def _directores_departamento(solicitud):
+    return _usuarios(rol='director_departamento', departamento=solicitud.departamento_destino)
+
+
+def _notificar(destinatarios, titulo, mensaje, solicitud, excluir=None):
+    from apps.notifications.utils import _crear_notificacion
+    from django.urls import reverse
+    url = reverse('solicitudes:detalle', args=[solicitud.pk])
+    for u in destinatarios:
+        if excluir is None or u.pk != excluir.pk:
+            _crear_notificacion(u, 'nuevo_tramite', titulo, mensaje, url=url)
+
+
+def _sudocu_txt(solicitud):
+    return f' — SUDOCU {solicitud.numero_sudocu}' if solicitud.numero_sudocu else ''
+
+
+def _enviar_a_revision(request, solicitud, reenvio=False):
+    """Estado al crear o corregir una solicitud: queda con el director de carrera (si la cargó
+    él mismo, para que la envíe con el N° SUDOCU). Si la carrera no tiene director, va directo
+    al director de departamento como antes."""
+    user = request.user
+    if user.es_director_carrera and solicitud.carrera_id == user.carrera_id:
+        solicitud.estado = EstadoTramite.EN_CARRERA
+        solicitud.save(update_fields=['estado'])
+        messages.success(
+            request,
+            'Solicitud guardada. Descargá la solicitud completa, iniciá el trámite en SUDOCU y enviala '
+            'al director de departamento con el número de trámite.',
+        )
+        return
+    directores = list(_directores_carrera(solicitud))
+    if directores:
+        solicitud.estado = EstadoTramite.EN_CARRERA
+        solicitud.save(update_fields=['estado'])
+        nombre = solicitud.get_nombre_docente
+        _notificar(
+            directores,
+            f'{"Solicitud de protocolización corregida" if reenvio else "Nueva solicitud de protocolización"} — {solicitud.nombre_curso}',
+            f'{nombre} {"corrigió" if reenvio else "envió"} la solicitud de protocolización de "{solicitud.nombre_curso}" '
+            f'({solicitud.carrera.nombre}). Revisala: aceptala y enviala al director de departamento con el '
+            'N° de trámite SUDOCU, o devolvela al docente con observaciones.',
+            solicitud,
+        )
+        messages.success(request, 'Solicitud enviada al director de carrera.')
+        return
+    solicitud.estado = EstadoTramite.PENDIENTE
+    solicitud.save(update_fields=['estado'])
+    from apps.notifications.utils import notificar_nuevo_tramite
+    from django.urls import reverse
+    notificar_nuevo_tramite(solicitud, 'Solicitud de Protocolización',
+                            url=reverse('solicitudes:detalle', args=[solicitud.pk]))
+    messages.success(request, 'Solicitud enviada. Quedó pendiente de revisión.')
+
+
+def _puede_editar(user, solicitud):
+    """El dueño la corrige cuando se la devuelven; el director de carrera, también antes de enviarla."""
+    if solicitud.usuario_id != user.pk:
+        return False
+    editables = {EstadoTramite.DEVUELTA_DOCENTE, EstadoTramite.DEVUELTA, EstadoTramite.RECHAZADO, EstadoTramite.OBSERVADA}
+    if user.es_director_carrera:
+        editables |= {EstadoTramite.EN_CARRERA, EstadoTramite.DEVUELTA_CARRERA}
+    return solicitud.estado in editables
+
+
+def _puede_revisar_carrera(user, solicitud):
+    return (
+        user.es_director_carrera and user.carrera_id and solicitud.carrera_id == user.carrera_id
+        and solicitud.estado in (EstadoTramite.EN_CARRERA, EstadoTramite.DEVUELTA_CARRERA)
+    )
+
+
+def _es_de_su_departamento(user, solicitud):
+    dep = user.departamento
+    dep_solicitud = solicitud.usuario.departamento if solicitud.usuario else solicitud.departamento_docente
+    carrera_dep = solicitud.carrera.departamento if solicitud.carrera else None
+    return dep_solicitud == dep or carrera_dep == dep
+
+
+def _con_acta(user, solicitud):
+    """La solicitud completa del director de carrera (y de administración) incluye el acta de la
+    Comisión de Carrera; la del docente, solo nota y programa."""
+    return user.puede_revisar or (
+        user.es_director_carrera and user.carrera_id and solicitud.carrera_id == user.carrera_id
+    )
 
 
 @login_required
@@ -116,11 +216,7 @@ def crear_solicitud(request, tipificacion):
             formset.save()
             correlativas_formset.instance = solicitud
             correlativas_formset.save()
-            from apps.notifications.utils import notificar_nuevo_tramite
-            from django.urls import reverse
-            notificar_nuevo_tramite(solicitud, 'Solicitud de Protocolización',
-                                    url=reverse('solicitudes:detalle', args=[solicitud.pk]))
-            messages.success(request, 'Solicitud enviada. Quedó pendiente de revisión.')
+            _enviar_a_revision(request, solicitud)
             return redirect('solicitudes:detalle', pk=solicitud.pk)
     else:
         form = SolicitudProtocolizacionForm(tipificacion=tipificacion, anonimo=False, carrera_qs=carrera_qs)
@@ -172,16 +268,82 @@ def detalle_solicitud(request, pk):
     return render(request, 'solicitudes/detalle.html', {
         'solicitud': solicitud,
         'puede_duplicar': puede_duplicar,
+        'puede_editar': _puede_editar(u, solicitud),
+        'puede_revisar_carrera': _puede_revisar_carrera(u, solicitud),
+        'puede_revisar_departamento': (
+            u.es_director_departamento and _es_de_su_departamento(u, solicitud)
+            and solicitud.estado in (EstadoTramite.PENDIENTE, EstadoTramite.OBSERVADA)
+        ),
+        'puede_nota_aval': u.puede_revisar or (u.es_director_departamento and _es_de_su_departamento(u, solicitud)),
+        'con_acta': _con_acta(u, solicitud),
+    })
+
+
+@login_required
+@solo_director_carrera
+def revisar_carrera(request, pk):
+    """Director de carrera: envía la solicitud al director de departamento con el N° SUDOCU
+    (y la fecha del acta de la Comisión de Carrera) o la devuelve al docente."""
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    if not _puede_revisar_carrera(request.user, solicitud):
+        messages.error(request, 'Esta solicitud no está pendiente de revisión de tu carrera.')
+        return redirect('solicitudes:detalle', pk=pk)
+    puede_devolver = solicitud.usuario_id != request.user.pk
+
+    if request.method == 'POST':
+        form = RevisionCarreraForm(request.POST, puede_devolver=puede_devolver)
+        if form.is_valid():
+            from apps.notifications.utils import notificar_cambio_estado
+            from django.urls import reverse
+            from django.utils import timezone
+            accion = form.cleaned_data['accion']
+            solicitud.revisor = request.user
+            if accion == 'enviar':
+                solicitud.estado = EstadoTramite.PENDIENTE
+                solicitud.numero_sudocu = form.cleaned_data['numero_sudocu']
+                solicitud.fecha_acta_comision_carrera = form.cleaned_data['fecha_acta_comision_carrera']
+                solicitud.director_carrera = request.user
+                solicitud.fecha_envio_carrera = timezone.now()
+                if form.cleaned_data['comentarios']:
+                    solicitud.comentarios_revision = form.cleaned_data['comentarios']
+                solicitud.save()
+                _notificar(
+                    _directores_departamento(solicitud),
+                    f'Solicitud de protocolización — {solicitud.nombre_curso}{_sudocu_txt(solicitud)}',
+                    f'{request.user.get_full_name()} (director de {solicitud.carrera.nombre}) envió la solicitud de '
+                    f'protocolización de "{solicitud.nombre_curso}".\nTrámite SUDOCU: {solicitud.numero_sudocu}.\n\n'
+                    'Revisala, generá la nota de aval del Consejo Departamental y elevala a Secretaría.',
+                    solicitud,
+                )
+                messages.success(request, f'Solicitud enviada al director de departamento con el trámite SUDOCU {solicitud.numero_sudocu}.')
+            else:
+                solicitud.estado = EstadoTramite.DEVUELTA_DOCENTE
+                solicitud.comentarios_revision = form.cleaned_data['comentarios']
+                solicitud.save()
+                messages.success(request, 'Solicitud devuelta al docente con observaciones.')
+            if solicitud.usuario_id and solicitud.usuario_id != request.user.pk:
+                notificar_cambio_estado(solicitud, 'Solicitud de Protocolización',
+                                        url=reverse('solicitudes:detalle', args=[solicitud.pk]))
+            return redirect('solicitudes:detalle', pk=pk)
+    else:
+        from django.utils import timezone
+        form = RevisionCarreraForm(puede_devolver=puede_devolver, initial={
+            'accion': '' if puede_devolver else 'enviar',
+            'numero_sudocu': solicitud.numero_sudocu,
+            'fecha_acta_comision_carrera': solicitud.fecha_acta_comision_carrera or timezone.localdate(),
+        })
+    return render(request, 'solicitudes/revision_carrera.html', {
+        'solicitud': solicitud, 'form': form, 'puede_devolver': puede_devolver,
     })
 
 
 @login_required
 def editar_solicitud(request, pk):
     solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk, usuario=request.user)
-    EDITABLES = (EstadoTramite.DEVUELTA, EstadoTramite.RECHAZADO, EstadoTramite.OBSERVADA)
-    if solicitud.estado not in EDITABLES:
-        messages.error(request, 'Solo podés editar solicitudes pendientes o con observaciones.')
+    if not _puede_editar(request.user, solicitud):
+        messages.error(request, 'Solo podés editar solicitudes devueltas con observaciones.')
         return redirect('solicitudes:detalle', pk=pk)
+    reenvio = solicitud.estado not in (EstadoTramite.EN_CARRERA,)
 
     tip = solicitud.tipificacion
     es_curricular = tip in TIPIFICACIONES_CURRICULARES
@@ -194,14 +356,12 @@ def editar_solicitud(request, pk):
         correlativas_formset = CorrelativaFormSet(request.POST, instance=solicitud, prefix='correlativas')
         _set_correlativas_materia_qs(correlativas_formset, plan_id)
         if form.is_valid() and formset.is_valid() and correlativas_formset.is_valid():
-            solicitud = form.save(commit=False)
-            solicitud.estado = EstadoTramite.PENDIENTE
-            solicitud.save()
+            solicitud = form.save()
             formset.instance = solicitud
             formset.save()
             correlativas_formset.instance = solicitud
             correlativas_formset.save()
-            messages.success(request, 'Solicitud actualizada y enviada nuevamente.')
+            _enviar_a_revision(request, solicitud, reenvio=reenvio)
             return redirect('solicitudes:detalle', pk=solicitud.pk)
     else:
         form = SolicitudProtocolizacionForm(instance=solicitud, tipificacion=tip, carrera_qs=carrera_qs)
@@ -232,10 +392,7 @@ def editar_solicitud(request, pk):
 def revisar_director(request, pk):
     """Director revisa una solicitud pendiente: la devuelve o la eleva al admin."""
     solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
-    dep = request.user.departamento
-    dep_solicitud = solicitud.usuario.departamento if solicitud.usuario else solicitud.departamento_docente
-    carrera_dep = solicitud.carrera.departamento if solicitud.carrera else None
-    if dep_solicitud != dep and carrera_dep != dep:
+    if not _es_de_su_departamento(request.user, solicitud):
         messages.error(request, 'Esta solicitud no pertenece a tu departamento.')
         return redirect('solicitudes:lista_departamento')
     if solicitud.estado not in (EstadoTramite.PENDIENTE, EstadoTramite.OBSERVADA):
@@ -245,25 +402,91 @@ def revisar_director(request, pk):
     if request.method == 'POST':
         form = RevisionDirectorProtocolizacionForm(request.POST)
         if form.is_valid():
-            accion = form.cleaned_data['accion']
-            if accion == 'elevada':
-                if not solicitud.acta_consejo_departamental:
-                    messages.error(request, 'Debés subir el Acta del Consejo Departamental antes de elevar.')
-                    return render(request, 'solicitudes/revision_director.html', {'solicitud': solicitud, 'form': form})
-            solicitud.estado = accion  # 'devuelta' | 'elevada'
-            solicitud.comentarios_revision = form.cleaned_data['comentarios']
-            solicitud.revisor = request.user
-            solicitud.save()
             from apps.notifications.utils import notificar_cambio_estado
             from django.urls import reverse
-            notificar_cambio_estado(solicitud, 'Solicitud de Protocolización',
-                                    url=reverse('solicitudes:detalle', args=[solicitud.pk]))
-            label = 'elevada a Secretaría' if accion == 'elevada' else 'devuelta al director de carrera con observaciones'
-            messages.success(request, f'Solicitud {label}.')
+            from django.utils import timezone
+            accion = form.cleaned_data['accion']
+            solicitud.comentarios_revision = form.cleaned_data['comentarios']
+            solicitud.revisor = request.user
+            if accion == 'elevada':
+                solicitud.estado = EstadoTramite.ELEVADA
+                solicitud.fecha_reunion_consejo = form.cleaned_data['fecha_reunion_consejo']
+                solicitud.hora_reunion_consejo = form.cleaned_data['hora_reunion_consejo']
+                solicitud.fecha_nota_aval = solicitud.fecha_nota_aval or timezone.localdate()
+                solicitud.save()
+                _notificar(
+                    _usuarios(rol__in=['secretario', 'direccion_academica']),
+                    f'Solicitud de protocolización elevada — {solicitud.nombre_curso}{_sudocu_txt(solicitud)}',
+                    f'{request.user.get_full_name()} (director del Departamento de {solicitud.departamento_destino}) '
+                    f'elevó la solicitud de protocolización de "{solicitud.nombre_curso}"'
+                    + (f' ({solicitud.carrera.nombre})' if solicitud.carrera_id else '') + '.'
+                    + (f'\nTrámite SUDOCU: {solicitud.numero_sudocu}.' if solicitud.numero_sudocu else ''),
+                    solicitud,
+                )
+                messages.success(request, 'Solicitud elevada a Secretaría.')
+            else:
+                solicitud.estado = EstadoTramite.DEVUELTA_CARRERA
+                solicitud.save()
+                _notificar(
+                    _directores_carrera(solicitud),
+                    f'Solicitud de protocolización devuelta — {solicitud.nombre_curso}',
+                    f'El director del Departamento de {solicitud.departamento_destino} devolvió la solicitud de '
+                    f'"{solicitud.nombre_curso}" con observaciones:\n\n{solicitud.comentarios_revision}',
+                    solicitud, excluir=solicitud.usuario,
+                )
+                messages.success(request, 'Solicitud devuelta al director de carrera con observaciones.')
+            if solicitud.usuario_id:
+                notificar_cambio_estado(solicitud, 'Solicitud de Protocolización',
+                                        url=reverse('solicitudes:detalle', args=[solicitud.pk]))
             return redirect('solicitudes:detalle', pk=pk)
     else:
-        form = RevisionDirectorProtocolizacionForm()
+        form = RevisionDirectorProtocolizacionForm(initial={
+            'fecha_reunion_consejo': solicitud.fecha_reunion_consejo,
+            'hora_reunion_consejo': solicitud.hora_reunion_consejo,
+        })
     return render(request, 'solicitudes/revision_director.html', {'solicitud': solicitud, 'form': form})
+
+
+@login_required
+def nota_aval_consejo(request, pk, formato):
+    """Nota de aval del Consejo Departamental. El director de departamento la genera cargando la
+    fecha y hora de la reunión (POST, desde la revisión); después la puede volver a descargar."""
+    from django.utils import timezone
+    from .docx_gen import generar_docx_nota_aval_consejo
+    from .pdf import generar_pdf_nota_aval_consejo
+    solicitud = get_object_or_404(SolicitudProtocolizacion, pk=pk)
+    user = request.user
+    es_director = user.es_director_departamento and _es_de_su_departamento(user, solicitud)
+    if not (es_director or user.puede_revisar) or formato not in ('pdf', 'docx'):
+        messages.error(request, 'Solo el director del departamento puede generar la nota de aval.')
+        return redirect('solicitudes:detalle', pk=pk)
+
+    if request.method == 'POST' and es_director:
+        form = RevisionDirectorProtocolizacionForm(request.POST)
+        form.is_valid()
+        fecha = form.cleaned_data.get('fecha_reunion_consejo')
+        hora = form.cleaned_data.get('hora_reunion_consejo')
+        if not (fecha and hora):
+            messages.error(request, 'Para generar la nota de aval indicá la fecha y la hora de la reunión del Consejo Departamental.')
+            return redirect('solicitudes:revisar_director', pk=pk)
+        if (fecha, hora) != (solicitud.fecha_reunion_consejo, solicitud.hora_reunion_consejo) or not solicitud.fecha_nota_aval:
+            solicitud.fecha_nota_aval = timezone.localdate()
+        solicitud.fecha_reunion_consejo, solicitud.hora_reunion_consejo = fecha, hora
+        solicitud.save(update_fields=['fecha_reunion_consejo', 'hora_reunion_consejo', 'fecha_nota_aval'])
+    elif not (solicitud.fecha_reunion_consejo and solicitud.hora_reunion_consejo):
+        messages.error(request, 'La nota de aval todavía no se generó.')
+        return redirect('solicitudes:detalle', pk=pk)
+
+    nombre = f'nota_aval_consejo_{solicitud.pk}'
+    if formato == 'docx':
+        response = HttpResponse(
+            generar_docx_nota_aval_consejo(solicitud),
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        )
+    else:
+        response = HttpResponse(generar_pdf_nota_aval_consejo(solicitud), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{nombre}.{formato}"'
+    return response
 
 
 @login_required
@@ -288,6 +511,25 @@ def revisar_solicitud(request, pk):
             from django.urls import reverse
             notificar_cambio_estado(solicitud, 'Solicitud de Protocolización',
                                     url=reverse('solicitudes:detalle', args=[solicitud.pk]))
+            if accion == 'aprobado':
+                directores = list(_directores_carrera(solicitud)) + list(_directores_departamento(solicitud))
+                _notificar(
+                    directores,
+                    f'Protocolización aprobada — {solicitud.nombre_curso} — Res. {solicitud.numero_resolucion}',
+                    f'Secretaría aprobó la protocolización de "{solicitud.nombre_curso}"'
+                    + (f' ({solicitud.carrera.nombre})' if solicitud.carrera_id else '')
+                    + f'.\nNúmero de resolución: {solicitud.numero_resolucion}.'
+                    + (f'\nTrámite SUDOCU: {solicitud.numero_sudocu}.' if solicitud.numero_sudocu else ''),
+                    solicitud, excluir=solicitud.usuario,
+                )
+            elif accion == 'observada':
+                _notificar(
+                    _directores_departamento(solicitud),
+                    f'Solicitud de protocolización observada — {solicitud.nombre_curso}',
+                    f'Secretaría devolvió con observaciones la solicitud de "{solicitud.nombre_curso}":\n\n'
+                    f'{solicitud.comentarios_revision}',
+                    solicitud, excluir=solicitud.usuario,
+                )
             messages.success(request, 'Revisión guardada.')
             if accion == 'aprobado' and solicitud.tipificacion == 'optativa':
                 from apps.planes.optativas import agregar_a_bolsa
@@ -370,7 +612,7 @@ def descargar_pdf_solicitud_completa(request, pk):
     if not _puede_ver_solicitud(request.user, solicitud):
         messages.error(request, 'No tenés permisos para descargar este documento.')
         return redirect('solicitudes:lista')
-    buffer = generar_pdf_solicitud_completa(solicitud)
+    buffer = generar_pdf_solicitud_completa(solicitud, con_acta=_con_acta(request.user, solicitud))
     apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
     nombre = f"solicitud_completa_{solicitud.pk}_{apellido}.pdf"
     response = HttpResponse(buffer, content_type='application/pdf')
@@ -384,7 +626,7 @@ def descargar_docx_solicitud_completa(request, pk):
     if not _puede_ver_solicitud(request.user, solicitud):
         messages.error(request, 'No tenés permisos para descargar este documento.')
         return redirect('solicitudes:lista')
-    buffer = generar_docx_solicitud_completa(solicitud)
+    buffer = generar_docx_solicitud_completa(solicitud, con_acta=_con_acta(request.user, solicitud))
     apellido = solicitud.usuario.last_name if solicitud.usuario else (solicitud.nombre_docente.split()[-1] if solicitud.nombre_docente else 'docente')
     nombre = f"solicitud_completa_{solicitud.pk}_{apellido}.docx"
     response = HttpResponse(
@@ -454,6 +696,7 @@ def lista_solicitudes_departamento(request):
         SolicitudProtocolizacion.objects
         .select_related('usuario', 'carrera')
         .filter(dep_q_base | models.Q(carrera__departamento=dep))
+        .exclude(estado__in=[EstadoTramite.EN_CARRERA, EstadoTramite.DEVUELTA_DOCENTE])
         .annotate(orden_estado=orden)
         .order_by('orden_estado', '-fecha_creacion')
     )
@@ -567,11 +810,7 @@ def duplicar_solicitud(request, pk):
             formset.save()
             correlativas_formset.instance = solicitud
             correlativas_formset.save()
-            from apps.notifications.utils import notificar_nuevo_tramite
-            from django.urls import reverse
-            notificar_nuevo_tramite(solicitud, 'Solicitud de Protocolización',
-                                    url=reverse('solicitudes:detalle', args=[solicitud.pk]))
-            messages.success(request, 'Solicitud enviada. Quedó pendiente de revisión.')
+            _enviar_a_revision(request, solicitud)
             return redirect('solicitudes:detalle', pk=solicitud.pk)
     else:
         fk_fields = {'carrera', 'plan_estudio', 'optativa_vinculada'}

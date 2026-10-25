@@ -32,6 +32,8 @@ urlpatterns = [
     path('planes/tribunales/descargar-informe/', views.descargar_informe_tribunales, name='descargar_informe_tribunales'),
 
     # Admin: informe anual
+    path('planes/admin/informes-tribunales/', views.admin_informes_tribunales, name='admin_informes_tribunales'),
+    path('planes/admin/informes-tribunales/descargar/', views.admin_descargar_informe_tribunales, name='admin_descargar_informe_tribunales'),
     path('planes/admin/tribunales/solicitar-informe/', views.solicitar_informe_tribunales, name='solicitar_informe_tribunales'),
 
     # Admin: materias en plan
@@ -49,6 +51,7 @@ urlpatterns = [
     path('planes/solicitudes-servicio/<int:pk>/', views.detalle_solicitud_servicio, name='detalle_solicitud_servicio'),
     path('planes/solicitudes-servicio/<int:pk>/descargar/', views.descargar_solicitud_servicio, name='descargar_solicitud_servicio'),
     path('planes/admin/solicitudes-servicio/', views.admin_lista_solicitudes_servicio, name='admin_lista_solicitudes_servicio'),
+    path('planes/admin/convocatorias-servicio/', views.admin_convocatorias_servicio, name='admin_convocatorias_servicio'),
     path('planes/admin/solicitudes-servicio/convocar/', views.convocar_solicitudes_servicio, name='convocar_solicitudes_servicio'),
 
     # Admin: bolsa de materias optativas

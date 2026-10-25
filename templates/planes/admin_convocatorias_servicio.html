@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Convocatorias de servicio{% endblock %}
+{% block nav_admin_convocatorias_servicio %}active{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <h2><i class="bi bi-megaphone me-2"></i>Solicitudes de servicio — convocatoria</h2>
+  <a href="{% url 'planes:admin_lista_solicitudes_servicio' %}" class="btn btn-sm btn-outline-primary">
+    <i class="bi bi-envelope-paper me-1"></i>Ver solicitudes recibidas
+  </a>
+</div>
+
+{# ── Convocatoria ─────────────────────────────────────────────────────────── #}
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-megaphone me-2"></i>Convocar a directores</span>
+  </div>
+  <div class="card-body">
+    <p class="small text-muted mb-3">
+      Enviá una notificación a todos los directores para que generen sus solicitudes de servicio.
+      Las materias <strong>anuales</strong> se convocan junto con el 1° cuatrimestre.
+      Solo se puede enviar <strong>una convocatoria por cuatrimestre y año</strong>.
+    </p>
+
+    {# Filtro de año (GET) — recalcula cuatrimestres habilitados para ese año #}
+    <form method="get" class="row g-2 align-items-end mb-3">
+      <div class="col-auto">
+        <label class="form-label fw-semibold small">Año a consultar</label>
+        <input type="number" name="anio" value="{{ anio_sel }}" min="2020" max="2040"
+               class="form-control form-control-sm" style="width:90px"
+               onchange="this.form.submit()">
+      </div>
+    </form>
+
+    {# Envío de convocatoria (POST) — usa el año filtrado #}
+    <form method="post" action="{% url 'planes:convocar_solicitudes_servicio' %}"
+          class="row g-2 align-items-end">
+      {% csrf_token %}
+      <input type="hidden" name="anio" value="{{ anio_sel }}">
+      <div class="col-auto">
+        <label class="form-label fw-semibold small">Cuatrimestre</label>
+        <select name="cuatrimestre" class="form-select form-select-sm" required>
+          <option value="1" {% if 1 in enviadas_anio %}disabled{% endif %}>
+            1° Cuatrimestre + Anuales{% if 1 in enviadas_anio %} (ya enviado {{ anio_sel }}){% endif %}
+          </option>
+          <option value="2" {% if 2 in enviadas_anio %}disabled{% endif %}>
+            2° Cuatrimestre{% if 2 in enviadas_anio %} (ya enviado {{ anio_sel }}){% endif %}
+          </option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm"
+                onclick="return confirm('¿Enviar convocatoria a todos los directores para {{ anio_sel }}?')">
+          <i class="bi bi-send me-1"></i>Enviar convocatoria
+        </button>
+      </div>
+    </form>
+
+    {% if convocatorias %}
+    <hr class="my-3">
+    <p class="small fw-semibold mb-2">Historial de convocatorias</p>
+    <div class="table-responsive">
+      <table class="table table-sm table-borderless mb-0">
+        <thead>
+          <tr class="text-muted small">
+            <th>Año</th><th>Cuatrimestre</th><th>Enviado por</th><th>Fecha</th><th>Directores</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in convocatorias %}
+          <tr class="small">
+            <td>{{ c.anio }}</td>
+            <td>{{ c.get_cuatrimestre_display }}</td>
+            <td>{{ c.enviado_por.get_full_name|default:"—" }}</td>
+            <td>{{ c.fecha_envio|date:"d/m/Y H:i" }}</td>
+            <td><span class="badge bg-secondary">{{ c.directores_notificados }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

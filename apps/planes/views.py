@@ -965,7 +965,7 @@ def descargar_solicitud_cambio_docx(request, pk):
 @solo_admin_general
 def solicitar_informe_tribunales(request):
     if request.method != 'POST':
-        return redirect('tramites:dashboard')
+        return redirect('planes:admin_informes_tribunales')
 
     from django.contrib.auth import get_user_model
     User = get_user_model()
@@ -977,7 +977,7 @@ def solicitar_informe_tribunales(request):
             raise ValueError
     except (ValueError, TypeError):
         messages.error(request, 'Cuatrimestre o año inválido.')
-        return redirect('tramites:dashboard')
+        return redirect('planes:admin_informes_tribunales')
 
     # Desactivar solicitudes anteriores
     SolicitudInformeTribunal.objects.filter(activa=True).update(activa=False)
@@ -1055,7 +1055,64 @@ def solicitar_informe_tribunales(request):
     if creados:
         resumen += f' Se inicializaron {creados} tribunal{"es" if creados != 1 else ""} sin datos previos.'
     messages.success(request, resumen)
-    return redirect('tramites:dashboard')
+    return redirect(reverse('planes:admin_informes_tribunales') + f'?solicitud={solicitud.pk}')
+
+
+@login_required
+@solo_admin_general
+def admin_informes_tribunales(request):
+    """Solicitud de los informes de tribunales y estado de cada departamento."""
+    solicitudes = list(SolicitudInformeTribunal.objects.order_by('-fecha'))
+    solicitud = None
+    if request.GET.get('solicitud', '').isdigit():
+        solicitud = next((s for s in solicitudes if s.pk == int(request.GET['solicitud'])), None)
+    if solicitud is None:
+        solicitud = next((s for s in solicitudes if s.activa), solicitudes[0] if solicitudes else None)
+
+    filas = []
+    if solicitud:
+        enviados = {i.departamento: i for i in solicitud.informes_enviados.select_related('director')}
+        for dep, label in DEPARTAMENTO_OPCIONES:
+            if dep == 'Externo':
+                continue
+            filas_dep, tribunal_map, sin_tribunal = _filas_informe_departamento(dep)
+            filas.append({
+                'departamento': dep,
+                'label': label,
+                'notificado': solicitud.cuatrimestre == 1 or dep in solicitud.departamentos_notificados,
+                'total': len(filas_dep),
+                'completos': sum(1 for f in filas_dep if f.id in tribunal_map and tribunal_completo(tribunal_map[f.id])),
+                'enviado': enviados.get(dep),
+            })
+
+    return render(request, 'planes/admin_informes_tribunales.html', {
+        'solicitudes': solicitudes,
+        'solicitud': solicitud,
+        'filas': filas,
+        'anio_actual': timezone.now().year,
+    })
+
+
+@login_required
+@solo_admin_general
+def admin_descargar_informe_tribunales(request):
+    """PDF con el estado actual de los tribunales de un departamento."""
+    from django.http import HttpResponse
+    departamento = request.GET.get('departamento', '')
+    if departamento not in {v for v, _ in DEPARTAMENTO_OPCIONES}:
+        messages.error(request, 'Departamento inválido.')
+        return redirect('planes:admin_informes_tribunales')
+    enviado = (
+        InformeTribunalesEnviado.objects.filter(departamento=departamento)
+        .select_related('director').order_by('-fecha_envio').first()
+    )
+    director = (enviado.director if enviado else None) or _director_del_departamento(departamento)
+    pdf_bytes = _pdf_buffer_departamento(departamento, director).read()
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = (
+        f'attachment; filename="tribunales_{departamento.lower().replace(" ", "_")}_{timezone.now():%Y%m%d}.pdf"'
+    )
+    return response
 
 
 @login_required
@@ -1317,11 +1374,7 @@ def lista_solicitudes_cambio(request):
     paginator = Paginator(qs, 25)
     page_obj = paginator.get_page(request.GET.get('page'))
 
-    informes = InformeTribunalesEnviado.objects.select_related('solicitud', 'director').order_by('-fecha_envio')
-    if dept_filtro:
-        informes = informes.filter(departamento=dept_filtro)
     return render(request, 'planes/admin_lista_solicitudes_cambio.html', {
-        'informes_enviados': informes[:30],
         'page_obj': page_obj,
         'dept_filtro': dept_filtro,
         'departamento_opciones': DEPARTAMENTO_OPCIONES,
@@ -1765,12 +1818,21 @@ def descargar_solicitud_servicio(request, pk):
 @login_required
 @solo_admin_general
 def admin_lista_solicitudes_servicio(request):
-    import datetime as _dt
     solicitudes = (
         SolicitudServicio.objects
         .select_related('director')
         .order_by('-fecha_creacion')
     )
+    return render(request, 'planes/admin_solicitudes_servicio.html', {
+        'solicitudes': solicitudes,
+    })
+
+
+@login_required
+@solo_admin_general
+def admin_convocatorias_servicio(request):
+    """Convocatoria a los directores para que generen sus solicitudes de servicio."""
+    import datetime as _dt
     convocatorias = ConvocatoriaSolicitudServicio.objects.select_related('enviado_por').all()
     anio_actual = _dt.date.today().year
     try:
@@ -1778,8 +1840,7 @@ def admin_lista_solicitudes_servicio(request):
     except ValueError:
         anio_sel = anio_actual
     enviadas_anio = {c.cuatrimestre for c in convocatorias if c.anio == anio_sel}
-    return render(request, 'planes/admin_solicitudes_servicio.html', {
-        'solicitudes': solicitudes,
+    return render(request, 'planes/admin_convocatorias_servicio.html', {
         'convocatorias': convocatorias,
         'anio_actual': anio_actual,
         'anio_sel': anio_sel,
@@ -2111,7 +2172,7 @@ def convocar_solicitudes_servicio(request):
     import datetime as _dt
     from django.contrib.auth import get_user_model
     if request.method != 'POST':
-        return redirect('planes:admin_lista_solicitudes_servicio')
+        return redirect('planes:admin_convocatorias_servicio')
 
     User = get_user_model()
     try:
@@ -2119,15 +2180,15 @@ def convocar_solicitudes_servicio(request):
         anio = int(request.POST.get('anio', 0))
     except ValueError:
         messages.error(request, 'Datos inválidos.')
-        return redirect('planes:admin_lista_solicitudes_servicio')
+        return redirect('planes:admin_convocatorias_servicio')
 
     if cuatrimestre not in (1, 2) or anio < 2020:
         messages.error(request, 'Cuatrimestre o año inválido.')
-        return redirect('planes:admin_lista_solicitudes_servicio')
+        return redirect('planes:admin_convocatorias_servicio')
 
     if ConvocatoriaSolicitudServicio.objects.filter(cuatrimestre=cuatrimestre, anio=anio).exists():
         messages.error(request, f'Ya se envió una convocatoria para ese cuatrimestre y año.')
-        return redirect('planes:admin_lista_solicitudes_servicio')
+        return redirect('planes:admin_convocatorias_servicio')
 
     cuat_label = '1° cuatrimestre (y anuales)' if cuatrimestre == 1 else '2° cuatrimestre'
     anual_nota = ' Las materias anuales deben solicitarse en conjunto con las del 1° cuatrimestre.' if cuatrimestre == 1 else ''
@@ -2156,7 +2217,7 @@ def convocar_solicitudes_servicio(request):
     )
 
     messages.success(request, f'Convocatoria enviada a {count} director{"es" if count != 1 else ""}.')
-    return redirect('planes:admin_lista_solicitudes_servicio')
+    return redirect('planes:admin_convocatorias_servicio')
 
 
 # ── admin: bolsa de materias optativas ────────────────────────────────────────

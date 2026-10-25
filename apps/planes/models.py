@@ -499,8 +499,10 @@ class InformeTribunalesEnviado(models.Model):
 
 
 class SolicitudCambioTribunal(models.Model):
+    # borrador → cerrada (se genera el docx) → enviada (con N° SUDOCU) → aplicada
     ESTADO_CHOICES = [
         ('borrador', 'Borrador'),
+        ('cerrada', 'Cerrada — falta enviar'),
         ('enviada', 'Enviada'),
         ('aplicada', 'Aplicada'),
     ]

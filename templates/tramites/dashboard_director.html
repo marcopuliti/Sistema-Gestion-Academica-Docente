@@ -134,6 +134,9 @@
             {% if borrador_count %}
             <span class="badge bg-secondary" style="font-size:.7rem">{{ borrador_count }} en borrador</span>
             {% endif %}
+            {% if solicitudes_cerradas %}
+            <a href="{% url 'planes:mis_solicitudes_cambio' %}" class="badge bg-warning text-dark text-decoration-none" style="font-size:.7rem">cerrada sin enviar</a>
+            {% endif %}
             {% if solicitudes_enviadas %}
             <span class="badge bg-info text-dark" style="font-size:.7rem">{{ solicitudes_enviadas }} enviada{{ solicitudes_enviadas|pluralize:"s" }}</span>
             {% endif %}

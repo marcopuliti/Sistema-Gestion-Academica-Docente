@@ -114,6 +114,9 @@ def _dashboard_director(request, user):
     solicitudes_enviadas = SolicitudCambioTribunal.objects.filter(
         departamento=departamento, estado='enviada',
     ).count()
+    solicitudes_cerradas = SolicitudCambioTribunal.objects.filter(
+        director=user, departamento=departamento, estado='cerrada',
+    ).count()
 
     solicitud = SolicitudInformeTribunal.objects.filter(activa=True).first()
     informe_enviado = (
@@ -163,6 +166,7 @@ def _dashboard_director(request, user):
         'con_datos_faltantes': con_datos_faltantes,
         'borrador_count': borrador_count,
         'solicitudes_enviadas': solicitudes_enviadas,
+        'solicitudes_cerradas': solicitudes_cerradas,
         'solicitud_informe_activa': solicitud_para_dept and not ya_enviado,
         'informe_enviado': informe_enviado,
         'ultimas_notificaciones': Notificacion.objects.filter(destinatario=user).order_by('-fecha')[:5],

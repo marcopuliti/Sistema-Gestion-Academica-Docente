@@ -81,20 +81,44 @@
     {% if borrador_count %}<strong>Tenés {{ borrador_count }} propuesta{{ borrador_count|pluralize:"s" }} pendiente{{ borrador_count|pluralize:"s" }}.</strong>{% endif %}
   </div>
 </div>
-{% elif borrador_count and not es_solo_consulta %}
+{% else %}
+{% if cerrada %}
+<div class="alert alert-warning d-flex align-items-center justify-content-between gap-3 mb-3 flex-wrap" role="alert">
+  <div class="d-flex align-items-center gap-2">
+    <i class="bi bi-lock fs-5 flex-shrink-0"></i>
+    <div>
+      <strong>Modificación cerrada sin enviar ({{ cerrada.items.count }} tribunal{{ cerrada.items.count|pluralize:"es" }}).</strong>
+      <span class="ms-1 small">Descargá el Word, iniciá el trámite en SUDOCU y enviala con el número de trámite.</span>
+    </div>
+  </div>
+  <div class="d-flex gap-2 flex-shrink-0">
+    {% if cerrada.documento %}
+    <a href="{{ cerrada.documento.url }}" class="btn btn-outline-dark btn-sm text-nowrap">
+      <i class="bi bi-file-earmark-word me-1"></i>Word
+    </a>
+    {% endif %}
+    <button type="button" id="btnEnviarSolicitud" class="btn btn-success btn-sm text-nowrap"
+            data-bs-toggle="modal" data-bs-target="#modalEnviarSolicitud{{ cerrada.pk }}">
+      <i class="bi bi-send me-1"></i>Enviar solicitud
+    </button>
+  </div>
+</div>
+{% endif %}
+{% if borrador_count and not es_solo_consulta %}
 <div class="alert alert-info d-flex align-items-center justify-content-between gap-3 mb-3" role="alert">
   <div class="d-flex align-items-center gap-2">
     <i class="bi bi-pencil-square fs-5 flex-shrink-0"></i>
     <div>
       <strong>{{ borrador_count }} cambio{{ borrador_count|pluralize:"s" }} en borrador.</strong>
-      <span class="ms-1 small">Revisá las propuestas, completá lo que falte y enviá la solicitud a administración.</span>
+      <span class="ms-1 small">Revisá las propuestas, completá lo que falte y cerrá la modificación para generar el Word.</span>
     </div>
   </div>
-  <button type="button" id="btnEnviarSolicitud" class="btn btn-info btn-sm text-dark text-nowrap flex-shrink-0"
-          data-bs-toggle="modal" data-bs-target="#modalEnviarSolicitud">
-    <i class="bi bi-send me-1"></i>Enviar solicitud
+  <button type="button" id="btnCerrarSolicitud" class="btn btn-info btn-sm text-dark text-nowrap flex-shrink-0"
+          data-bs-toggle="modal" data-bs-target="#modalCerrarSolicitud">
+    <i class="bi bi-lock me-1"></i>Cerrar modificación
   </button>
 </div>
+{% endif %}
 {% endif %}
 
 {# ── Barra de búsqueda y filtros ──────────────────────────────────────────── #}
@@ -287,7 +311,9 @@
       <div>
         <div class="d-flex align-items-center gap-2 mb-1">
           <div class="fw-semibold small">Solicitud del {{ s.fecha_creacion|date:"d/m/Y H:i" }}</div>
-          {% if s.estado == 'enviada' %}
+          {% if s.estado == 'cerrada' %}
+          <span class="badge bg-warning text-dark" style="font-size:.7rem">Cerrada — falta enviar</span>
+          {% elif s.estado == 'enviada' %}
           <span class="badge bg-info text-dark" style="font-size:.7rem">Enviada</span>
           {% elif s.estado == 'aplicada' %}
           <span class="badge bg-success" style="font-size:.7rem">Aplicada</span>
@@ -432,30 +458,31 @@
 
 {# ── Modal enviar solicitud de cambio ─────────────────────────────────────── #}
 {% if borrador_count and not es_solo_consulta and not modo_carrera %}
-<div class="modal fade" id="modalEnviarSolicitud" tabindex="-1">
+<div class="modal fade" id="modalCerrarSolicitud" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
-        <h5 class="modal-title"><i class="bi bi-send me-2"></i>Enviar solicitud de cambio</h5>
+        <h5 class="modal-title"><i class="bi bi-lock me-2"></i>Cerrar modificación de tribunales</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <form id="formEnviarSolicitud" method="post" action="{% url 'planes:enviar_solicitud_cambio' %}">
+      <form method="post" action="{% url 'planes:cerrar_solicitud_cambio' %}">
         {% csrf_token %}
         <div class="modal-body">
-          <p>Se genera el documento Word con la nota y las tablas de los <strong>{{ borrador_count }}</strong> tribunal{{ borrador_count|pluralize:"es" }} modificado{{ borrador_count|pluralize:"s" }}, se adjunta a la solicitud y se notifica a administración.</p>
+          <p>Se genera el documento Word con la nota y las tablas de los <strong>{{ borrador_count }}</strong> tribunal{{ borrador_count|pluralize:"es" }} modificado{{ borrador_count|pluralize:"s" }}.</p>
           <p class="small text-muted">Cada tribunal tiene que estar completo: presidente, 1er. y 2do. vocal con nombre y DNI, día y hora.</p>
-          <label class="form-label fw-semibold small" for="sudocuSolicitud">N° de trámite SUDOCU <span class="text-danger">*</span></label>
-          <input type="text" name="numero_sudocu" id="sudocuSolicitud" class="form-control" placeholder="Ej: 9628/2026" required>
-          <div class="alert alert-danger small mt-3 mb-0 d-none" id="errorEnviarSolicitud"></div>
+          <p class="small mb-0">Después descargá el Word, iniciá el trámite en SUDOCU y enviá la solicitud con el número de trámite. Hasta que la envíes, podés reabrirla para corregirla.</p>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-send me-1"></i>Generar y enviar</button>
+          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-lock me-1"></i>Cerrar y generar Word</button>
         </div>
       </form>
     </div>
   </div>
 </div>
+{% endif %}
+{% if cerrada and not es_solo_consulta and not modo_carrera %}
+{% include "planes/_modal_enviar_solicitud_cambio.html" with solicitud=cerrada %}
 {% endif %}
 
 {# ── Modal enviar informe anual ───────────────────────────────────────────── #}
@@ -966,7 +993,7 @@
     });
   }
 
-  // ── Enviar solicitud de cambio / informe (AJAX, con N° SUDOCU) ────────────
+  // ── Enviar informe (AJAX, con N° SUDOCU) ──────────────────────────────────
   async function enviarConSudocu(form, errorEl, alTerminar) {
     const btn = form.querySelector('[type=submit]') || document.querySelector(`[form="${form.id}"][type=submit]`);
     const original = btn.innerHTML;
@@ -989,15 +1016,6 @@
     }
     btn.disabled = false;
     btn.innerHTML = original;
-  }
-
-  const formSolicitud = document.getElementById('formEnviarSolicitud');
-  if (formSolicitud) {
-    formSolicitud.addEventListener('submit', function (e) {
-      e.preventDefault();
-      enviarConSudocu(formSolicitud, document.getElementById('errorEnviarSolicitud'),
-                      data => { location.href = data.redirect_url; });
-    });
   }
 
   // ── Enviar informe anual (AJAX) ───────────────────────────────────────────

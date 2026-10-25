@@ -37,6 +37,8 @@
       &middot;
       {% if solicitud.estado == 'borrador' %}
       <span class="badge bg-secondary">Borrador</span>
+      {% elif solicitud.estado == 'cerrada' %}
+      <span class="badge bg-warning text-dark">Cerrada — falta enviar</span>
       {% elif solicitud.estado == 'enviada' %}
       <span class="badge bg-info text-dark">Enviada — pendiente de revisión</span>
       {% elif solicitud.estado == 'aplicada' %}
@@ -50,8 +52,8 @@
       <i class="bi bi-file-earmark-pdf me-1"></i>PDF
     </a>
     {% if solicitud.documento %}
-    <a href="{{ solicitud.documento.url }}" class="btn btn-outline-primary" title="Documento enviado a administración">
-      <i class="bi bi-file-earmark-word me-1"></i>Word enviado
+    <a href="{{ solicitud.documento.url }}" class="btn btn-outline-primary" title="Documento generado al cerrar la modificación">
+      <i class="bi bi-file-earmark-word me-1"></i>Word
     </a>
     {% else %}
     <a href="{% url 'planes:descargar_solicitud_cambio_docx' solicitud.pk %}"
@@ -59,17 +61,34 @@
       <i class="bi bi-file-earmark-word me-1"></i>Word
     </a>
     {% endif %}
-    {% if solicitud.estado != 'aplicada' %}
+    {% if solicitud.estado == 'cerrada' %}
+    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalEnviarSolicitud{{ solicitud.pk }}">
+      <i class="bi bi-send me-1"></i>Enviar solicitud
+    </button>
+    {% endif %}
+    {% if solicitud.estado == 'cerrada' or solicitud.estado == 'enviada' %}
     <form method="post" action="{% url 'planes:reabrir_solicitud_cambio' solicitud.pk %}"
-          onsubmit="return confirm('¿Retractás esta solicitud para poder modificarla?')">
+          onsubmit="return confirm('¿Reabrís esta solicitud para poder modificarla? Volverá a borrador y habrá que cerrarla de nuevo.')">
       {% csrf_token %}
       <button type="submit" class="btn btn-outline-warning">
-        <i class="bi bi-pencil me-1"></i>Modificar
+        <i class="bi bi-pencil me-1"></i>Reabrir
       </button>
     </form>
+    {% elif solicitud.estado == 'borrador' %}
+    <a href="{% url 'planes:lista_tribunales' %}?filtro=con_propuesta" class="btn btn-outline-primary">
+      <i class="bi bi-pencil me-1"></i>Seguir editando
+    </a>
     {% endif %}
   </div>
 </div>
+
+{% if solicitud.estado == 'cerrada' %}
+<div class="alert alert-warning small">
+  <i class="bi bi-lock me-1"></i>
+  La modificación está <strong>cerrada</strong>: descargá el Word, iniciá el trámite en SUDOCU y enviala a administración con el número de trámite.
+</div>
+{% include "planes/_modal_enviar_solicitud_cambio.html" %}
+{% endif %}
 
 {% if items %}
 <div class="alert alert-info py-2 small mb-3">

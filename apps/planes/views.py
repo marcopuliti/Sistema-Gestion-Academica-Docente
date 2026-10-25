@@ -455,6 +455,12 @@ def lista_tribunales(request):
             .prefetch_related('items')
             .order_by('-fecha_creacion')[:10]
         ),
+        'cerrada': (
+            SolicitudCambioTribunal.objects
+            .filter(director=request.user, departamento=departamento, estado='cerrada')
+            .prefetch_related('items')
+            .first()
+        ),
         'agrupaciones': (
             AgrupacionTribunal.objects
             .filter(director=request.user, departamento=departamento)
@@ -798,40 +804,42 @@ def proponer_cambio_tribunal(request, pk):
 
 @login_required
 @solo_director_departamento
-def enviar_solicitud_cambio(request):
-    from django.http import JsonResponse
-
+def cerrar_solicitud_cambio(request):
+    """Cierra el borrador: valida que todos los tribunales estén completos y genera el docx."""
     if request.method != 'POST':
         return redirect('planes:lista_tribunales')
 
     departamento = request.user.departamento
-
-    try:
-        borrador = SolicitudCambioTribunal.objects.get(
-            director=request.user,
-            departamento=departamento,
-            estado='borrador',
-        )
-    except SolicitudCambioTribunal.DoesNotExist:
-        return JsonResponse({'ok': False, 'error': 'No hay cambios propuestos.'}, status=400)
-
+    borrador = SolicitudCambioTribunal.objects.filter(
+        director=request.user, departamento=departamento, estado='borrador',
+    ).first()
     items = list(
         borrador.items.select_related(*_ITEMS_RELACIONADOS)
         .prefetch_related('tribunal__materia_optativa__optativas__plan__carrera')
-    )
+    ) if borrador else []
     if not items:
-        return JsonResponse({'ok': False, 'error': 'No hay cambios propuestos.'})
+        messages.error(request, 'No hay cambios propuestos para cerrar.')
+        return redirect('planes:lista_tribunales')
 
-    numero_sudocu = request.POST.get('numero_sudocu', '').strip()
-    if not numero_sudocu:
-        return JsonResponse({'ok': False, 'error': 'Ingresá el número de trámite SUDOCU.'})
+    cerrada = SolicitudCambioTribunal.objects.filter(
+        director=request.user, departamento=departamento, estado='cerrada',
+    ).first()
+    if cerrada:
+        messages.error(
+            request,
+            'Ya tenés una modificación cerrada sin enviar. Enviala o reabrila antes de cerrar otra.',
+        )
+        return redirect('planes:detalle_mi_solicitud_cambio', pk=cerrada.pk)
 
     incompletos = [item.tribunal.fila for item in items if not tribunal_completo(item)]
     if incompletos:
-        return JsonResponse({'ok': False, 'error': (
-            f'Hay {len(incompletos)} tribunal(es) incompleto(s): {_describir_incompletos(incompletos)}. '
-            'Cada tribunal debe tener presidente, 1er. y 2do. vocal con nombre y DNI, día y hora.'
-        )})
+        messages.error(
+            request,
+            f'No se puede cerrar: hay {len(incompletos)} tribunal(es) incompleto(s): '
+            f'{_describir_incompletos(incompletos)}. Cada tribunal debe tener presidente, '
+            '1er. y 2do. vocal con nombre y DNI, día y hora.',
+        )
+        return redirect(reverse('planes:lista_tribunales') + '?filtro=con_propuesta')
 
     from django.contrib.auth import get_user_model
     from django.core.files.base import ContentFile
@@ -842,25 +850,56 @@ def enviar_solicitud_cambio(request):
     docx = generar_docx_solicitud_cambio(request.user, admin, filas, item_map, current_map)
     nombre = f'solicitud_cambio_tribunales_{departamento.lower().replace(" ", "_")}_{timezone.now():%Y%m%d}.docx'
     if borrador.documento:
-        borrador.documento.delete(save=False)  # reenvío tras reabrir: reemplaza el anterior
+        borrador.documento.delete(save=False)
     borrador.documento.save(nombre, ContentFile(docx.read()), save=False)
-    borrador.numero_sudocu = numero_sudocu
-    borrador.estado = 'enviada'
-    borrador.fecha_envio = timezone.now()
+    borrador.estado = 'cerrada'
     borrador.save()
 
+    messages.success(
+        request,
+        'Modificación cerrada: se generó el Word con la nota y las tablas de los tribunales modificados. '
+        'Descargalo, iniciá el trámite en SUDOCU y enviá la solicitud con el número de trámite.',
+    )
+    return redirect('planes:detalle_mi_solicitud_cambio', pk=borrador.pk)
+
+
+@login_required
+@solo_director_departamento
+def enviar_solicitud_cambio(request, pk):
+    """Envía a administración una modificación cerrada, con su número de trámite SUDOCU."""
+    solicitud = get_object_or_404(SolicitudCambioTribunal, pk=pk, director=request.user)
+    if request.method != 'POST':
+        return redirect('planes:detalle_mi_solicitud_cambio', pk=pk)
+    if solicitud.estado != 'cerrada':
+        messages.error(request, 'Solo se puede enviar una modificación cerrada.')
+        return redirect('planes:detalle_mi_solicitud_cambio', pk=pk)
+
+    numero_sudocu = request.POST.get('numero_sudocu', '').strip()
+    if not numero_sudocu:
+        messages.error(request, 'Ingresá el número de trámite SUDOCU.')
+        return redirect('planes:detalle_mi_solicitud_cambio', pk=pk)
+
+    solicitud.numero_sudocu = numero_sudocu
+    solicitud.estado = 'enviada'
+    solicitud.fecha_envio = timezone.now()
+    solicitud.save(update_fields=['numero_sudocu', 'estado', 'fecha_envio'])
+
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    departamento = solicitud.departamento
+    cantidad = solicitud.items.count()
     url_lista = reverse('planes:lista_solicitudes_cambio')
     for admin_user in User.objects.filter(rol__in=['secretario', 'direccion_academica', 'dpto_estudiantes'], is_active=True):
         _crear_notificacion(
             admin_user, 'nuevo_tramite',
             f'Solicitud de cambio de tribunales — Dpto. {departamento} — SUDOCU {numero_sudocu}',
-            f'{request.user.get_full_name()} envió una solicitud de cambio de {len(items)} tribunal(es) '
+            f'{request.user.get_full_name()} envió una solicitud de cambio de {cantidad} tribunal(es) '
             f'del Departamento de {departamento}.\nTrámite SUDOCU: {numero_sudocu}.',
             url=url_lista,
         )
 
-    redirect_url = reverse('planes:detalle_mi_solicitud_cambio', args=[borrador.pk])
-    return JsonResponse({'ok': True, 'pk': borrador.pk, 'redirect_url': redirect_url})
+    messages.success(request, f'Solicitud enviada a administración con el trámite SUDOCU {numero_sudocu}.')
+    return redirect('planes:detalle_mi_solicitud_cambio', pk=pk)
 
 
 @login_required
@@ -1136,9 +1175,27 @@ def reabrir_solicitud_cambio(request, pk):
     if solicitud.estado == 'aplicada':
         messages.error(request, 'No podés modificar una solicitud ya aplicada.')
         return redirect('planes:mis_solicitudes_cambio')
+    if solicitud.estado == 'borrador':
+        return redirect('planes:lista_tribunales')
+
+    # Si mientras tanto se abrió otro borrador (propuestas nuevas), se fusiona en la reabierta:
+    # para un mismo tribunal vale la propuesta más reciente.
+    otro = (
+        SolicitudCambioTribunal.objects
+        .filter(director=request.user, departamento=solicitud.departamento, estado='borrador')
+        .exclude(pk=solicitud.pk)
+        .first()
+    )
+    if otro:
+        solicitud.items.filter(tribunal_id__in=otro.items.values('tribunal_id')).delete()
+        otro.items.update(solicitud=solicitud)
+        otro.delete()
+
+    if solicitud.documento:
+        solicitud.documento.delete(save=False)  # se regenera al volver a cerrarla
     solicitud.estado = 'borrador'
     solicitud.fecha_envio = None
-    solicitud.save(update_fields=['estado', 'fecha_envio'])
+    solicitud.save(update_fields=['estado', 'fecha_envio', 'documento'])
     messages.success(request, 'Solicitud reabierta. Podés modificar los cambios desde Tribunales.')
     return redirect('planes:lista_tribunales')
 

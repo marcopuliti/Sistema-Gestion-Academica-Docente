@@ -17,13 +17,14 @@ urlpatterns = [
     path('planes/agrupaciones/crear/', views.crear_agrupacion, name='crear_agrupacion'),
     path('planes/agrupaciones/<int:pk>/eliminar/', views.eliminar_agrupacion, name='eliminar_agrupacion'),
     path('planes/agrupaciones/<int:pk>/proponer-cambio/', views.proponer_cambio_agrupacion, name='proponer_cambio_agrupacion'),
-    path('planes/tribunales/enviar-solicitud/', views.enviar_solicitud_cambio, name='enviar_solicitud_cambio'),
+    path('planes/tribunales/cerrar-solicitud/', views.cerrar_solicitud_cambio, name='cerrar_solicitud_cambio'),
     path('planes/tribunales/solicitudes/<int:pk>/descargar/', views.descargar_solicitud_cambio, name='descargar_solicitud_cambio'),
     path('planes/tribunales/solicitudes/<int:pk>/descargar-docx/', views.descargar_solicitud_cambio_docx, name='descargar_solicitud_cambio_docx'),
 
     # Director: solicitudes de cambio propias
     path('planes/tribunales/mis-solicitudes/', views.mis_solicitudes_cambio, name='mis_solicitudes_cambio'),
     path('planes/tribunales/mis-solicitudes/<int:pk>/reabrir/', views.reabrir_solicitud_cambio, name='reabrir_solicitud_cambio'),
+    path('planes/tribunales/mis-solicitudes/<int:pk>/enviar/', views.enviar_solicitud_cambio, name='enviar_solicitud_cambio'),
     path('planes/tribunales/mis-solicitudes/<int:pk>/', views.detalle_mi_solicitud_cambio, name='detalle_mi_solicitud_cambio'),
 
     # Director: informe anual

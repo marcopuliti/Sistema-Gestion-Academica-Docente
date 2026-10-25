@@ -1,0 +1,30 @@
+{# Envío de una modificación cerrada: pide el N° de trámite SUDOCU. Recibe `solicitud`. #}
+<div class="modal fade" id="modalEnviarSolicitud{{ solicitud.pk }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color:var(--color-primario);color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-send me-2"></i>Enviar solicitud de cambio</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{% url 'planes:enviar_solicitud_cambio' solicitud.pk %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          <p>Se envía a administración la modificación de <strong>{{ solicitud.items.count }}</strong> tribunal{{ solicitud.items.count|pluralize:"es" }} con el documento Word generado al cerrarla.</p>
+          {% if solicitud.documento %}
+          <p class="small">
+            <a href="{{ solicitud.documento.url }}"><i class="bi bi-file-earmark-word me-1"></i>Descargar el Word</a>
+            para adjuntarlo al trámite en SUDOCU.
+          </p>
+          {% endif %}
+          <label class="form-label fw-semibold small" for="sudocuSolicitud{{ solicitud.pk }}">N° de trámite SUDOCU <span class="text-danger">*</span></label>
+          <input type="text" name="numero_sudocu" id="sudocuSolicitud{{ solicitud.pk }}" class="form-control"
+                 value="{{ solicitud.numero_sudocu }}" placeholder="Ej: 9628/2026" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-send me-1"></i>Enviar a administración</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

@@ -59,6 +59,8 @@
           <td class="text-center">
             {% if s.estado == 'borrador' %}
             <span class="badge bg-secondary">Borrador</span>
+{% elif s.estado == 'cerrada' %}
+            <span class="badge bg-warning text-dark">Cerrada — falta enviar</span>
             {% elif s.estado == 'enviada' %}
             <span class="badge bg-info text-dark">Enviada</span>
             {% elif s.estado == 'aplicada' %}

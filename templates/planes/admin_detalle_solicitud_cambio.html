@@ -40,6 +40,8 @@
       <span class="badge bg-info text-dark">Enviada</span>
       {% elif solicitud.estado == 'aplicada' %}
       <span class="badge bg-success">Aplicada</span>
+      {% elif solicitud.estado == 'cerrada' %}
+      <span class="badge bg-warning text-dark">Cerrada — falta enviar</span>
       {% else %}
       <span class="badge bg-secondary">Borrador</span>
       {% endif %}

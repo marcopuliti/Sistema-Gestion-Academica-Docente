@@ -30,6 +30,8 @@
           <td class="text-center">
             {% if s.estado == 'borrador' %}
             <span class="badge bg-secondary">Borrador</span>
+{% elif s.estado == 'cerrada' %}
+            <span class="badge bg-warning text-dark">Cerrada — falta enviar</span>
             {% elif s.estado == 'enviada' %}
             <span class="badge bg-info text-dark">Enviada — pendiente de revisión</span>
             {% elif s.estado == 'aplicada' %}
@@ -50,7 +52,7 @@
                 <i class="bi bi-file-earmark-pdf"></i>
               </a>
               <a href="{% if s.documento %}{{ s.documento.url }}{% else %}{% url 'planes:descargar_solicitud_cambio_docx' s.pk %}{% endif %}"
-                 class="btn btn-sm btn-outline-primary" title="{% if s.documento %}Word enviado{% else %}Descargar Word{% endif %}">
+                 class="btn btn-sm btn-outline-primary" title="{% if s.documento %}Word generado al cerrar{% else %}Descargar Word{% endif %}">
                 <i class="bi bi-file-earmark-word"></i>
               </a>
               {% if s.estado == 'borrador' %}
@@ -58,9 +60,15 @@
                  class="btn btn-sm btn-outline-primary" title="Continuar editando">
                 <i class="bi bi-pencil me-1"></i>Editar
               </a>
-              {% elif s.estado == 'enviada' %}
+              {% elif s.estado == 'cerrada' or s.estado == 'enviada' %}
+              {% if s.estado == 'cerrada' %}
+              <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal"
+                      data-bs-target="#modalEnviarSolicitud{{ s.pk }}" title="Enviar con el N° SUDOCU">
+                <i class="bi bi-send me-1"></i>Enviar
+              </button>
+              {% endif %}
               <form method="post" action="{% url 'planes:reabrir_solicitud_cambio' s.pk %}"
-                    onsubmit="return confirm('¿Retractás esta solicitud para poder modificarla? Volverá a borrador.')">
+                    onsubmit="return confirm('¿Reabrís esta solicitud para poder modificarla? Volverá a borrador y habrá que cerrarla de nuevo.')">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-sm btn-outline-warning" title="Reabrir para editar">
                   <i class="bi bi-arrow-counterclockwise me-1"></i>Modificar
@@ -75,6 +83,10 @@
     </table>
   </div>
 </div>
+
+{% for s in page_obj %}{% if s.estado == 'cerrada' %}
+{% include "planes/_modal_enviar_solicitud_cambio.html" with solicitud=s %}
+{% endif %}{% endfor %}
 
 {% if page_obj.has_other_pages %}
 <nav class="mt-3">
